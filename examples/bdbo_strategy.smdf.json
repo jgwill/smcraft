@@ -1,0 +1,94 @@
+{
+  "settings": {
+    "namespace": "Trading.Strategies",
+    "name": "BDBOStrategy",
+    "asynchronous": false,
+    "objects": [
+      { "instance": "strategy", "class": "BDBOStrategyEntity" }
+    ],
+    "context": { "class": "BDBOStrategyContext" }
+  },
+  "events": [
+    {
+      "name": "StrategyEvents",
+      "feeder": "StrategyFeeder",
+      "events": [
+        {
+          "id": "StrategyCreated",
+          "parameters": [
+            { "name": "strategyId", "type": "string" }
+          ]
+        },
+        {
+          "id": "PriceBreakout",
+          "parameters": [
+            { "name": "price", "type": "float" },
+            { "name": "direction", "type": "string" }
+          ]
+        },
+        { "id": "SignalFound" },
+        { "id": "OrderFilled" },
+        { "id": "StrategyCompleted" },
+        { "id": "StrategyFailed" }
+      ],
+      "timers": [
+        { "id": "evTimeout", "name": "Timeout" }
+      ]
+    }
+  ],
+  "state": {
+    "name": "Root",
+    "states": [
+      {
+        "name": "Idle",
+        "transitions": [
+          { "event": "StrategyCreated", "nextState": "Active_WaitingBreakout" }
+        ]
+      },
+      {
+        "name": "Active",
+        "states": [
+          {
+            "name": "Active_WaitingBreakout",
+            "onEntry": { "actions": [{ "code": "strategy.start_monitoring()" }] },
+            "transitions": [
+              { "event": "PriceBreakout", "nextState": "Active_WaitingSignal" },
+              { "event": "StrategyFailed", "nextState": "Failed" }
+            ]
+          },
+          {
+            "name": "Active_WaitingSignal",
+            "onEntry": {
+              "actions": [
+                { "timerStart": { "timer": "Timeout", "duration": "60000" } }
+              ]
+            },
+            "onExit": {
+              "actions": [
+                { "timerStop": "Timeout" }
+              ]
+            },
+            "transitions": [
+              { "event": "SignalFound", "nextState": "Active_WaitingEntry" },
+              { "event": "evTimeout", "nextState": "Active_WaitingBreakout" }
+            ]
+          },
+          {
+            "name": "Active_WaitingEntry",
+            "transitions": [
+              { "event": "OrderFilled", "nextState": "Completed" },
+              {
+                "event": "StrategyFailed",
+                "nextState": "Active_WaitingSignal",
+                "condition": "strategy.can_retry()"
+              },
+              { "event": "StrategyFailed", "nextState": "Failed" }
+            ]
+          }
+        ]
+      },
+      { "name": "Completed", "kind": "final" },
+      { "name": "Failed", "kind": "final" }
+    ]
+  }
+}

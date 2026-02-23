@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smcraft"
+version = "0.1.1"
+description = "State Machine Craft — design, generate, and run hierarchical state machines"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+keywords = ["state-machine", "code-generator", "fsm", "hierarchical"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Code Generators",
+]
+
+[project.scripts]
+smcg = "smcraft.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["smcraft*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

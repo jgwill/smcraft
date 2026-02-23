@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.next/
+.pytest_cache/
+__pycache__/
+*.egg-info/
+*.log
+

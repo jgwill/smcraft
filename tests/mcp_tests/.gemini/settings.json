@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+     "smcraft-mcp": {
+      "command": "node",
+      "args": [
+        "/b/trading/smcraft/mcp/dist/server.js"
+      ],
+      "env": { }
+    }
+  }
+}
