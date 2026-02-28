@@ -191,7 +191,7 @@
     {
       "Idug": "e-integration",
       "DisplayName": "[EXECUTION] Platform Integration Reality",
-      "Description": "jgtutils.statemachine imports smcraft Python. jgt-strategy-api's 13-state FSM was designed via smcraft patterns. But: no mia-code-server integration exists, no shared SMDF definitions for creative workflows, smcraft MCP not registered in any platform's .mcp.json.",
+      "Description": "jgt-strategy-api's 13-state FSM was designed using smcraft-derived patterns. But: no mia-code-server integration exists, no shared SMDF definitions for creative workflows, smcraft MCP not registered in any platform's .mcp.json.",
       "DominanceFactor": 0,
       "ComparationTableData": {},
       "TwoFlag": false,
