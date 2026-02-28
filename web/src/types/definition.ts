@@ -17,10 +17,13 @@ export interface ContextConfig {
 export interface SettingsModel {
   namespace: string;
   name?: string;
+  description?: string;
   asynchronous: boolean;
-  objects?: ObjectRef[];
-  context?: ContextConfig;
+  objects?: { name: string; type: string }[];
+  context?: { className?: string; baseClass?: string };
+  imports?: string[];
   using?: string[];
+  targetLanguage?: string;
 }
 
 export interface ParameterDef {
@@ -58,7 +61,9 @@ export interface TimerStartAction {
 }
 
 export interface ActionDef {
+  action: "code" | "timerStart" | "timerStop";
   code?: string;
+  name?: string;
   timerStart?: TimerStartAction;
   timerStop?: string;
 }
@@ -111,4 +116,5 @@ export interface ValidationError {
   ruleId: string;
   message: string;
   element?: string;
+  severity?: "error" | "warning";
 }
