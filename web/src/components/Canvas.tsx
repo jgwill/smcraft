@@ -136,7 +136,12 @@ export default function Canvas() {
         className="w-full h-full bg-gray-950"
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onClick={() => { clearSelection(); setEventPicker(null); }}
+        onClick={(e) => {
+          if ((e.target as SVGElement)?.tagName === 'svg') {
+            clearSelection();
+            setEventPicker(null);
+          }
+        }}
         onContextMenu={(e) => handleContextMenu(e)}
       >
         <defs>
