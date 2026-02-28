@@ -11,17 +11,32 @@ class StateId(Enum):
 class StateRed(State):
     """State: Red"""
     def on_timer_elapsed(self, context):
-        TransitionHelper.do_transition(context, context.state_green)
+        state_prev = self
+        state_next = context.state_green
+        transition_name = "TIMER_ELAPSED"
+        TransitionHelper.process_transition_begin(context, state_prev, state_next, transition_name)
+        context.current_state = state_next
+        TransitionHelper.process_transition_end(context, state_prev, state_next)
 
 class StateYellow(State):
     """State: Yellow"""
     def on_timer_elapsed(self, context):
-        TransitionHelper.do_transition(context, context.state_red)
+        state_prev = self
+        state_next = context.state_red
+        transition_name = "TIMER_ELAPSED"
+        TransitionHelper.process_transition_begin(context, state_prev, state_next, transition_name)
+        context.current_state = state_next
+        TransitionHelper.process_transition_end(context, state_prev, state_next)
 
 class StateGreen(State):
     """State: Green"""
     def on_timer_elapsed(self, context):
-        TransitionHelper.do_transition(context, context.state_yellow)
+        state_prev = self
+        state_next = context.state_yellow
+        transition_name = "TIMER_ELAPSED"
+        TransitionHelper.process_transition_begin(context, state_prev, state_next, transition_name)
+        context.current_state = state_next
+        TransitionHelper.process_transition_end(context, state_prev, state_next)
 
 class streetlightContext(Context):
     """Context for streetlight"""
@@ -31,29 +46,35 @@ class streetlightContext(Context):
         self.state_yellow = StateYellow("Yellow")
         self.state_green = StateGreen("Green")
         self.state_initial = self.state_red
+        self.current_state = None # Initialize to None, will be set in enter_initial_state
+
+    def enter_initial_state(self) -> None:
+        """Enter the state machine's initial state."""
+        self.current_state = self.state_initial
+        self.current_state.on_entry(self)
 
 # --- Simulation Logic ---
 if __name__ == "__main__":
     print("--- Python Streetlight State Machine Simulation ---")
     context = streetlightContext()
+    context.enter_initial_state()
 
-
-    print(f"Initial state: {context.current_state.get_state_id().name}")
-
-    print("\nTriggering TIMER_ELAPSED...")
-    context.current_state.on_timer_elapsed(context)
-    print(f"Current state: {context.current_state.get_state_id().name}")
+    print(f"Initial state: {context.current_state.name}")
 
     print("\nTriggering TIMER_ELAPSED...")
     context.current_state.on_timer_elapsed(context)
-    print(f"Current state: {context.current_state.get_state_id().name}")
+    print(f"Current state: {context.current_state.name}")
 
     print("\nTriggering TIMER_ELAPSED...")
     context.current_state.on_timer_elapsed(context)
-    print(f"Current state: {context.current_state.get_state_id().name}")
+    print(f"Current state: {context.current_state.name}")
+
+    print("\nTriggering TIMER_ELAPSED...")
+    context.current_state.on_timer_elapsed(context)
+    print(f"Current state: {context.current_state.name}")
 
     print("\nTriggering TIMER_ELAPSED (to complete the cycle)...")
     context.current_state.on_timer_elapsed(context)
-    print(f"Current state: {context.current_state.get_state_id().name}")
+    print(f"Current state: {context.current_state.name}")
 
     print("\nSimulation complete.")
