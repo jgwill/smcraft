@@ -13,7 +13,7 @@ Modules:
   - cli: Command-line interface for code generation
 """
 
-__version__ = "0.1.1"
+__version__ = "0.1.4"
 
 from smcraft.model import (
     StateMachineDefinition,
