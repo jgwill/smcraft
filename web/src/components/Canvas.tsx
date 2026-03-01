@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useCallback, useState, useEffect } from "react";
-import { useDesignerStore, collectAllStates } from "@/store/useDesignerStore";
+import { useDesignerStore } from "@/store/useDesignerStore";
 import type { StatePosition, StateDef } from "@/types/definition";
 
 interface DragState {
@@ -31,13 +31,18 @@ export default function Canvas() {
   const undo = useDesignerStore((s) => s.undo);
   const redo = useDesignerStore((s) => s.redo);
   const errors = useDesignerStore((s) => s.errors);
+  const navigationPath = useDesignerStore((s) => s.navigationPath);
+  const currentParent = useDesignerStore((s) => s.currentParent);
+  const navigateInto = useDesignerStore((s) => s.navigateInto);
+  const navigateUp = useDesignerStore((s) => s.navigateUp);
+  const getCurrentChildren = useDesignerStore((s) => s.getCurrentChildren);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [eventPicker, setEventPicker] = useState<{ stateName: string; targetName: string; x: number; y: number } | null>(null);
 
-  const allStates = collectAllStates(definition.state);
-  const leafStates = allStates.filter((s) => s.name !== "Root");
+  // Show only children of current navigation level (not flattened)
+  const currentChildren = getCurrentChildren();
   const allEvents = definition.events.flatMap((src) => src.events ?? []);
 
   // Keyboard shortcuts
@@ -119,11 +124,12 @@ export default function Canvas() {
     setDrawMode("select");
   };
 
-  // Collect all transitions for arrows
+  // Collect transitions for arrows (within current navigation level)
+  const currentChildNames = new Set(currentChildren.map(s => s.name));
   const arrows: { from: string; to: string; event: string; stateName: string; index: number; condition?: string }[] = [];
-  for (const state of leafStates) {
+  for (const state of currentChildren) {
     for (const [i, t] of (state.transitions ?? []).entries()) {
-      if (t.nextState) {
+      if (t.nextState && currentChildNames.has(t.nextState)) {
         arrows.push({ from: state.name, to: t.nextState, event: t.event, stateName: state.name, index: i, condition: t.condition });
       }
     }
@@ -131,6 +137,22 @@ export default function Canvas() {
 
   return (
     <div className="relative w-full h-full">
+      {/* Breadcrumb navigation */}
+      {navigationPath.length > 1 && (
+        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-gray-900/90 border border-gray-700 rounded-lg px-3 py-1.5 text-sm">
+          {navigationPath.map((name, i) => (
+            <span key={name} className="flex items-center gap-1">
+              {i > 0 && <span className="text-gray-600">›</span>}
+              <button
+                className={`hover:text-blue-400 ${i === navigationPath.length - 1 ? "text-blue-400 font-semibold" : "text-gray-400"}`}
+                onClick={() => navigateUp(i)}
+              >
+                {name}
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <svg
         ref={svgRef}
         className="w-full h-full bg-gray-950"
@@ -233,7 +255,7 @@ export default function Canvas() {
         })}
 
         {/* State nodes */}
-        {leafStates.map((state) => {
+        {currentChildren.map((state) => {
           const pos = getPos(state.name);
           const isSelected = selection.kind === "state" && selection.id === state.name;
           const isFinal = state.kind === "final";
@@ -248,8 +270,12 @@ export default function Canvas() {
             <g
               key={state.name}
               onMouseDown={(e) => handleMouseDown(e, state.name)}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                if (isComposite) navigateInto(state.name);
+              }}
               onContextMenu={(e) => handleContextMenu(e, state.name)}
-              className={drawMode === "transition" ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}
+              className={drawMode === "transition" ? "cursor-crosshair" : isComposite ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"}
             >
               <rect
                 x={pos.x}
@@ -304,12 +330,18 @@ export default function Canvas() {
                   ⚠
                 </text>
               )}
+              {/* Composite indicator (drill-down hint) */}
+              {isComposite && (
+                <text x={pos.x + pos.width / 2} y={pos.y + pos.height - 6} fill="#6366f1" fontSize={9} textAnchor="middle" className="pointer-events-none select-none">
+                  ▼ {state.states?.length} children — double-click to enter
+                </text>
+              )}
             </g>
           );
         })}
 
         {/* Empty state message */}
-        {leafStates.length === 0 && (
+        {currentChildren.length === 0 && (
           <text x="50%" y="50%" fill="#475569" fontSize={16} textAnchor="middle">
             Right-click to add a state, or load a .smdf.json file
           </text>

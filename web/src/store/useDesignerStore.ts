@@ -64,6 +64,10 @@ interface DesignerState {
   showCodePreview: boolean;
   generatedCode: string | null;
 
+  // Navigation (composite drill-down)
+  navigationPath: string[];  // breadcrumb path, e.g. ["Root", "Composite1"]
+  currentParent: string;     // which state's children to display
+
   // Internal: push history before mutation
   _pushHistory: () => void;
 
@@ -136,6 +140,11 @@ interface DesignerState {
   // Code generation
   setGeneratedCode: (code: string | null) => void;
   setShowCodePreview: (show: boolean) => void;
+
+  // Navigation (composite drill-down)
+  navigateInto: (stateName: string) => void;
+  navigateUp: (toLevel?: number) => void;
+  getCurrentChildren: () => StateDef[];
 }
 
 function createEmptyDefinition(): StateMachineDefinition {
@@ -321,6 +330,8 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   errors: [],
   showCodePreview: false,
   generatedCode: null,
+  navigationPath: ["Root"],
+  currentParent: "Root",
 
   _pushHistory: () => {
     const { definition, layout, undoStack } = get();
@@ -596,6 +607,7 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
       const parsed = JSON.parse(json);
       const def: StateMachineDefinition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
       const layout = autoLayout(def, createDefaultLayout());
+      const rootName = def.state?.name ?? "Root";
       set({
         definition: def,
         layout,
@@ -605,6 +617,8 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
         selection: { kind: null, id: null },
         undoStack: [],
         redoStack: [],
+        navigationPath: [rootName],
+        currentParent: rootName,
       });
     } catch (e) {
       console.error("Failed to parse definition:", e);
@@ -624,4 +638,34 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
 
   setGeneratedCode: (code) => set({ generatedCode: code }),
   setShowCodePreview: (show) => set({ showCodePreview: show }),
+
+  navigateInto: (stateName) => {
+    const { definition, navigationPath } = get();
+    const target = findState(definition.state, stateName);
+    if (target && (target.states?.length ?? 0) > 0) {
+      set({
+        navigationPath: [...navigationPath, stateName],
+        currentParent: stateName,
+        selection: { kind: null, id: null },
+      });
+    }
+  },
+
+  navigateUp: (toLevel) => {
+    const { navigationPath } = get();
+    if (navigationPath.length <= 1) return;
+    const level = toLevel ?? navigationPath.length - 2;
+    const newPath = navigationPath.slice(0, level + 1);
+    set({
+      navigationPath: newPath,
+      currentParent: newPath[newPath.length - 1],
+      selection: { kind: null, id: null },
+    });
+  },
+
+  getCurrentChildren: () => {
+    const { definition, currentParent } = get();
+    const parent = findState(definition.state, currentParent);
+    return parent?.states ?? [];
+  },
 }));

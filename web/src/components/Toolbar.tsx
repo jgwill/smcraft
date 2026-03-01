@@ -58,8 +58,26 @@ export default function Toolbar() {
     setAddingState(false);
   };
 
-  const handleGenerate = () => {
-    setGeneratedCode(exportJson());
+  const [generateLang, setGenerateLang] = useState<"python" | "typescript">("python");
+
+  const handleGenerate = async () => {
+    const json = exportJson();
+    try {
+      const resp = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ definition: json, language: generateLang }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setGeneratedCode(data.code);
+      } else {
+        const err = await resp.json().catch(() => ({ error: "Unknown error" }));
+        setGeneratedCode(`// Code generation failed: ${err.error}\n// Showing definition JSON as fallback:\n${json}`);
+      }
+    } catch {
+      setGeneratedCode(`// Backend unavailable — showing definition JSON\n${json}`);
+    }
     setShowCodePreview(true);
   };
 
@@ -151,6 +169,14 @@ export default function Toolbar() {
       <button onClick={() => validate()} className="toolbar-btn">
         ✓ Validate
       </button>
+      <select
+        value={generateLang}
+        onChange={(e) => setGenerateLang(e.target.value as "python" | "typescript")}
+        className="bg-gray-800 border border-gray-700 rounded text-xs text-gray-300 px-1 py-0.5"
+      >
+        <option value="python">Python</option>
+        <option value="typescript">TypeScript</option>
+      </select>
       <button onClick={handleGenerate} className="toolbar-btn">
         ⚡ Generate
       </button>
