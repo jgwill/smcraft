@@ -167,6 +167,53 @@ class StateMachineParser:
             if state.is_final and (state.states or state.parallel):
                 errors.append(ValidationError("V008", f"Final state has children: {state.name}", state.name))
 
+        # V009: Composite states should have a valid initial child
+        # The first child is implicitly the initial state; warn if composite has children
+        # but none are non-final (no reachable initial state)
+        for state in model.composite_states:
+            if state.states:
+                non_final_children = [c for c in state.states if not c.is_final and not c.is_history]
+                if not non_final_children:
+                    errors.append(ValidationError(
+                        "V009",
+                        f"Composite state has no non-final initial child: {state.name}",
+                        state.name,
+                    ))
+
+        # V010: Parallel states must have ≥2 regions, each with ≥1 child
+        for state in model.all_states:
+            if state.parallel:
+                if len(state.parallel.states) < 2:
+                    errors.append(ValidationError(
+                        "V010",
+                        f"Parallel state must have at least 2 regions, has {len(state.parallel.states)}: {state.name}",
+                        state.name,
+                    ))
+                for region in state.parallel.states:
+                    if not region.states:
+                        errors.append(ValidationError(
+                            "V010",
+                            f"Parallel region '{region.name}' in '{state.name}' has no child states",
+                            region.name,
+                        ))
+
+        # V011: Parallel region transitions nextState must be within same region or to parent exit state
+        for state in model.all_states:
+            if state.parallel:
+                exit_state = state.parallel.next_state
+                for region in state.parallel.states:
+                    region_state_names = {s.name for s in region.states}
+                    self._collect_all_state_names(region, region_state_names)
+                    for child in region.states:
+                        for t in child.transitions:
+                            if t.next_state and t.next_state not in region_state_names and t.next_state != exit_state:
+                                errors.append(ValidationError(
+                                    "V011",
+                                    f"Transition in parallel region '{region.name}' targets '{t.next_state}' "
+                                    f"which is outside the region and not the exit state '{exit_state}'",
+                                    child.name,
+                                ))
+
         # V012: Composite states have at least one child
         for state in model.composite_states:
             if not state.states:
@@ -175,6 +222,15 @@ class StateMachineParser:
         # V013: At least one event source
         if not defn.event_sources:
             errors.append(ValidationError("V013", "No event sources defined"))
+
+        # V014: Timer references in actions must reference defined timers
+        timer_names = set(model.timer_map.keys())
+        for state in model.all_states:
+            for action in state.on_entry + state.on_exit:
+                self._check_timer_refs(action, timer_names, state.name, errors)
+            for t in state.transitions:
+                for action in t.actions:
+                    self._check_timer_refs(action, timer_names, state.name, errors)
 
         return errors
 
@@ -415,6 +471,31 @@ class StateMachineParser:
         for ts_el in el.findall("sm:timerStop", ns) + el.findall("timerStop"):
             actions.append(ActionDef(timer_stop=ts_el.get("timer", "")))
         return actions
+
+    # --- Helper Methods ---
+
+    def _collect_all_state_names(self, state: StateDef, names: set[str]) -> None:
+        """Recursively collect all state names in a subtree."""
+        for child in state.states:
+            names.add(child.name)
+            self._collect_all_state_names(child, names)
+
+    def _check_timer_refs(self, action: ActionDef, timer_names: set[str], state_name: str, errors: list[ValidationError]) -> None:
+        """Check that timer_start and timer_stop reference defined timers."""
+        if action.timer_start:
+            timer_name = action.timer_start.get("timer", "")
+            if timer_name and timer_name not in timer_names:
+                errors.append(ValidationError(
+                    "V014",
+                    f"Action references undefined timer: {timer_name}",
+                    state_name,
+                ))
+        if action.timer_stop and action.timer_stop not in timer_names:
+            errors.append(ValidationError(
+                "V014",
+                f"Action references undefined timer: {action.timer_stop}",
+                state_name,
+            ))
 
     # --- State Collection ---
 

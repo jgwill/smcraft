@@ -28,6 +28,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { execSync } from "child_process";
+import { writeFileSync, readFileSync, mkdtempSync, rmSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 
 // ─── In-memory state machine definition ──────────────────────────────
 
@@ -153,7 +157,39 @@ function validate(def: Definition): ValidationError[] {
   return errors;
 }
 
-function generatePython(def: Definition): string {
+function generateViaSmcg(def: Definition, language: string): string {
+  const tmpDir = mkdtempSync(join(tmpdir(), "smcraft-"));
+  const inputFile = join(tmpDir, `${def.settings.name ?? "machine"}.smdf.json`);
+  const outputDir = join(tmpDir, "output");
+
+  try {
+    // Write definition as SMDF JSON
+    const smdf = { settings: def.settings, events: def.events, state: def.state };
+    writeFileSync(inputFile, JSON.stringify(smdf, null, 2));
+
+    // Call real smcg CLI
+    execSync(`smcg "${inputFile}" -l ${language} -o "${outputDir}"`, {
+      encoding: "utf-8",
+      timeout: 30000,
+    });
+
+    // Read generated output
+    const ext = language === "python" ? "py" : "ts";
+    const name = def.settings.name ?? "machine";
+    const outputFile = join(outputDir, `${name}_fsm.${ext}`);
+    return readFileSync(outputFile, "utf-8");
+  } catch (e: any) {
+    // Fallback to lightweight inline generation if smcg fails
+    return language === "python"
+      ? generatePythonFallback(def)
+      : generateTypeScriptFallback(def);
+  } finally {
+    try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+  }
+}
+
+// Fallback lightweight generators (used when smcg CLI unavailable)
+function generatePythonFallback(def: Definition): string {
   const lines: string[] = [];
   const name = def.settings.name ?? "StateMachine";
   const states = def.state.states ?? [];
@@ -209,7 +245,7 @@ function generatePython(def: Definition): string {
   return lines.join("\n");
 }
 
-function generateTypeScript(def: Definition): string {
+function generateTypeScriptFallback(def: Definition): string {
   const lines: string[] = [];
   const name = def.settings.name ?? "StateMachine";
   const states = def.state.states ?? [];
@@ -400,7 +436,7 @@ server.tool(
         isError: true,
       };
     }
-    const code = language === "python" ? generatePython(currentDefinition) : generateTypeScript(currentDefinition);
+    const code = generateViaSmcg(currentDefinition, language);
     return { content: [{ type: "text", text: code }] };
   }
 );
