@@ -46,10 +46,10 @@ The RISE framework's Structural Tension Charts (STC) are, at their core, state m
 | Desired Outcome | Target/Final State |
 | Current Reality | Initial State |
 | Action Step Completion | Transition Event |
-| Structural Tension | Distance between current and desired state |
+| Structural Tension | Disequilibrium energy driving state toward resolution |
 | Resolution | Reaching the final state |
 
-This bridge means smcraft can model RISE planning workflows themselves, creating a recursive self-referencing capability where the framework used to plan work becomes the tool that executes it.
+This structural equivalence is documented in `llms/llms-stc-state-machine.md` as an **LLM comprehension layer** — it encodes the creative process as event-driven architecture for LLM reasoning. smcraft is one potential runtime consumer of this framing, not its origin or sole purpose.
 
 #### Creative Process ↔ State Machine
 mia-code-server's creative process (Germination → Assimilation → Completion) maps directly to a composite state machine. Each phase is a composite state containing sub-states (e.g., Germination has TaskDefinition, SpecGeneration, PDEDecomposition). The `creative-process.smdf.json` example demonstrates this mapping.
