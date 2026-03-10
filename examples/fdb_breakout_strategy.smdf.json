@@ -1,0 +1,221 @@
+{
+  "settings": {
+    "namespace": "Trading.Strategies",
+    "name": "FDBBreakoutStrategy",
+    "asynchronous": false,
+    "objects": [
+      { "instance": "strategy", "class": "FDBBreakoutStrategyEntity" },
+      { "instance": "market", "class": "MarketDataProvider" },
+      { "instance": "broker", "class": "BrokerOrderManager" }
+    ],
+    "context": { "class": "FDBBreakoutContext" }
+  },
+  "events": [
+    {
+      "name": "StrategyEvents",
+      "feeder": "StrategyFeeder",
+      "events": [
+        {
+          "id": "Activate",
+          "parameters": [
+            { "name": "strategyId", "type": "string" }
+          ]
+        },
+        {
+          "id": "BreakoutDetected",
+          "parameters": [
+            { "name": "price", "type": "float" },
+            { "name": "direction", "type": "string" }
+          ]
+        },
+        {
+          "id": "FDBSignalFound",
+          "parameters": [
+            { "name": "signalBar", "type": "int" },
+            { "name": "fdbbOrFdbs", "type": "string" }
+          ]
+        },
+        {
+          "id": "OrderPlaced",
+          "parameters": [
+            { "name": "orderId", "type": "string" },
+            { "name": "entryPrice", "type": "float" },
+            { "name": "stopPrice", "type": "float" }
+          ]
+        },
+        {
+          "id": "OrderFilled",
+          "parameters": [
+            { "name": "tradeId", "type": "string" },
+            { "name": "fillPrice", "type": "float" }
+          ]
+        },
+        {
+          "id": "OrderCanceled",
+          "parameters": [
+            { "name": "reason", "type": "string" }
+          ]
+        },
+        {
+          "id": "StopInvalidated",
+          "parameters": [
+            { "name": "currentPrice", "type": "float" }
+          ]
+        },
+        {
+          "id": "TradeClosed",
+          "parameters": [
+            { "name": "pnl", "type": "float" }
+          ]
+        },
+        {
+          "id": "MaxPuiReached",
+          "parameters": [
+            { "name": "periodsElapsed", "type": "int" }
+          ]
+        },
+        {
+          "id": "MaxEntryReached",
+          "parameters": [
+            { "name": "entryCount", "type": "int" }
+          ]
+        },
+        { "id": "MaxTradeReached" },
+        {
+          "id": "Faulted",
+          "parameters": [
+            { "name": "error", "type": "string" }
+          ]
+        },
+        {
+          "id": "Deactivate",
+          "parameters": [
+            { "name": "reason", "type": "string" }
+          ]
+        },
+        { "id": "Retry" }
+      ],
+      "timers": [
+        { "id": "evMaxPuiTimeout", "name": "MaxPuiTimer" }
+      ]
+    }
+  ],
+  "state": {
+    "name": "Root",
+    "states": [
+      {
+        "name": "Created",
+        "transitions": [
+          { "event": "Activate", "nextState": "Active_WaitingBreakout" },
+          { "event": "Deactivate", "nextState": "Deactivated" }
+        ]
+      },
+      {
+        "name": "Active",
+        "states": [
+          {
+            "name": "Active_WaitingBreakout",
+            "onEntry": {
+              "actions": [
+                { "code": "market.start_price_monitoring(strategy.breakout_price)" }
+              ]
+            },
+            "transitions": [
+              { "event": "BreakoutDetected", "nextState": "Active_WaitingSignal" },
+              { "event": "Deactivate", "nextState": "Deactivated" },
+              { "event": "MaxPuiReached", "nextState": "MaxPuiReached" }
+            ]
+          },
+          {
+            "name": "Active_WaitingSignal",
+            "onEntry": {
+              "actions": [
+                { "code": "market.start_signal_scan(strategy.instrument, strategy.timeframe)" }
+              ]
+            },
+            "transitions": [
+              { "event": "FDBSignalFound", "nextState": "Active_WaitingEntering" },
+              { "event": "Deactivate", "nextState": "Deactivated" },
+              { "event": "MaxEntryReached", "nextState": "MaxEntryReached" },
+              { "event": "MaxPuiReached", "nextState": "MaxPuiReached" }
+            ]
+          },
+          {
+            "name": "Active_WaitingEntering",
+            "onEntry": {
+              "actions": [
+                { "code": "broker.prepare_entry_order(strategy)" }
+              ]
+            },
+            "transitions": [
+              {
+                "event": "OrderPlaced",
+                "nextState": "Active_Placed",
+                "condition": "strategy.validate_mpr(entry_price, stop_price)"
+              },
+              { "event": "Deactivate", "nextState": "Deactivated" },
+              { "event": "Faulted", "nextState": "Faulted" },
+              { "event": "MaxPuiReached", "nextState": "MaxPuiReached" }
+            ]
+          },
+          {
+            "name": "Active_Placed",
+            "onEntry": {
+              "actions": [
+                { "code": "broker.submit_order(strategy.pending_order)" }
+              ]
+            },
+            "transitions": [
+              { "event": "OrderFilled", "nextState": "Active_Filled" },
+              { "event": "OrderCanceled", "nextState": "Active_EntryOrderCanceled" },
+              { "event": "StopInvalidated", "nextState": "Active_EntryOrderCanceled" },
+              { "event": "Faulted", "nextState": "Faulted" }
+            ]
+          },
+          {
+            "name": "Active_Filled",
+            "onEntry": {
+              "actions": [
+                { "code": "strategy.record_fill(trade_id, fill_price)" }
+              ]
+            },
+            "transitions": [
+              { "event": "TradeClosed", "nextState": "Completed" },
+              { "event": "MaxTradeReached", "nextState": "MaxTradeReached" }
+            ]
+          },
+          {
+            "name": "Active_EntryOrderCanceled",
+            "onEntry": {
+              "actions": [
+                { "code": "strategy.increment_cancel_count()" }
+              ]
+            },
+            "transitions": [
+              {
+                "event": "Retry",
+                "nextState": "Active_WaitingSignal",
+                "condition": "strategy.cancel_count < strategy.max_cancel"
+              },
+              { "event": "Deactivate", "nextState": "Deactivated" }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Completed",
+        "kind": "final",
+        "onEntry": {
+          "actions": [
+            { "code": "strategy.record_completion(pnl)" }
+          ]
+        }
+      },
+      { "name": "MaxTradeReached", "kind": "final" },
+      { "name": "MaxEntryReached", "kind": "final" },
+      { "name": "MaxPuiReached", "kind": "final" },
+      { "name": "Faulted", "kind": "final" },
+      { "name": "Deactivated", "kind": "final" }
+    ]
+  }
+}
