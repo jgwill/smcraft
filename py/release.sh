@@ -39,3 +39,4 @@ echo "   - Push changes: git push origin main"
 echo "   - Push tag: git push origin v${VERSION}"
 echo "   - Verify package on PyPI: https://pypi.org/project/smcraft/"
 echo "   - Test installation: pip install smcraft"
+
