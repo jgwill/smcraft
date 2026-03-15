@@ -50,6 +50,15 @@ Without this, the user receives library code (classes inheriting from the runtim
 - [ ] **Edge cases** — duplicate names, self-transitions, orphan events, 20+ state scale
 - [ ] **TypeScript runtime alignment** — npm `smcraft@0.1.2` exports need verification
 
+## RISE Spec Produced
+
+This ceremony produced **[Spec 75: Agent ↔ Designer Bridge](rispecs/75-agent-designer-bridge.spec.md)** — covering:
+- Socket.IO live sync between MCP agent session and WebUI
+- `launch_designer` MCP tool (agent opens the visual editor)
+- `generate_to_file` MCP tool (codegen writes to disk, not clipboard)
+- Scaffold generation (`pyproject.toml` / `package.json` + entrypoint)
+- Session persistence (auto-save after each mutation)
+
 ## Summary
 
 `smcraft-mcp` delivers a clean, conversational state machine design experience. The core design→validate→generate loop is solid. The structural tension is between "generated code" and "running application" — closing that loop with scaffolding/bootstrap tooling would make the full pipeline generative end-to-end.
