@@ -1,0 +1,120 @@
+{
+  "stateMachine": {
+    "settings": {
+      "namespace": "ceremony",
+      "name": "CreativeSession",
+      "asynchronous": false
+    },
+    "events": [
+      {
+        "name": "Internal",
+        "events": [
+          {
+            "id": "BEGIN",
+            "description": "Initiate the session"
+          },
+          {
+            "id": "INTENTIONS_SET",
+            "description": "Intentions declared, ready to work"
+          },
+          {
+            "id": "PAUSE",
+            "description": "Step back to reflect on what emerged"
+          },
+          {
+            "id": "RESUME",
+            "description": "Return to active work after reflection"
+          },
+          {
+            "id": "CLOSE",
+            "description": "Begin closing ceremony"
+          },
+          {
+            "id": "ARCHIVE",
+            "description": "Final archiving complete"
+          }
+        ]
+      }
+    ],
+    "state": {
+      "name": "Root",
+      "states": [
+        {
+          "name": "Idle",
+          "kind": "normal",
+          "description": "Session not yet started",
+          "transitions": [
+            {
+              "event": "BEGIN",
+              "nextState": "Opening",
+              "description": "Session starts"
+            }
+          ]
+        },
+        {
+          "name": "Opening",
+          "kind": "normal",
+          "description": "Ceremony opening — setting intentions",
+          "transitions": [
+            {
+              "event": "INTENTIONS_SET",
+              "nextState": "Active",
+              "description": "Intentions declared, entering deep work"
+            }
+          ]
+        },
+        {
+          "name": "Active",
+          "kind": "normal",
+          "description": "Deep creative work in progress",
+          "transitions": [
+            {
+              "event": "PAUSE",
+              "nextState": "Reflecting",
+              "description": "Step into reflection"
+            },
+            {
+              "event": "CLOSE",
+              "nextState": "Closing",
+              "description": "Direct close from active work"
+            }
+          ]
+        },
+        {
+          "name": "Reflecting",
+          "kind": "normal",
+          "description": "West direction — processing what emerged",
+          "transitions": [
+            {
+              "event": "RESUME",
+              "nextState": "Active",
+              "description": "Return to active creation"
+            },
+            {
+              "event": "CLOSE",
+              "nextState": "Closing",
+              "description": "Move to closing ceremony"
+            }
+          ]
+        },
+        {
+          "name": "Closing",
+          "kind": "normal",
+          "description": "Closing ceremony — archiving and honoring",
+          "transitions": [
+            {
+              "event": "ARCHIVE",
+              "nextState": "Complete",
+              "description": "Archive done, session complete"
+            }
+          ]
+        },
+        {
+          "name": "Complete",
+          "kind": "final",
+          "description": "Session fully closed"
+        }
+      ]
+    }
+  }
+}
