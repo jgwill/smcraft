@@ -134,3 +134,6 @@ API: `generate_python(input_path, output_path?) → str`
 - [RISE Framework](https://llms.jgwill.com/llms-rise-framework.txt): Creative-oriented analysis and generation
 - [Structural Tension Charts](https://llms.jgwill.com/llms-structural-tension-charts.txt): STC ↔ FSM equivalence
 - [Kinship Hub System](https://llms.jgwill.com/llms-kinship-hub-system.md): Software as beings in kinship networks
+- [Veritas — Truth & Performance Models](https://docs.veritas.jgwill.com/llms.txt): MMOT evaluation shares structural tension framing with FSM states
+- [Medicine Wheel Developer Suite](https://docs.medicine-wheel.jgwill.com/llms.txt): Ceremonial cycle maps to composite state machine phases
+- [NarIntel — Narrative Intelligence](https://docs.narintel.jgwill.com/llms.txt): Narrative structure informs state transition narratives
