@@ -1,0 +1,136 @@
+# SMCraft — State Machine Craft
+
+> Domain-agnostic framework for designing, generating, and executing hierarchical state machines. Extracted from legacy Caishen C# StateForge library, reimplemented in Python + TypeScript. Design visually, conversationally via MCP, or programmatically — validate against 14 structural rules — generate production-ready code.
+
+**Python Version:** 0.1.5 (PyPI: `smcraft`)
+**TypeScript Version:** 0.1.2 (NPM: `smcraft`)
+**MCP Server Version:** 0.1.0 (NPM: `smcraft-mcp`)
+**Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
+**Published at:** https://docs.smcraft.jgwill.com
+
+## Core Packages
+
+### Python (`py/`) — v0.1.5
+Runtime library + parser + SMCG code generator + CLI. PyPI: `smcraft`. CLI: `smcg`.
+- `smcraft.model` — Dataclass-based SMDF model (StateMachineDefinition, StateDef, EventDef, TransitionDef, ActionDef, ParallelDef)
+- `smcraft.parser` — JSON/XML parser with EnrichedModel (state_map, event_map, timer_map, feeders_map, parent_map)
+- `smcraft.runtime` — Context, ContextAsync, State, StateKind, TransitionHelper, IObserver, ObserverConsole, ObserverLogger
+- `smcraft.codegen` — PythonCodeGenerator: state enum + base state class + leaf state classes + context class + feeder classes
+- `smcraft.cli` — `smcg <input.smdf.json> -o output/ -l python --validate-only -v`
+
+### TypeScript (`ts/`) — v0.1.2
+ESM package with subpath exports. NPM: `smcraft`.
+- `smcraft` — Barrel exports (model types, parser, runtime, codegen)
+- `smcraft/runtime` — ContextBase, Context, ContextAsync, State, StateKind, TransitionHelper, IObserver, ObserverNull, ObserverConsole
+- `smcraft/parser` — parseJson, parseFile, enrich, validate (EnrichedModel with stateMap, eventMap, timerMap, feedersMap, parentMap)
+- `smcraft/codegen` — TypeScriptCodeGenerator: generates TS state machine code from EnrichedModel
+
+### MCP Server (`mcp/`) — v0.1.0
+MCP server for LLM agent integration. Conversational state machine design on stdio.
+- 11 tools for create → build → validate → generate workflow
+- 1 resource: `smcraft://definition` — current definition as JSON
+- 1 prompt: `design-state-machine` — guided design conversation
+
+### Web Designer (`web/`) — v0.1.0
+Next.js 16 + React 19 + Zustand + SVG canvas. Visual state machine editor.
+- Canvas: SVG-based, drag-and-drop states, Bézier transition arrows, draw mode
+- Toolbar: Open/Save/Export, Select/Draw mode toggle, +State, Validate, Generate, Undo/Redo
+- PropertiesPanel: State name/kind/description, onEntry/onExit actions, transition editing
+- EventsPanel, SettingsPanel, ValidationPanel, CodePreview
+
+## SMDF — State Machine Definition Format
+
+File extension: `.smdf.json` (also supports `.smdf.xml`, `.fsm`)
+
+Three top-level sections:
+- `settings` — namespace, name, asynchronous, objects[], context
+- `events` — event sources with grouped events, parameters, and timers
+- `state` — hierarchical state tree (Root → composite → leaf states)
+
+State types: Leaf, Composite, Final, History, Parallel, Root
+Validation rules: V001-V014 (unique names, valid references, final state constraints, parallel region rules, timer refs)
+
+## MCP Tools (11 total)
+
+### Creation Tools
+- `create_state_machine` — Initialize definition (namespace, name, asynchronous?)
+- `add_state` — Add state to hierarchy (name, parent?, kind?, description?)
+- `add_event` — Add event definition (id, description?)
+- `add_transition` — Wire transition (state, event, nextState?, condition?, description?)
+
+### Modification Tools
+- `remove_state` — Remove state from definition (name)
+
+### Query Tools
+- `get_definition` — Export current definition as JSON
+- `load_definition` — Import definition from JSON string
+- `list_states` — Tree view with transitions per state
+- `list_events` — Flat event list with descriptions
+
+### Action Tools
+- `validate_definition` — Run V001-V014 validation rules
+- `generate_code` — Generate Python or TypeScript code (language)
+
+## Runtime Engine
+
+Hierarchical state machine execution with LCA-based transitions.
+
+Key classes:
+- `State` — name, kind (StateKind enum), parent, on_entry/on_exit callbacks
+- `Context` (sync) — state_current, state_previous, state_history; immediate event dispatch
+- `ContextAsync` — Thread-safe event queue with background processing (max 1024 events)
+- `TransitionHelper` — find_common_ancestor (LCA), process_transition_begin (exit chain), process_transition_end (entry chain)
+
+Observer hooks: on_entry, on_exit, on_transition_begin, on_transition_end, on_timer_start, on_timer_stop
+Observer implementations: ObserverNull (no-op), ObserverConsole (stdout), ObserverLogger (Python logging)
+
+Timer support: start_timer(name, duration_ms, callback), stop_timer(name), stop_all_timers()
+State serialization: serialize() / deserialize() for persistence and recovery
+
+## Code Generator (SMCG)
+
+Pipeline: SMDF File → Parser → EnrichedModel → Validator (V001-V014) → CodeGenerator → Output File
+
+Python target generates:
+1. State enum (IntEnum)
+2. Base state class with virtual event handlers
+3. Leaf state classes with concrete transition handlers
+4. Context class with state initialization and event dispatch
+5. Feeder classes with typed event methods
+
+TypeScript target generates equivalent structure with TS idioms.
+
+CLI: `smcg <input> -o <dir> -l python|typescript -n <name> --validate-only -v`
+API: `generate_python(input_path, output_path?) → str`
+
+## RISE Specifications
+
+- [Spec 70 — SMDF Format](./rispecs/70-smdf-format.spec.md): Schema, state types, validation V001-V014, JSON/XML formats
+- [Spec 71 — Runtime Engine](./rispecs/71-runtime-engine.spec.md): State, Context, ContextAsync, TransitionHelper, observers
+- [Spec 72 — Code Generator](./rispecs/72-code-generator.spec.md): Python + TS targets, CLI, codegen pipeline, EnrichedModel
+- [Spec 73 — MCP Server](./rispecs/73-mcp-server.spec.md): 11 tools, design session protocol, in-memory state
+- [Spec 74 — Web Designer](./rispecs/74-web-designer.spec.md): Canvas, store, components, MMOT drill-down vision
+- [Spec 75 — Agent-Designer Bridge](./rispecs/75-agent-designer-bridge.spec.md): Live Agent ↔ WebUI sync, Socket.IO, scaffold pipeline
+
+## Lineage / KINSHIP
+
+### Upstream (Feeds From)
+- **caishen** — Original C# StateForge runtime and SMCG code generation (Specs 60-63)
+
+### Downstream (Feeds Into)
+- **jgt-strategy-api** — 13-state FDB Breakout Strategy FSM designed using smcraft patterns
+- **jgt-code** — Terminal trading agent imports `smcraft` for TS state machine runtime
+- **mia-code-server** — Creative process stages (Germination → Assimilation → Completion) as hierarchical state machines
+- **jgtutils** — Previously hosted Python state machine code; now imports `smcraft` as dependency
+
+### Conceptual Bridges
+- Structural Tension Charts (STC) ↔ State Transitions — structural isomorphism (desired outcome = final state, current reality = initial state, action steps = events)
+- Creative Process ↔ Composite State Machine — each creative phase maps to a composite state with sub-states
+
+## Cross-Repository Links
+
+- [Master LLM Index](https://llms.jgwill.com): 40+ guidance documents
+- [Workspace Platform](https://docs.workspace.jgwill.com/llms.txt): Unified creative development platform
+- [RISE Framework](https://llms.jgwill.com/llms-rise-framework.txt): Creative-oriented analysis and generation
+- [Structural Tension Charts](https://llms.jgwill.com/llms-structural-tension-charts.txt): STC ↔ FSM equivalence
+- [Kinship Hub System](https://llms.jgwill.com/llms-kinship-hub-system.md): Software as beings in kinship networks

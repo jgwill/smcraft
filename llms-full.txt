@@ -1,0 +1,1208 @@
+# SMCraft — State Machine Craft (Full Reference)
+
+> Domain-agnostic framework for designing, generating, and executing hierarchical state machines. Extracted from legacy Caishen C# StateForge library, reimplemented in Python + TypeScript. Four packages: Python runtime/parser/codegen/CLI, TypeScript runtime/parser/codegen, MCP server for conversational design, Web Designer for visual editing.
+
+**Python Version:** 0.1.5 (PyPI: `smcraft`, CLI: `smcg`)
+**TypeScript Version:** 0.1.2 (NPM: `smcraft`, ESM with subpath exports)
+**MCP Server Version:** 0.1.0 (NPM: `smcraft-mcp`, stdio transport)
+**Web Designer Version:** 0.1.0 (Next.js 16 + React 19 + Zustand + SVG)
+**Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
+**RISE Specs:** 70-75 (SMDF, Runtime, CodeGen, MCP, Web, Agent Bridge)
+**Published at:** https://docs.smcraft.jgwill.com
+
+---
+
+## 1. Architecture Overview
+
+```
+.smdf.json definition (or .smdf.xml / .fsm)
+    ↓
+  Parser (Spec 70)
+    ↓
+  EnrichedModel (with lookup maps: state_map, event_map, timer_map, feeders_map, parent_map)
+    ↓
+  Validator (V001-V014 rules)
+    ↓
+  Code Generator (Spec 72)
+    ↓
+  Python / TypeScript state machine classes
+    ↓
+  Runtime Engine (Spec 71) executes them
+```
+
+### Package Topology
+```
+smcraft/
+├── py/                    # Python package (PyPI: smcraft)
+│   └── smcraft/
+│       ├── model.py       # Dataclass SMDF model
+│       ├── parser.py      # JSON/XML parser + validator + enricher
+│       ├── runtime.py     # Context, State, TransitionHelper, Observer
+│       ├── codegen.py     # PythonCodeGenerator
+│       └── cli.py         # smcg CLI
+├── ts/                    # TypeScript package (NPM: smcraft)
+│   └── src/
+│       ├── model.ts       # TypeScript interfaces
+│       ├── parser.ts      # Parser + validator + enricher
+│       ├── runtime.ts     # Context, State, TransitionHelper, Observer
+│       ├── codegen.ts     # TypeScriptCodeGenerator
+│       └── index.ts       # Barrel exports
+├── mcp/                   # MCP Server (NPM: smcraft-mcp)
+│   └── src/
+│       └── server.ts      # 11 tools, 1 resource, 1 prompt
+├── web/                   # Visual Designer (Next.js)
+│   └── src/
+│       ├── components/    # Canvas, Toolbar, PropertiesPanel, etc.
+│       ├── store/         # Zustand: useDesignerStore
+│       └── types/         # definition.ts type interfaces
+├── examples/              # Example SMDF definitions
+├── rispecs/               # RISE specifications (70-75)
+└── KINSHIP.md             # Lineage and relationships
+```
+
+### Four Design Surfaces
+1. **CLI** (`smcg`) — Parse, validate, generate from command line
+2. **Python/TS API** — Programmatic parsing, validation, code generation
+3. **MCP Server** — LLM agents design state machines conversationally
+4. **Web Designer** — Visual drag-and-drop canvas with SVG rendering
+
+---
+
+## 2. SMDF Schema Specification
+
+### File Format
+Extension: `.smdf.json` (primary), `.smdf.xml`, `.fsm` (legacy XML)
+
+### Top-Level Structure
+```json
+{
+  "settings": {
+    "namespace": "Trading.Strategies",
+    "name": "FDBBreakoutStrategy",
+    "asynchronous": false,
+    "objects": [
+      { "instance": "strategy", "class": "FDBBreakoutStrategyEntity" },
+      { "instance": "market", "class": "MarketDataProvider" }
+    ],
+    "context": { "class": "FDBBreakoutContext" }
+  },
+  "events": [
+    {
+      "name": "StrategyEvents",
+      "feeder": "StrategyFeeder",
+      "events": [
+        { "id": "Activate", "parameters": [{ "name": "strategyId", "type": "string" }] },
+        { "id": "BreakoutDetected", "parameters": [{ "name": "price", "type": "float" }, { "name": "direction", "type": "string" }] },
+        { "id": "FDBSignalFound" },
+        { "id": "OrderFilled" }
+      ],
+      "timers": [
+        { "id": "evMaxPuiTimeout", "name": "MaxPuiTimer" }
+      ]
+    }
+  ],
+  "state": {
+    "name": "Root",
+    "states": [
+      {
+        "name": "Created",
+        "transitions": [
+          { "event": "Activate", "nextState": "Active_WaitingBreakout" }
+        ]
+      },
+      {
+        "name": "Active",
+        "states": [
+          {
+            "name": "Active_WaitingBreakout",
+            "onEntry": { "actions": [{ "code": "market.start_price_monitoring(strategy.breakout_price)" }] },
+            "transitions": [
+              { "event": "BreakoutDetected", "nextState": "Active_WaitingSignal" }
+            ]
+          },
+          {
+            "name": "Active_WaitingSignal",
+            "transitions": [
+              { "event": "FDBSignalFound", "nextState": "Active_WaitingEntering" }
+            ]
+          },
+          {
+            "name": "Active_WaitingEntering",
+            "transitions": [
+              { "event": "OrderFilled", "nextState": "Completed" }
+            ]
+          }
+        ]
+      },
+      { "name": "Completed", "kind": "final" },
+      { "name": "Faulted", "kind": "final" }
+    ]
+  }
+}
+```
+
+### Settings Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `namespace` | string | ✓ | Code namespace for generated output |
+| `name` | string | | State machine name (defaults to filename) |
+| `asynchronous` | boolean | | If true, generates ContextAsync with event queue |
+| `objects` | ObjectRef[] | | Domain objects accessible in actions/conditions |
+| `context` | ContextConfig | | Override context class/instance naming |
+| `using` | string[] | | Additional imports for generated code |
+
+### ObjectRef
+```json
+{ "instance": "strategy", "class": "BDBOStrategyEntity", "namespace": "Trading" }
+```
+Objects are stored on the generated Context class and accessible in action code via `context.strategy.method()`.
+
+### EventSourceDef
+Groups related events. Generates a Feeder class with typed methods for each event.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Event source identifier |
+| `feeder` | string | Generated feeder class name |
+| `events` | EventDef[] | Event definitions |
+| `timers` | TimerDef[] | Timer definitions (fire as events) |
+
+### EventDef
+```json
+{ "id": "OrderFilled", "parameters": [{ "name": "tradeId", "type": "string" }, { "name": "fillPrice", "type": "float" }] }
+```
+Parameter types: `string`, `int`, `float`, `double`, `bool`, `boolean`, `object`, or custom type names.
+
+### TimerDef
+```json
+{ "id": "evTimeout", "name": "Timeout" }
+```
+Timers generate as events. In actions: `timerStart: { "timer": "Timeout", "duration": "60000" }` and `timerStop: "Timeout"`.
+
+### StateDef
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Unique state identifier |
+| `kind` | "normal" \| "final" \| "history" | State classification (default: normal) |
+| `description` | string | Human-readable description |
+| `onEntry` | { actions: ActionDef[] } | Entry actions |
+| `onExit` | { actions: ActionDef[] } | Exit actions |
+| `transitions` | TransitionDef[] | Event-triggered transitions |
+| `states` | StateDef[] | Child states (makes this composite) |
+| `parallel` | ParallelDef | Orthogonal regions |
+
+**State Classification (derived from structure):**
+- **Leaf**: `states == [] && parallel == null`
+- **Composite**: `states.length > 0`
+- **Final**: `kind == "final"` — no outgoing transitions, no children
+- **History**: `kind == "history"` — remembers last active child
+- **Parallel**: `parallel != null` — contains orthogonal regions
+- **Root**: Top-level state in the tree
+
+### TransitionDef
+```json
+{
+  "event": "OrderFilled",
+  "nextState": "Completed",
+  "condition": "strategy.validate_mpr(entry_price, stop_price)",
+  "actions": [{ "code": "strategy.record_fill(trade_id, fill_price)" }]
+}
+```
+- `event`: Required — references a defined EventDef.id
+- `nextState`: Optional — if omitted, this is an internal transition (no state change)
+- `condition`: Optional — guard expression; transition only fires if true
+- Multiple transitions on the same event create conditional branches (if/elif/else)
+
+### ActionDef
+Three forms:
+```json
+{ "code": "strategy.start_monitoring()" }
+{ "timerStart": { "timer": "Timeout", "duration": "60000" } }
+{ "timerStop": "Timeout" }
+```
+
+### ParallelDef
+```json
+{
+  "nextState": "Completed",
+  "states": [
+    { "name": "RegionA", "states": [...] },
+    { "name": "RegionB", "states": [...] }
+  ]
+}
+```
+Requires ≥2 regions, each with ≥1 child state. `nextState` is the exit state when all regions complete.
+
+### Validation Rules (V001-V014)
+
+| Rule | Description |
+|------|-------------|
+| V001 | Exactly one root state must be defined |
+| V002 | All state names must be unique |
+| V003 | All event IDs must be unique |
+| V004 | Timer IDs must not collide with event IDs |
+| V005 | Transition events must reference defined events |
+| V006 | Transition nextState must reference defined states |
+| V007 | Final states must have no outgoing transitions |
+| V008 | Final states must have no children |
+| V009 | Composite states must have at least one non-final initial child |
+| V010 | Parallel states must have ≥2 regions, each with ≥1 child |
+| V011 | Parallel region transitions must target within region or parent exit state |
+| V012 | Composite states must have at least one child |
+| V013 | At least one event source must be defined |
+| V014 | Timer references in actions must reference defined timers |
+
+---
+
+## 3. Python Package Deep Dive
+
+### Installation
+```bash
+pip install smcraft
+# or from source:
+cd py && pip install -e .
+```
+
+### Module: `smcraft.model` (Spec 70)
+Dataclass-based SMDF representation.
+
+**Key Classes:**
+```python
+from smcraft import (
+    StateMachineDefinition,  # Root: settings + event_sources + root_state
+    SettingsModel,           # namespace, name, asynchronous, objects, context, using
+    EventSourceDef,          # name, feeder, events[], timers[]
+    EventDef,                # id, name, description, parameters[], pre_action, post_action
+    TimerDef,                # id, name, description
+    ParameterDef,            # name, type
+    StateDef,                # name, kind, description, on_entry, on_exit, transitions, states, parallel
+    TransitionDef,           # event, next_state, condition, description, actions
+    ActionDef,               # code, timer_start, timer_stop
+    ParallelDef,             # next_state, states[]
+    ObjectRef,               # instance, cls, namespace
+    ContextConfig,           # cls, instance
+    StateKindType,           # Enum: NORMAL, FINAL, HISTORY
+)
+```
+
+**StateDef properties:**
+```python
+state.is_leaf       # True if no children and no parallel
+state.is_composite  # True if has children
+state.is_final      # True if kind == FINAL
+state.is_history    # True if kind == HISTORY
+state.is_parallel   # True if parallel is not None
+```
+
+**Serialization:**
+```python
+definition = StateMachineDefinition(settings=..., event_sources=[...], root_state=...)
+json_str = definition.to_json(indent=2)
+```
+
+### Module: `smcraft.parser` (Spec 70)
+Parses JSON/XML, enriches with lookup maps, validates.
+
+**Key Classes:**
+```python
+from smcraft.parser import StateMachineParser, EnrichedModel, ValidationError
+
+parser = StateMachineParser()
+
+# Parse file (auto-detects JSON/XML/FSM)
+model: EnrichedModel = parser.parse_file("input.smdf.json")
+
+# Parse string
+definition = parser.parse_json(json_string)
+definition = parser.parse_xml(xml_string)
+
+# Enrich (build lookup maps)
+model = parser.enrich(definition)
+
+# Validate
+errors: list[ValidationError] = parser.validate(model)
+for err in errors:
+    print(f"[{err.rule_id}] {err.message} ({err.element})")
+```
+
+**EnrichedModel fields:**
+```python
+model.definition        # StateMachineDefinition
+model.state_map         # dict[str, StateDef] — name → state
+model.event_map         # dict[str, EventDef] — id → event
+model.timer_map         # dict[str, TimerDef] — name → timer
+model.feeders_map       # dict[str, list[EventDef]] — feeder_name → events
+model.parent_map        # dict[str, Optional[str]] — state_name → parent_name
+model.all_states        # list[StateDef] — all states in tree order
+model.leaf_states       # list[StateDef] — leaf states only
+model.composite_states  # list[StateDef] — composite states only
+```
+
+**XML Support:**
+Parses StateMachineDotNet-v1 namespace (`http://www.stateforge.com/StateMachineDotNet-v1`). Handles both namespaced and non-namespaced XML. Supports legacy `.fsm` extension.
+
+### Module: `smcraft.runtime` (Spec 71)
+Execution engine for generated state machines.
+
+**StateKind Enum:**
+```python
+from smcraft.runtime import StateKind
+# LEAF=0, COMPOSITE=1, ROOT=2, FINAL=3, PARALLEL=4, HISTORY=5
+```
+
+**State Class:**
+```python
+from smcraft.runtime import State
+
+state = State(name="Active", kind=StateKind.COMPOSITE, parent=root_state)
+# Override in generated subclasses:
+# state.on_entry(context) — called when entering
+# state.on_exit(context) — called when leaving
+```
+
+**Context (Synchronous):**
+```python
+from smcraft.runtime import Context
+
+ctx = Context(name="MyContext")
+ctx.set_observer(ObserverConsole.instance())
+ctx.register_end_handler(lambda c: print(f"{c.name} completed"))
+ctx.enter_initial_state()  # Override in generated code
+
+# State tracking:
+ctx.state_current   # Active leaf state
+ctx.state_previous  # Last state before transition
+ctx.state_history   # Saved state for history support
+```
+
+**ContextAsync (Asynchronous):**
+```python
+from smcraft.runtime import ContextAsync
+
+ctx = ContextAsync(name="AsyncContext", max_events=1024)
+# Events are enqueued and processed on a background thread
+ctx.schedule_event(handler_fn, *args)
+```
+
+**TransitionHelper:**
+```python
+from smcraft.runtime import TransitionHelper
+
+# Find LCA (lowest common ancestor) of two states
+lca = TransitionHelper.find_common_ancestor(state_a, state_b)
+
+# Process transition (called by generated code):
+# 1. Exit chain: walk from current state up to LCA, calling on_exit
+TransitionHelper.process_transition_begin(context, state_prev, state_next, "EventName")
+
+# 2. Set new current state (generated code does this)
+context.state_current = state_next
+
+# 3. Entry chain: walk from LCA down to target state, calling on_entry
+TransitionHelper.process_transition_end(context, state_prev, state_next)
+# Automatically calls context._on_end() if state_next is FINAL
+```
+
+**Timer Support:**
+```python
+ctx.start_timer("Timeout", 60000, lambda: ctx.on_timeout())
+ctx.stop_timer("Timeout")
+ctx.stop_all_timers()
+```
+
+**Observers:**
+```python
+from smcraft.runtime import IObserver, ObserverNull, ObserverConsole, ObserverLogger
+
+# IObserver Protocol:
+# on_entry(context_name, state_name)
+# on_exit(context_name, state_name)
+# on_transition_begin(context_name, state_prev, state_next, transition_name)
+# on_transition_end(context_name, state_prev, state_next, transition_name)
+# on_timer_start(context_name, timer_name, duration)
+# on_timer_stop(context_name, timer_name)
+
+ctx.set_observer(ObserverConsole.instance())  # stdout logging
+ctx.set_observer(ObserverLogger("mylogger"))  # Python logging module
+```
+
+**State Serialization:**
+```python
+data = ctx.serialize()    # {"state": "Active_WaitingSignal", "history": "..."}
+ctx.deserialize(data)     # Restores state_current via set_state()
+```
+
+### Module: `smcraft.codegen` (Spec 72)
+Generates Python state machine code.
+
+**PythonCodeGenerator:**
+```python
+from smcraft.codegen import PythonCodeGenerator, generate_python
+
+# High-level API:
+code = generate_python("input.smdf.json", "output/machine_fsm.py")
+
+# Low-level API:
+parser = StateMachineParser()
+model = parser.parse_file("input.smdf.json")
+generator = PythonCodeGenerator(model)
+code = generator.generate()
+```
+
+**Generated code structure:**
+1. `{Name}StateEnum(IntEnum)` — State enumeration
+2. `State{Name}(State)` — Base state class with virtual `on_{event}()` methods
+3. `State{LeafName}(State{Name})` — One class per leaf state with:
+   - `__init__` setting name, kind, parent
+   - `on_entry(context)` / `on_exit(context)` if actions defined
+   - `on_{event}(context, params)` with `TransitionHelper.process_transition_begin/end` calls
+   - Guard conditions as `if/elif/else` chains for multi-transition events
+4. `{Name}Context(Context)` — Context class with:
+   - State instance fields (`self.state_{name}`)
+   - Object references from settings
+   - `enter_initial_state()` — walks entry chain from root to initial leaf
+   - `set_state(state_name)` — for deserialization
+   - `on_{event}(params)` — delegates to `self.state_current.on_{event}()`
+5. `{Feeder}` — Feeder class with typed event methods
+
+**Naming conventions:**
+- PascalCase → snake_case for Python identifiers (`OrderCreated` → `on_order_created`)
+- Type mapping: string→str, int→int, float→float, bool→bool, object→Any
+
+### Module: `smcraft.cli` (Spec 72)
+CLI for code generation.
+
+```bash
+smcg <input-file> [options]
+
+Options:
+  --output, -o <dir>       Output directory (default: current directory)
+  --language, -l <lang>    Target language: python (default: python)
+  --name, -n <name>        Override state machine name
+  --validate-only          Only validate, don't generate code
+  --verbose, -v            Verbose output
+
+# Examples:
+smcg examples/bdbo_strategy.smdf.json -o output/ -v
+smcg examples/fdb_breakout_strategy.smdf.json --validate-only
+smcg input.smdf.json -l python -n MyMachine -o generated/
+```
+
+Output: `{output_dir}/{snake_case_name}_fsm.py`
+
+---
+
+## 4. TypeScript Package Deep Dive
+
+### Installation
+```bash
+npm install smcraft
+# or from source:
+cd ts && npm install && npm run build
+```
+
+### Subpath Exports
+```typescript
+import { ... } from "smcraft";           // Barrel: all exports
+import { ... } from "smcraft/runtime";   // Runtime only
+import { ... } from "smcraft/parser";    // Parser only
+import { ... } from "smcraft/codegen";   // Code generator only
+```
+
+### Model Types (`smcraft/model.ts`)
+```typescript
+interface StateMachineDefinition {
+  settings: SettingsModel;
+  events: EventSourceDef[];
+  state: StateDef;
+}
+
+interface SettingsModel {
+  namespace: string;
+  name?: string;
+  asynchronous: boolean;
+  objects?: ObjectRef[];
+  context?: ContextConfig;
+  using?: string[];
+}
+
+interface StateDef {
+  name: string;
+  kind?: "normal" | "final" | "history";
+  description?: string;
+  onEntry?: { actions: ActionDef[] };
+  onExit?: { actions: ActionDef[] };
+  transitions?: TransitionDef[];
+  states?: StateDef[];
+  parallel?: ParallelDef;
+}
+
+interface TransitionDef {
+  event: string;
+  nextState?: string;
+  condition?: string;
+  description?: string;
+  actions?: ActionDef[];
+}
+
+interface ActionDef {
+  code?: string;
+  timerStart?: { timer: string; duration: string };
+  timerStop?: string;
+}
+
+interface EventDef {
+  id: string;
+  name?: string;
+  description?: string;
+  parameters?: ParameterDef[];
+}
+```
+
+### Parser (`smcraft/parser.ts`)
+```typescript
+import { parseJson, parseFile, enrich, validate, type EnrichedModel, type ValidationError } from "smcraft/parser";
+
+const definition = parseJson(jsonString);
+const model: EnrichedModel = enrich(definition);
+const errors: ValidationError[] = validate(model);
+
+// EnrichedModel:
+model.stateMap      // Map<string, StateDef>
+model.eventMap      // Map<string, EventDef>
+model.timerMap      // Map<string, TimerDef>
+model.feedersMap    // Map<string, EventDef[]>
+model.parentMap     // Map<string, string | null>
+model.allStates     // StateDef[]
+model.leafStates    // StateDef[]
+model.compositeStates // StateDef[]
+```
+
+### Runtime (`smcraft/runtime.ts`)
+```typescript
+import {
+  State, StateKind, Context, ContextAsync, ContextBase,
+  TransitionHelper, ObserverNull, ObserverConsole,
+  type IObserver, type EndHandler
+} from "smcraft/runtime";
+
+// StateKind: LEAF, COMPOSITE, ROOT, FINAL, PARALLEL, HISTORY
+
+const ctx = new Context("MyContext");
+ctx.setObserver(ObserverConsole.instance());
+ctx.registerEndHandler((c) => console.log(`${c.name} completed`));
+
+// TransitionHelper (same LCA algorithm as Python):
+TransitionHelper.processTransitionBegin(context, statePrev, stateNext, "EventName");
+TransitionHelper.processTransitionEnd(context, statePrev, stateNext);
+
+// ContextAsync uses queueMicrotask for async event processing:
+const asyncCtx = new ContextAsync("AsyncCtx", 1024);
+asyncCtx.scheduleEvent(handler, ...args);
+
+// Timer support:
+ctx.startTimer("Timeout", 60000, () => ctx.onTimeout());
+ctx.stopTimer("Timeout");
+ctx.stopAllTimers();
+
+// Serialization:
+const data = ctx.serialize();
+ctx.deserialize(data);
+```
+
+### Code Generator (`smcraft/codegen.ts`)
+```typescript
+import { TypeScriptCodeGenerator } from "smcraft/codegen";
+import { parseJson, enrich } from "smcraft/parser";
+
+const definition = parseJson(jsonString);
+const model = enrich(definition);
+const generator = new TypeScriptCodeGenerator(model);
+const code: string = generator.generate();
+```
+
+Generates TypeScript equivalent of the Python output: state enum, base state class, leaf state classes, context class, feeder classes. Uses `(context as any)` casts for accessing state instances on the context.
+
+---
+
+## 5. MCP Server Deep Dive
+
+### Installation & Setup
+```bash
+cd mcp && npm install && npm run build
+node dist/server.js  # Runs on stdio
+```
+
+**MCP Client Configuration:**
+```json
+{
+  "mcpServers": {
+    "smcraft": {
+      "command": "node",
+      "args": ["/path/to/smcraft/mcp/dist/server.js"]
+    }
+  }
+}
+```
+
+### Tool Signatures (All 11)
+
+#### `create_state_machine`
+Create a new state machine definition.
+```
+Parameters:
+  namespace: string (required) — Code namespace
+  name: string (required) — State machine name
+  asynchronous: boolean (optional) — Enable async event queue
+Returns: Confirmation text. Creates definition with Root state and empty "Internal" event source.
+```
+
+#### `add_state`
+Add a state to the hierarchy.
+```
+Parameters:
+  name: string (required) — State name
+  parent: string (optional, default: "Root") — Parent state name
+  kind: "normal" | "final" | "history" (optional, default: "normal")
+  description: string (optional)
+Returns: Confirmation with state name, parent, and kind.
+Error: If no definition created, or parent not found.
+```
+
+#### `add_event`
+Add an event to the definition.
+```
+Parameters:
+  id: string (required) — Event identifier
+  description: string (optional)
+Returns: Confirmation with event id.
+Note: Events are added to the first event source ("Internal").
+```
+
+#### `add_transition`
+Wire a transition between states.
+```
+Parameters:
+  state: string (required) — Source state name
+  event: string (required) — Event that triggers transition
+  nextState: string (optional) — Target state (omit for internal transition)
+  condition: string (optional) — Guard expression
+  description: string (optional)
+Returns: Transition description (e.g., "Idle --[Start]--> Active").
+Error: If state not found.
+```
+
+#### `remove_state`
+Remove a state and its children.
+```
+Parameters:
+  name: string (required) — State to remove
+Returns: Confirmation.
+Error: Cannot remove "Root" state.
+```
+
+#### `validate_definition`
+Run validation rules against the definition.
+```
+Parameters: None
+Returns: "✓ Definition is valid" or list of [V00x] error messages.
+Validates: Event definitions exist, state names unique, transitions reference valid events/states, root has children.
+```
+
+#### `generate_code`
+Generate executable code from the definition.
+```
+Parameters:
+  language: "python" | "typescript" (required)
+Returns: Generated source code as text.
+Error: Validation errors must be fixed first.
+Implementation: Attempts smcg CLI first, falls back to lightweight inline generator.
+```
+
+#### `get_definition`
+Export current definition as JSON.
+```
+Parameters: None
+Returns: JSON string with full definition under "stateMachine" key.
+```
+
+#### `load_definition`
+Import a definition from JSON.
+```
+Parameters:
+  json: string (required) — JSON string with definition
+Returns: Confirmation with name, state count, event count.
+Accepts: { "stateMachine": {...} } or { "StateMachine": {...} } or raw definition.
+```
+
+#### `list_states`
+List all states with tree structure.
+```
+Parameters: None
+Returns: Indented tree view showing:
+  - State name and kind
+  - Transition count per state
+  - Each transition: → [event] → target
+```
+
+#### `list_events`
+List all defined events.
+```
+Parameters: None
+Returns: Flat list of event IDs with descriptions.
+```
+
+### Resource
+```
+URI: smcraft://definition
+MIME: application/json
+Returns: Current definition as JSON, or error if none loaded.
+```
+
+### Prompt
+```
+Name: design-state-machine
+Parameters:
+  domain: string (optional) — Domain context (e.g., "trading", "order processing")
+  name: string (optional) — Desired machine name
+Returns: Guided design conversation prompt that walks through:
+  1. Create state machine
+  2. Identify and add states
+  3. Define events
+  4. Wire transitions
+  5. Validate
+  6. Generate code
+```
+
+### Design Session Protocol
+1. **Initialize**: `create_state_machine` or `load_definition`
+2. **Build**: Iterative `add_state` → `add_event` → `add_transition`
+3. **Validate**: `validate_definition` → fix errors → re-validate
+4. **Generate**: `generate_code` → production-ready output
+5. **Export**: `get_definition` → save `.smdf.json` for version control
+
+---
+
+## 6. Runtime Engine Details
+
+### LCA-Based Transitions
+Every state transition computes the Lowest Common Ancestor (LCA) of the source and target states, then:
+
+1. **Exit chain**: Walk from source state UP to LCA (exclusive), calling `on_exit()` at each level
+2. **Notify**: Observer receives `on_transition_begin`
+3. **Set current state** to target
+4. **Entry chain**: Walk from LCA DOWN to target state, calling `on_entry()` at each level
+5. **Notify**: Observer receives `on_transition_end`
+6. **Check final**: If target is a FINAL state, call `_on_end()` which fires all registered end handlers
+
+**Example transition `Active_WaitingSignal → Completed`:**
+```
+Exit: Active_WaitingSignal.on_exit()
+Exit: Active.on_exit()                  (parent — up to LCA=Root)
+Observer: transition_begin
+Entry: Completed.on_entry()             (from LCA=Root down)
+Observer: transition_end
+→ Completed is FINAL → fire end handlers
+```
+
+### Hierarchical Entry Chain
+When entering `enter_initial_state()`, the context walks from Root down to the deepest initial child (first child of first child of first child...), calling `on_entry()` at each level.
+
+### Event Dispatch Pattern
+Generated contexts have `on_{event}()` methods that delegate to `self.state_current.on_{event}()`. The leaf state class handles the transition logic including guard conditions.
+
+### Timer Architecture
+- Python: `threading.Timer` with daemon threads
+- TypeScript: `setTimeout`/`clearTimeout`
+- Timer events are synthetic events that call the corresponding `on_{timer_event}()` handler
+- `stop_all_timers()` cleans up on context teardown
+
+### Observer Hook Points
+```
+State lifecycle:          on_entry, on_exit
+Transition lifecycle:     on_transition_begin, on_transition_end
+Timer lifecycle:          on_timer_start, on_timer_stop
+```
+
+ObserverConsole format: `ContextName: enter StateName`, `ContextName: transition begin StateA -> StateB [EventName]`
+
+### Async Context Behavior
+- Events are enqueued as `(handler, args)` tuples
+- Processing happens sequentially on a background thread (Python) or via `queueMicrotask` (TypeScript)
+- Maximum 1024 events per processing cycle (configurable)
+- Errors are logged but don't stop event processing
+- Thread-safe via `threading.Lock` (Python)
+
+---
+
+## 7. Code Generator Pipeline
+
+### Full Pipeline
+```
+Input File (.smdf.json / .smdf.xml / .fsm)
+    ↓
+StateMachineParser.parse_file(path)
+    ↓  auto-detects format, parses, derives name from filename if needed
+EnrichedModel
+    ↓  state_map, event_map, timer_map, feeders_map, parent_map
+StateMachineParser.validate(model)
+    ↓  V001-V014 rules → list[ValidationError]
+PythonCodeGenerator(model).generate()
+    ↓  or TypeScriptCodeGenerator(model).generate()
+Source Code (string)
+    ↓
+Output File ({snake_case_name}_fsm.py or .ts)
+```
+
+### Generated File Structure (Python Target)
+```python
+"""
+Generated State Machine: OrderWorkflow
+Namespace: MyApp
+
+Generated by SMCG. Do not edit manually.
+"""
+
+from enum import IntEnum
+from typing import Any, Optional
+from smcraft.runtime import Context, ContextAsync, ContextBase, ObserverNull, State, StateKind, TransitionHelper
+
+class OrderWorkflowStateEnum(IntEnum):
+    ROOT = 0
+    PENDING = 1
+    ACTIVE = 2
+    COMPLETED = 3
+
+class StateOrderWorkflow(State):
+    """Base state with virtual event handlers."""
+    def on_order_created(self, context, order_id: str) -> None: pass
+    def on_order_approved(self, context) -> None: pass
+    def on_order_completed(self, context) -> None: pass
+
+class StatePending(StateOrderWorkflow):
+    """State: Pending"""
+    def __init__(self, parent=None):
+        super().__init__(name="Pending", kind=StateKind.LEAF, parent=parent)
+
+    def on_order_created(self, context, order_id: str) -> None:
+        TransitionHelper.process_transition_begin(context, self, context.state_active, "OrderCreated")
+        context.state_current = context.state_active
+        TransitionHelper.process_transition_end(context, self, context.state_active)
+
+class StateActive(StateOrderWorkflow): ...
+class StateCompleted(StateOrderWorkflow): ...
+
+class OrderWorkflowContext(Context):
+    """Context for OrderWorkflow state machine."""
+    def __init__(self):
+        super().__init__(name="OrderWorkflowContext")
+        self.state_root = State(name="Root", kind=StateKind.ROOT, parent=None)
+        self.state_pending = StatePending(parent=self.state_root)
+        self.state_active = StateActive(parent=self.state_root)
+        self.state_completed = StateCompleted(parent=self.state_root)
+
+    def enter_initial_state(self) -> None:
+        self.state_current = self.state_pending
+        self.observer.on_entry(self.name, "Root")
+        self.state_root.on_entry(self)
+        self.observer.on_entry(self.name, "Pending")
+        self.state_pending.on_entry(self)
+
+    def on_order_created(self, order_id: str) -> None:
+        if self.state_current:
+            self.state_current.on_order_created(self, order_id)
+
+class OrderFeeder:
+    """Event feeder. Provides typed event methods."""
+    def __init__(self, context: OrderWorkflowContext):
+        self.context = context
+
+    def order_created(self, order_id: str) -> None:
+        self.context.on_order_created(order_id)
+```
+
+### Multi-Transition Guard Logic
+When a state has multiple transitions for the same event with conditions:
+```python
+def on_strategy_failed(self, context, error: str) -> None:
+    if strategy.can_retry():
+        TransitionHelper.process_transition_begin(context, self, context.state_active_waiting_signal, "StrategyFailed[strategy.can_retry()]")
+        context.state_current = context.state_active_waiting_signal
+        TransitionHelper.process_transition_end(context, self, context.state_active_waiting_signal)
+    else:
+        TransitionHelper.process_transition_begin(context, self, context.state_failed, "StrategyFailed")
+        context.state_current = context.state_failed
+        TransitionHelper.process_transition_end(context, self, context.state_failed)
+```
+
+---
+
+## 8. Web Designer Component Architecture
+
+### Technology Stack
+- **Next.js 16** with App Router
+- **React 19** with React Compiler (babel-plugin-react-compiler)
+- **Zustand 5** for state management
+- **SVG** for canvas rendering
+- **Tailwind CSS 4** for styling
+
+### Components
+
+#### `Canvas.tsx`
+SVG-based rendering surface for states and transitions.
+- Flattens hierarchy with `collectAllStates(definition.state)`
+- States: rounded rectangles with labels, kind indicators (dashed for final, badges for entry/exit actions)
+- Transitions: Bézier curves between state centers
+- **Draw mode**: Click source → click target → event picker popup
+- **Drag-to-move** with position persistence in Zustand store
+- **Context menu**: right-click for state operations
+- **Error highlighting**: red borders, ⚠ icon for validation errors
+- **Keyboard**: Delete (remove), Ctrl+Z/Y (undo/redo), Escape (deselect)
+
+#### `Toolbar.tsx`
+Control bar with file operations and workflow actions.
+- File: Open (.smdf.json), Save, Export JSON
+- Mode: Select ↔ Transition draw mode toggle
+- State: +State (inline name input), Delete
+- Workflow: Validate, Generate
+- Edit: Undo, Redo
+
+#### `PropertiesPanel.tsx`
+Edit panel for selected state or transition.
+- State: name, kind (dropdown), description
+- Entry/Exit actions: add/edit/remove action list
+- Transition: event (dropdown), target (dropdown), condition, description
+
+#### `EventsPanel.tsx`
+Event management panel.
+- List all events with parameters
+- Add/edit/remove events
+
+#### `SettingsPanel.tsx`
+State machine settings editor.
+- Namespace, name, asynchronous toggle
+- Object references
+
+#### `ValidationPanel.tsx`
+Displays validation results.
+- Error list with rule IDs and messages
+- Click-to-select errored states
+
+#### `CodePreview.tsx`
+Generated code display.
+- Language selector (Python/TypeScript)
+- Syntax-highlighted code preview
+- Copy to clipboard
+
+### Store: `useDesignerStore.ts`
+Zustand store managing:
+- Current definition (StateMachineDefinition)
+- State positions (for canvas layout)
+- Selected state/transition
+- Undo/redo history
+- Validation errors
+- Canvas mode (select/draw)
+- Generated code cache
+
+---
+
+## 9. RISE Specifications Summary
+
+### Spec 70 — SMDF Format
+Schema, state types (Leaf, Composite, Final, History, Parallel, Root), validation V001-V014, JSON primary format with XML legacy support. Covers StateMachineDefinition, StateDef, EventDef, TransitionDef, ActionDef, ParallelDef, TimerDef. Defines the canonical representation that all packages consume.
+
+### Spec 71 — Runtime Engine
+State (with StateKind), Context (synchronous), ContextAsync (queued event processing), TransitionHelper (LCA algorithm, entry/exit chains), IObserver protocol with hooks (entry, exit, transition begin/end, timer start/stop). Timer support via threading.Timer (Python) / setTimeout (TypeScript). State serialization for persistence.
+
+### Spec 72 — Code Generator (SMCG)
+Pipeline: SMDF → Parser → EnrichedModel → Validator → CodeGenerator → Output. Python target: state enum, base state class, leaf classes, context class, feeder classes. TypeScript target: equivalent structure. CLI `smcg` with options for output dir, language, name override, validate-only mode.
+
+### Spec 73 — MCP Server
+11 tools (create_state_machine, add_state, add_event, add_transition, remove_state, validate_definition, generate_code, get_definition, load_definition, list_states, list_events). 1 resource (smcraft://definition). 1 prompt (design-state-machine). Design session protocol: create → build → validate → generate → export.
+
+### Spec 74 — Web Designer
+Next.js 16 + React 19 + Zustand + SVG canvas. Components: Canvas (SVG rendering, draw mode, drag-and-drop), Toolbar (file/mode/workflow), PropertiesPanel, EventsPanel, SettingsPanel, ValidationPanel, CodePreview. State position tracking, undo/redo history, composite drill-down vision (planned).
+
+### Spec 75 — Agent-Designer Bridge
+Live sync between MCP server and Web Designer via Socket.IO. Events: definition:updated, validation:result, codegen:complete (server→UI), definition:patch, codegen:request (UI→server). MCP server as single source of truth. File I/O scaffold pipeline for generated code. Currently specified but not implemented — agent and WebUI are disconnected.
+
+---
+
+## 10. KINSHIP Relationships
+
+### Identity
+SMCraft is the **Architect's Toolkit** — it doesn't trade, analyze, or decide. It provides the structural framework that other systems use to organize their state transitions with correctness guarantees.
+
+### Upstream (Feeds From)
+- **caishen** — Original C# StateForge runtime patterns and SMCG code generation. RISE Specs 60-63 define the framework contracts that SMCraft reimplements.
+
+### Downstream (Feeds Into)
+- **jgt-strategy-api** — The 13-state FDB Breakout Strategy FSM (CREATED → WAITING_BREAKOUT → ... → COMPLETED) was designed using smcraft patterns. `src/fsm.py` follows smcraft's hierarchical state architecture.
+- **jgt-code** — Terminal trading agent imports `smcraft` for TypeScript state machine runtime.
+- **mia-code-server** — Creative process stages (Germination → Assimilation → Completion) as hierarchical state machines. smcraft provides the structural engine for creative lifecycle management.
+- **jgtutils** — Previously hosted Python state machine code; now imports `smcraft` as a dependency.
+- **Any application** — SMCraft is domain-agnostic; install and use anywhere.
+
+### Siblings
+- **jgtml** — Both are tooling packages; jgtml for ML pipelines, smcraft for state machines.
+- **jgtapy** — Both are library packages; jgtapy for indicators, smcraft for state machines.
+
+### Conceptual Bridges
+
+#### Structural Tension ↔ State Transitions
+The RISE framework's Structural Tension Charts (STC) are structurally isomorphic to state machines:
+
+| STC Concept | State Machine Equivalent |
+|-------------|--------------------------|
+| Desired Outcome | Target/Final State |
+| Current Reality | Initial State |
+| Action Step Completion | Transition Event |
+| Structural Tension | Disequilibrium energy driving state toward resolution |
+| Resolution | Reaching the final state |
+
+#### Creative Process ↔ Composite State Machine
+mia-code-server's creative process maps to a composite state machine where each phase (Germination, Assimilation, Completion) is a composite state containing sub-states (e.g., Germination has TaskDefinition, SpecGeneration, PDEDecomposition).
+
+### Medicine Wheel Alignment
+- **EAST**: Designer detects workflow patterns (inquiry & vision)
+- **SOUTH**: Parser analyzes and validates definitions (planning & consent)
+- **WEST**: Code generator transforms to executable form (experience & action)
+- **NORTH**: Runtime executes the state machine (reflection & wisdom)
+
+---
+
+## 11. Example State Machines
+
+### BDBO Strategy (`examples/bdbo_strategy.smdf.json`)
+Trading strategy with 5 states (Idle, Active_WaitingBreakout, Active_WaitingSignal, Active_WaitingEntry, Completed, Failed). Demonstrates:
+- Composite state (Active with 3 children)
+- Timer events (evTimeout with 60s duration)
+- onEntry/onExit actions
+- Guard conditions (`strategy.can_retry()`)
+- Multiple transitions per event (conditional branching)
+
+### FDB Breakout Strategy (`examples/fdb_breakout_strategy.smdf.json`)
+Complex 13-state trading FSM with:
+- 3 object references (strategy, market, broker)
+- 14 events with typed parameters
+- Timer (MaxPuiTimer)
+- Deep composite hierarchy (Active with 6 children)
+- 6 final states (Completed, MaxTradeReached, MaxEntryReached, MaxPuiReached, Faulted, Deactivated)
+- Guard conditions on transitions
+- Retry logic (Active_EntryOrderCanceled → Active_WaitingSignal with `cancel_count < max_cancel`)
+
+---
+
+## 12. Quick Start for Each Package
+
+### Python Quick Start
+```bash
+pip install smcraft
+
+# Generate code from SMDF
+smcg examples/bdbo_strategy.smdf.json -o output/ -v
+
+# Programmatic usage
+python -c "
+from smcraft import StateMachineParser
+from smcraft.codegen import PythonCodeGenerator
+
+parser = StateMachineParser()
+model = parser.parse_file('examples/bdbo_strategy.smdf.json')
+errors = parser.validate(model)
+print(f'{len(model.all_states)} states, {len(model.event_map)} events, {len(errors)} errors')
+
+gen = PythonCodeGenerator(model)
+code = gen.generate()
+print(code[:200])
+"
+```
+
+### TypeScript Quick Start
+```bash
+cd ts && npm install && npm run build && npm test
+
+# Programmatic usage
+import { parseJson, enrich, validate } from "smcraft/parser";
+import { TypeScriptCodeGenerator } from "smcraft/codegen";
+import { readFileSync } from "fs";
+
+const json = readFileSync("examples/bdbo_strategy.smdf.json", "utf-8");
+const definition = parseJson(json);
+const model = enrich(definition);
+const errors = validate(model);
+console.log(`${model.allStates.length} states, ${model.eventMap.size} events, ${errors.length} errors`);
+
+const gen = new TypeScriptCodeGenerator(model);
+const code = gen.generate();
+```
+
+### MCP Server Quick Start
+```bash
+cd mcp && npm install && npm run build
+# Add to MCP client config:
+# { "mcpServers": { "smcraft": { "command": "node", "args": ["path/to/mcp/dist/server.js"] } } }
+
+# Then in conversation:
+# Agent calls: create_state_machine(namespace="MyApp", name="OrderFlow")
+# Agent calls: add_state(name="Pending")
+# Agent calls: add_state(name="Active")
+# Agent calls: add_state(name="Completed", kind="final")
+# Agent calls: add_event(id="Start")
+# Agent calls: add_transition(state="Pending", event="Start", nextState="Active")
+# Agent calls: validate_definition()
+# Agent calls: generate_code(language="python")
+```
+
+### Web Designer Quick Start
+```bash
+cd web && npm install && npm run dev
+# Opens at http://localhost:3000
+# 1. Click +State to add states
+# 2. Toggle to Draw mode, click source → target to wire transitions
+# 3. Click Validate to check structure
+# 4. Click Generate to produce code
+```
+
+---
+
+## 13. For LLMs
+
+### When to Use SMCraft
+- You need to design a stateful workflow with hierarchical states, events, and transitions
+- You want to generate executable state machine code from a declarative definition
+- You're building a trading strategy, order processor, creative workflow, UI flow, game logic, or any event-driven system
+- You need to validate state machine structure before generating code
+
+### Key Design Decisions
+1. **SMDF is the single source of truth** — all packages parse the same format
+2. **Hierarchical state machines** (not flat FSMs) — composite states, parallel regions, history states
+3. **LCA-based transitions** — correct entry/exit chain semantics for hierarchical states
+4. **Code generation, not interpretation** — SMCG generates standalone code that imports the runtime library
+5. **Observer pattern for monitoring** — no modification to state machine logic needed
+6. **Domain-agnostic** — no trading or domain-specific concepts in the framework itself
+
+### Common Patterns
+- **Guard conditions**: Multiple transitions on the same event with `condition` fields → if/elif/else chains
+- **Timer events**: Define timer in event source, use `timerStart`/`timerStop` in actions, timer fires as a regular event
+- **Object references**: Domain objects on settings.objects are accessible as `context.{instance}.method()` in actions
+- **Feeder classes**: Generated typed API for sending events to the state machine
+- **Async mode**: Set `asynchronous: true` in settings → generates ContextAsync with event queue
+
+### MCP Integration Pattern
+```
+1. create_state_machine(namespace, name)
+2. add_state(name, parent?, kind?) × N
+3. add_event(id) × N
+4. add_transition(state, event, nextState, condition?) × N
+5. validate_definition() → fix errors
+6. generate_code(language) → production code
+7. get_definition() → save as .smdf.json
+```
+
+### File Naming Conventions
+- Definitions: `{name}.smdf.json`
+- Generated Python: `{snake_case_name}_fsm.py`
+- Generated TypeScript: `{snake_case_name}_fsm.ts`
