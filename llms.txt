@@ -129,11 +129,7 @@ API: `generate_python(input_path, output_path?) → str`
 
 ## Cross-Repository Links
 
-- [Master LLM Index](https://llms.jgwill.com): 40+ guidance documents
-- [Workspace Platform](https://docs.workspace.jgwill.com/llms.txt): Unified creative development platform
-- [RISE Framework](https://llms.jgwill.com/llms-rise-framework.txt): Creative-oriented analysis and generation
-- [Structural Tension Charts](https://llms.jgwill.com/llms-structural-tension-charts.txt): STC ↔ FSM equivalence
-- [Kinship Hub System](https://llms.jgwill.com/llms-kinship-hub-system.md): Software as beings in kinship networks
-- [Veritas — Truth & Performance Models](https://docs.veritas.jgwill.com/llms.txt): MMOT evaluation shares structural tension framing with FSM states
-- [Medicine Wheel Developer Suite](https://docs.medicine-wheel.jgwill.com/llms.txt): Ceremonial cycle maps to composite state machine phases
-- [NarIntel — Narrative Intelligence](https://docs.narintel.jgwill.com/llms.txt): Narrative structure informs state transition narratives
+- [Master LLM Index](https://llms.jgwill.com/llms-full.txt): Guidance portfolio — STC ↔ FSM equivalence documentation
+- [RISE Framework](https://llms.jgwill.com/llms-rise-framework.txt): Specification methodology for rispecs 60-75
+- [Structural Tension Charts](https://llms.jgwill.com/llms-structural-tension-charts.txt): STC methodology — conceptual isomorphism with FSM (desired outcome = target state, current reality = initial state)
+- [Veritas](https://docs.veritas.jgwill.com/llms.txt): MMOT evaluation format — smcraft-evaluation.tandt.json is a Veritas Type 2 model that flows from smcraft into veritas for performance assessment
