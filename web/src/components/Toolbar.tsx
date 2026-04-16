@@ -110,6 +110,26 @@ export default function Toolbar() {
 
   const [generateLang, setGenerateLang] = useState<"python" | "typescript">("python");
 
+  const handleGenerateRispec = async () => {
+    try {
+      const r = await fetch("/api/rispec", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        setGeneratedCode(data.rispec);
+      } else {
+        const err = await r.json().catch(() => ({ error: "Unknown" }));
+        setGeneratedCode(`# RISE rispec generation failed\n${err.error}`);
+      }
+    } catch (e) {
+      setGeneratedCode(`# RISE rispec generation failed\n${e}`);
+    }
+    setShowCodePreview(true);
+  };
+
   const handleGenerate = async () => {
     const json = exportJson();
     try {
@@ -256,6 +276,9 @@ export default function Toolbar() {
       </select>
       <button onClick={handleGenerate} className="toolbar-btn">
         ⚡ Generate
+      </button>
+      <button onClick={handleGenerateRispec} className="toolbar-btn" title="Generate RISE rispec markdown">
+        📜 RISE
       </button>
       <button
         onClick={() => setShowCodePreview(!showCodePreview)}
