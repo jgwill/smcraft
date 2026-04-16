@@ -29,8 +29,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { execSync } from "child_process";
-import { writeFileSync, readFileSync, mkdtempSync, rmSync } from "fs";
-import { join } from "path";
+import { writeFileSync, readFileSync, mkdtempSync, rmSync, existsSync } from "fs";
+import { join, resolve } from "path";
 import { tmpdir } from "os";
 
 // ─── In-memory state machine definition ──────────────────────────────
@@ -67,7 +67,30 @@ interface Definition {
   state: StateDef;
 }
 
-let currentDefinition: Definition | null = null;
+// ─── File-backed shared store ────────────────────────────────────────
+// Both web/ and mcp/ resolve the same path from SMCRAFT_PROJECT_FILE.
+// Web reads/writes via /api/file; mcp reads/writes here. fs.watch on
+// the web side broadcasts disk changes back to the canvas.
+
+const PROJECT_FILE = resolve(
+  process.env.SMCRAFT_PROJECT_FILE ?? "./statemachine.smdf.json"
+);
+
+function readDef(): Definition | null {
+  if (!existsSync(PROJECT_FILE)) return null;
+  try {
+    const raw = readFileSync(PROJECT_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed.stateMachine ?? parsed.StateMachine ?? parsed;
+  } catch (e) {
+    console.error(`[smcraft-mcp] Failed to read ${PROJECT_FILE}:`, e);
+    return null;
+  }
+}
+
+function writeDef(def: Definition): void {
+  writeFileSync(PROJECT_FILE, JSON.stringify({ stateMachine: def }, null, 2), "utf8");
+}
 
 function createEmpty(namespace: string, name: string): Definition {
   return {
@@ -300,13 +323,14 @@ server.tool(
   "Create a new state machine definition with namespace and name",
   { namespace: z.string(), name: z.string(), asynchronous: z.boolean().optional() },
   async ({ namespace, name, asynchronous }) => {
-    currentDefinition = createEmpty(namespace, name);
-    if (asynchronous) currentDefinition.settings.asynchronous = true;
+    const def = createEmpty(namespace, name);
+    if (asynchronous) def.settings.asynchronous = true;
+    writeDef(def);
     return {
       content: [
         {
           type: "text",
-          text: `Created state machine '${name}' in namespace '${namespace}'. Add states and events next.`,
+          text: `Created state machine '${name}' in namespace '${namespace}' → ${PROJECT_FILE}. Add states and events next.`,
         },
       ],
     };
@@ -323,13 +347,14 @@ server.tool(
     description: z.string().optional(),
   },
   async ({ name, parent, kind, description }) => {
-    if (!currentDefinition)
+    const def = readDef();
+    if (!def)
       return {
-        content: [{ type: "text", text: "No state machine created yet. Use create_state_machine first." }],
+        content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}. Use create_state_machine first.` }],
         isError: true,
       };
     const parentName = parent ?? "Root";
-    const parentState = findState(currentDefinition.state, parentName);
+    const parentState = findState(def.state, parentName);
     if (!parentState)
       return {
         content: [{ type: "text", text: `Parent state '${parentName}' not found.` }],
@@ -337,6 +362,7 @@ server.tool(
       };
     if (!parentState.states) parentState.states = [];
     parentState.states.push({ name, kind: kind ?? "normal", description });
+    writeDef(def);
     return {
       content: [{ type: "text", text: `Added state '${name}' under '${parentName}' (${kind ?? "normal"}).` }],
     };
@@ -348,13 +374,15 @@ server.tool(
   "Add an event to the state machine",
   { id: z.string(), description: z.string().optional() },
   async ({ id, description }) => {
-    if (!currentDefinition)
+    const def = readDef();
+    if (!def)
       return {
-        content: [{ type: "text", text: "No state machine created yet." }],
+        content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }],
         isError: true,
       };
-    const source = currentDefinition.events[0];
+    const source = def.events[0];
     source.events.push({ id, description });
+    writeDef(def);
     return {
       content: [{ type: "text", text: `Added event '${id}'.` }],
     };
@@ -372,12 +400,13 @@ server.tool(
     description: z.string().optional(),
   },
   async ({ state, event, nextState, condition, description }) => {
-    if (!currentDefinition)
+    const def = readDef();
+    if (!def)
       return {
-        content: [{ type: "text", text: "No state machine created yet." }],
+        content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }],
         isError: true,
       };
-    const target = findState(currentDefinition.state, state);
+    const target = findState(def.state, state);
     if (!target)
       return {
         content: [{ type: "text", text: `State '${state}' not found.` }],
@@ -385,6 +414,7 @@ server.tool(
       };
     if (!target.transitions) target.transitions = [];
     target.transitions.push({ event, nextState, condition, description });
+    writeDef(def);
     const desc = nextState ? `${state} --[${event}]--> ${nextState}` : `${state} --[${event}]--> (internal)`;
     return { content: [{ type: "text", text: `Added transition: ${desc}` }] };
   }
@@ -395,11 +425,13 @@ server.tool(
   "Remove a state from the definition",
   { name: z.string() },
   async ({ name }) => {
-    if (!currentDefinition)
-      return { content: [{ type: "text", text: "No state machine created yet." }], isError: true };
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
     if (name === "Root")
       return { content: [{ type: "text", text: "Cannot remove Root state." }], isError: true };
-    currentDefinition.state = removeState(currentDefinition.state, name);
+    def.state = removeState(def.state, name);
+    writeDef(def);
     return { content: [{ type: "text", text: `Removed state '${name}'.` }] };
   }
 );
@@ -409,9 +441,10 @@ server.tool(
   "Validate the current state machine definition against all rules",
   {},
   async () => {
-    if (!currentDefinition)
-      return { content: [{ type: "text", text: "No state machine created yet." }], isError: true };
-    const errors = validate(currentDefinition);
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+    const errors = validate(def);
     if (errors.length === 0)
       return { content: [{ type: "text", text: "✓ Definition is valid. No errors found." }] };
     const lines = errors.map((e) => `[${e.ruleId}] ${e.message}`).join("\n");
@@ -426,9 +459,10 @@ server.tool(
   "Generate Python or TypeScript code from the current definition",
   { language: z.enum(["python", "typescript"]) },
   async ({ language }) => {
-    if (!currentDefinition)
-      return { content: [{ type: "text", text: "No state machine created yet." }], isError: true };
-    const errors = validate(currentDefinition);
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+    const errors = validate(def);
     if (errors.length > 0) {
       const lines = errors.map((e) => `[${e.ruleId}] ${e.message}`).join("\n");
       return {
@@ -436,7 +470,7 @@ server.tool(
         isError: true,
       };
     }
-    const code = generateViaSmcg(currentDefinition, language);
+    const code = generateViaSmcg(def, language);
     return { content: [{ type: "text", text: code }] };
   }
 );
@@ -446,10 +480,11 @@ server.tool(
   "Get the current state machine definition as JSON",
   {},
   async () => {
-    if (!currentDefinition)
-      return { content: [{ type: "text", text: "No state machine created yet." }], isError: true };
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
     return {
-      content: [{ type: "text", text: JSON.stringify({ stateMachine: currentDefinition }, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify({ stateMachine: def }, null, 2) }],
     };
   }
 );
@@ -461,14 +496,15 @@ server.tool(
   async ({ json }) => {
     try {
       const parsed = JSON.parse(json);
-      currentDefinition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
-      const stateCount = collectStateNames(currentDefinition!.state).length;
-      const eventCount = collectEventIds(currentDefinition!).length;
+      const def: Definition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
+      writeDef(def);
+      const stateCount = collectStateNames(def.state).length;
+      const eventCount = collectEventIds(def).length;
       return {
         content: [
           {
             type: "text",
-            text: `Loaded definition: ${currentDefinition!.settings.name} (${stateCount} states, ${eventCount} events)`,
+            text: `Loaded definition → ${PROJECT_FILE}: ${def.settings.name} (${stateCount} states, ${eventCount} events)`,
           },
         ],
       };
@@ -483,8 +519,9 @@ server.tool(
   "List all states in the current definition with their kind and transitions",
   {},
   async () => {
-    if (!currentDefinition)
-      return { content: [{ type: "text", text: "No state machine created yet." }], isError: true };
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
     const lines: string[] = [];
     const walk = (state: StateDef, depth: number) => {
       const indent = "  ".repeat(depth);
@@ -496,7 +533,7 @@ server.tool(
       }
       (state.states ?? []).forEach((s) => walk(s, depth + 1));
     };
-    walk(currentDefinition.state, 0);
+    walk(def.state, 0);
     return { content: [{ type: "text", text: lines.join("\n") }] };
   }
 );
@@ -506,9 +543,10 @@ server.tool(
   "List all events in the current definition",
   {},
   async () => {
-    if (!currentDefinition)
-      return { content: [{ type: "text", text: "No state machine created yet." }], isError: true };
-    const events = currentDefinition.events.flatMap((src) =>
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+    const events = def.events.flatMap((src) =>
       src.events.map((e) => `${e.id}${e.description ? ` — ${e.description}` : ""}`)
     );
     if (events.length === 0)
@@ -520,14 +558,15 @@ server.tool(
 // Resources
 
 server.resource("definition", "smcraft://definition", async () => {
+  const def = readDef();
   return {
     contents: [
       {
         uri: "smcraft://definition",
         mimeType: "application/json",
-        text: currentDefinition
-          ? JSON.stringify({ stateMachine: currentDefinition }, null, 2)
-          : '{"error": "No definition loaded"}',
+        text: def
+          ? JSON.stringify({ stateMachine: def }, null, 2)
+          : `{"error": "No definition at ${PROJECT_FILE}"}`,
       },
     ],
   };
@@ -565,7 +604,7 @@ Start by asking me about the states and events I need.`,
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("SMCraft MCP server running on stdio");
+  console.error(`SMCraft MCP server running on stdio (project file: ${PROJECT_FILE})`);
 }
 
 main().catch(console.error);
