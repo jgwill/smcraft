@@ -12,7 +12,9 @@ import logging
 import threading
 from abc import ABC, abstractmethod
 from collections import deque
+from dataclasses import dataclass
 from enum import IntEnum, IntFlag
+from datetime import datetime, timezone
 from typing import Any, Callable, Optional, Protocol
 
 logger = logging.getLogger(__name__)
@@ -155,6 +157,82 @@ class ObserverLogger:
 
     def on_timer_stop(self, context_name: str, timer_name: str) -> None:
         self._logger.debug("%s: timer stop %s", context_name, timer_name)
+
+
+@dataclass
+class TraceEvent:
+    """Structured runtime provenance event."""
+
+    sequence: int
+    timestamp: str
+    event_type: str
+    context_name: str
+    state_name: Optional[str] = None
+    state_prev: Optional[str] = None
+    state_next: Optional[str] = None
+    transition_name: Optional[str] = None
+    timer_name: Optional[str] = None
+    duration: Optional[int] = None
+
+
+class ObserverTrace:
+    """Records ordered runtime events for provenance and replay."""
+
+    def __init__(self, clock: Optional[Callable[[], str]] = None):
+        self._clock = clock or (lambda: datetime.now(timezone.utc).isoformat())
+        self._sequence = 0
+        self.events: list[TraceEvent] = []
+
+    def _record(self, event_type: str, context_name: str, **kwargs: Any) -> None:
+        self._sequence += 1
+        self.events.append(
+            TraceEvent(
+                sequence=self._sequence,
+                timestamp=self._clock(),
+                event_type=event_type,
+                context_name=context_name,
+                **kwargs,
+            )
+        )
+
+    def on_entry(self, context_name: str, state_name: str) -> None:
+        self._record("entry", context_name, state_name=state_name)
+
+    def on_exit(self, context_name: str, state_name: str) -> None:
+        self._record("exit", context_name, state_name=state_name)
+
+    def on_transition_begin(self, context_name: str, state_prev: str, state_next: str, transition_name: str) -> None:
+        self._record(
+            "transition_begin",
+            context_name,
+            state_prev=state_prev,
+            state_next=state_next,
+            transition_name=transition_name,
+        )
+
+    def on_transition_end(self, context_name: str, state_prev: str, state_next: str, transition_name: str) -> None:
+        self._record(
+            "transition_end",
+            context_name,
+            state_prev=state_prev,
+            state_next=state_next,
+            transition_name=transition_name,
+        )
+
+    def on_timer_start(self, context_name: str, timer_name: str, duration: int) -> None:
+        self._record("timer_start", context_name, timer_name=timer_name, duration=duration)
+
+    def on_timer_stop(self, context_name: str, timer_name: str) -> None:
+        self._record("timer_stop", context_name, timer_name=timer_name)
+
+    def snapshot(self) -> list[TraceEvent]:
+        """Return a shallow copy of recorded events."""
+        return [TraceEvent(**event.__dict__) for event in self.events]
+
+    def clear(self) -> None:
+        """Reset the recorded trace."""
+        self.events.clear()
+        self._sequence = 0
 
 
 # ---------------------------------------------------------------------------

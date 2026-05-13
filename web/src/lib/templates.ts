@@ -1,0 +1,95 @@
+import type { StateMachineDefinition } from "@/types/definition";
+
+export function createAgentLifecycleTemplate(
+  namespace = "Agent.Runtime",
+  name = "AgentLifecycle",
+): StateMachineDefinition {
+  return {
+    settings: {
+      namespace,
+      name,
+      asynchronous: true,
+    },
+    events: [
+      {
+        name: "WorkUnitEvents",
+        feeder: "WorkUnitFeeder",
+        events: [
+          { id: "WorkUnitPlanned", description: "Planning metadata has been captured." },
+          { id: "WorkUnitStarted", description: "Execution has started." },
+          { id: "HitlRequested", description: "Execution is waiting for human review." },
+          { id: "HitlApproved", description: "A human approved the pending work." },
+          { id: "HitlRejected", description: "A human rejected the pending work." },
+          { id: "ExecutionResumed", description: "Approved work resumed execution." },
+          { id: "RetryScheduled", description: "A failed or rejected unit was rescheduled." },
+          { id: "WorkUnitCompleted", description: "Execution completed successfully." },
+          { id: "WorkUnitFailed", description: "Execution failed and needs recovery." },
+          { id: "WorkUnitArchived", description: "Execution provenance was archived." },
+        ],
+      },
+    ],
+    state: {
+      name: "Root",
+      states: [
+        {
+          name: "Created",
+          description: "A work unit exists but has not been planned yet.",
+          transitions: [{ event: "WorkUnitPlanned", nextState: "Planned" }],
+        },
+        {
+          name: "Planned",
+          description: "The work unit has inputs, routing, and retry metadata.",
+          transitions: [{ event: "WorkUnitStarted", nextState: "Running" }],
+        },
+        {
+          name: "Running",
+          description: "Runtime adapters are actively executing the work unit.",
+          transitions: [
+            { event: "HitlRequested", nextState: "WaitingForHITL" },
+            { event: "WorkUnitCompleted", nextState: "Completed" },
+            { event: "WorkUnitFailed", nextState: "Failed" },
+          ],
+        },
+        {
+          name: "WaitingForHITL",
+          description: "Execution is paused behind a human review gate.",
+          transitions: [
+            { event: "HitlApproved", nextState: "Approved" },
+            { event: "HitlRejected", nextState: "Rejected" },
+          ],
+        },
+        {
+          name: "Approved",
+          description: "The work unit passed human review and can resume.",
+          transitions: [{ event: "ExecutionResumed", nextState: "Running" }],
+        },
+        {
+          name: "Rejected",
+          description: "The work unit was rejected and must be replanned or abandoned.",
+          transitions: [
+            { event: "RetryScheduled", nextState: "Planned" },
+            { event: "WorkUnitArchived", nextState: "Archived" },
+          ],
+        },
+        {
+          name: "Completed",
+          description: "Execution finished successfully and is ready for archival.",
+          transitions: [{ event: "WorkUnitArchived", nextState: "Archived" }],
+        },
+        {
+          name: "Failed",
+          description: "Execution failed and can either be retried or archived.",
+          transitions: [
+            { event: "RetryScheduled", nextState: "Planned" },
+            { event: "WorkUnitArchived", nextState: "Archived" },
+          ],
+        },
+        {
+          name: "Archived",
+          kind: "final",
+          description: "Execution lineage has been captured for provenance and replay.",
+        },
+      ],
+    },
+  };
+}

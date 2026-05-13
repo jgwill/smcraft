@@ -348,7 +348,18 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   setDefinition: (def) => {
     get()._pushHistory();
     const layout = autoLayout(def, get().layout);
-    set({ definition: def, layout, dirty: true, errors: validateDefinition(def) });
+    const rootName = def.state?.name ?? "Root";
+    set({
+      definition: def,
+      layout,
+      dirty: true,
+      errors: validateDefinition(def),
+      fileName: null,
+      selection: { kind: null, id: null },
+      navigationPath: [rootName],
+      currentParent: rootName,
+      generatedCode: null,
+    });
   },
 
   updateSettings: (patch) => {

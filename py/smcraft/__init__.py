@@ -42,6 +42,8 @@ from smcraft.runtime import (
     IObserver,
     ObserverNull,
     ObserverConsole,
+    ObserverTrace,
+    TraceEvent,
 )
 
 __all__ = [
@@ -68,4 +70,6 @@ __all__ = [
     "IObserver",
     "ObserverNull",
     "ObserverConsole",
+    "ObserverTrace",
+    "TraceEvent",
 ]

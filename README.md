@@ -37,6 +37,8 @@ cd mcp && npm install && npm run build
 node dist/server.js  # Runs on stdio
 ```
 
+The MCP `create_state_machine` tool also supports `template: "agent_lifecycle"` to bootstrap a durable work-unit lifecycle starter.
+
 Add to your MCP client config:
 ```json
 {
@@ -75,8 +77,22 @@ The **runtime library** (`Context`, `State`, `TransitionHelper`, `Observer`) shi
 - **Spec 61** — Runtime Engine (Context, State, Observer)
 - **Spec 62** — Code Generator (SMCG pipeline)
 - **Spec 63** — Visual Designer (web-based)
+- **Spec 76** — Agent Lifecycle Starter Template
 
 See `caishen/rispecs/StateMachineries/` for full specs.
+
+## Built-in Lifecycle Starter
+
+The repository now includes `examples/agent_lifecycle.smdf.json`, a reusable backbone for durable agent work units:
+
+`Created → Planned → Running → WaitingForHITL → Approved/Rejected → Completed/Failed → Archived`
+
+Use it from:
+- the `examples/` folder for CLI/codegen flows
+- the web designer via the **🧭 Lifecycle** toolbar action
+- the MCP server via `create_state_machine(..., template: "agent_lifecycle")`
+
+Both runtimes also export `ObserverTrace`, which records structured transition/timer provenance for audit and replay use cases.
 
 ## Definition Format (`.smdf.json`)
 

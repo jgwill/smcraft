@@ -2,15 +2,15 @@
 
 import { useRef, useState } from "react";
 import { useDesignerStore } from "@/store/useDesignerStore";
-import type { StateDef } from "@/types/definition";
+import { createAgentLifecycleTemplate } from "@/lib/templates";
 
 export default function Toolbar() {
-  const definition = useDesignerStore((s) => s.definition);
   const fileName = useDesignerStore((s) => s.fileName);
   const dirty = useDesignerStore((s) => s.dirty);
   const loadFromJson = useDesignerStore((s) => s.loadFromJson);
   const exportJson = useDesignerStore((s) => s.exportJson);
   const addState = useDesignerStore((s) => s.addState);
+  const setDefinition = useDesignerStore((s) => s.setDefinition);
   const validate = useDesignerStore((s) => s.validate);
   const showCodePreview = useDesignerStore((s) => s.showCodePreview);
   const setShowCodePreview = useDesignerStore((s) => s.setShowCodePreview);
@@ -56,6 +56,13 @@ export default function Toolbar() {
     addState(null, { name: newStateName.trim(), kind: "normal" });
     setNewStateName("");
     setAddingState(false);
+  };
+
+  const handleLoadAgentLifecycle = () => {
+    if (dirty && !window.confirm("Replace the current definition with the agent lifecycle starter?")) {
+      return;
+    }
+    setDefinition(createAgentLifecycleTemplate());
   };
 
   const [generateLang, setGenerateLang] = useState<"python" | "typescript">("python");
@@ -162,6 +169,9 @@ export default function Toolbar() {
           ＋State
         </button>
       )}
+      <button onClick={handleLoadAgentLifecycle} className="toolbar-btn" title="Load agent lifecycle starter">
+        🧭 Lifecycle
+      </button>
 
       <div className="w-px h-4 bg-gray-700" />
 

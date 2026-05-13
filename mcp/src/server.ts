@@ -57,13 +57,20 @@ interface EventDef {
   description?: string;
 }
 
+interface EventSourceDef {
+  name: string;
+  feeder?: string;
+  description?: string;
+  events: EventDef[];
+}
+
 interface Definition {
   settings: {
     namespace: string;
     name: string;
     asynchronous: boolean;
   };
-  events: { name: string; events: EventDef[] }[];
+  events: EventSourceDef[];
   state: StateDef;
 }
 
@@ -74,6 +81,93 @@ function createEmpty(namespace: string, name: string): Definition {
     settings: { namespace, name, asynchronous: false },
     events: [{ name: "Internal", events: [] }],
     state: { name: "Root", states: [] },
+  };
+}
+
+function createAgentLifecycleTemplate(namespace: string, name: string): Definition {
+  return {
+    settings: { namespace, name, asynchronous: true },
+    events: [
+      {
+        name: "WorkUnitEvents",
+        feeder: "WorkUnitFeeder",
+        events: [
+          { id: "WorkUnitPlanned", description: "Planning metadata has been captured." },
+          { id: "WorkUnitStarted", description: "Execution has started." },
+          { id: "HitlRequested", description: "Execution is waiting for human review." },
+          { id: "HitlApproved", description: "A human approved the pending work." },
+          { id: "HitlRejected", description: "A human rejected the pending work." },
+          { id: "ExecutionResumed", description: "Approved work resumed execution." },
+          { id: "RetryScheduled", description: "A failed or rejected unit was rescheduled." },
+          { id: "WorkUnitCompleted", description: "Execution completed successfully." },
+          { id: "WorkUnitFailed", description: "Execution failed and needs recovery." },
+          { id: "WorkUnitArchived", description: "Execution provenance was archived." },
+        ],
+      },
+    ],
+    state: {
+      name: "Root",
+      states: [
+        {
+          name: "Created",
+          description: "A work unit exists but has not been planned yet.",
+          transitions: [{ event: "WorkUnitPlanned", nextState: "Planned" }],
+        },
+        {
+          name: "Planned",
+          description: "The work unit has inputs, routing, and retry metadata.",
+          transitions: [{ event: "WorkUnitStarted", nextState: "Running" }],
+        },
+        {
+          name: "Running",
+          description: "Runtime adapters are actively executing the work unit.",
+          transitions: [
+            { event: "HitlRequested", nextState: "WaitingForHITL" },
+            { event: "WorkUnitCompleted", nextState: "Completed" },
+            { event: "WorkUnitFailed", nextState: "Failed" },
+          ],
+        },
+        {
+          name: "WaitingForHITL",
+          description: "Execution is paused behind a human review gate.",
+          transitions: [
+            { event: "HitlApproved", nextState: "Approved" },
+            { event: "HitlRejected", nextState: "Rejected" },
+          ],
+        },
+        {
+          name: "Approved",
+          description: "The work unit passed human review and can resume.",
+          transitions: [{ event: "ExecutionResumed", nextState: "Running" }],
+        },
+        {
+          name: "Rejected",
+          description: "The work unit was rejected and must be replanned or abandoned.",
+          transitions: [
+            { event: "RetryScheduled", nextState: "Planned" },
+            { event: "WorkUnitArchived", nextState: "Archived" },
+          ],
+        },
+        {
+          name: "Completed",
+          description: "Execution finished successfully and is ready for archival.",
+          transitions: [{ event: "WorkUnitArchived", nextState: "Archived" }],
+        },
+        {
+          name: "Failed",
+          description: "Execution failed and can either be retried or archived.",
+          transitions: [
+            { event: "RetryScheduled", nextState: "Planned" },
+            { event: "WorkUnitArchived", nextState: "Archived" },
+          ],
+        },
+        {
+          name: "Archived",
+          kind: "final",
+          description: "Execution lineage has been captured for provenance and replay.",
+        },
+      ],
+    },
   };
 }
 
@@ -298,15 +392,23 @@ const server = new McpServer({
 server.tool(
   "create_state_machine",
   "Create a new state machine definition with namespace and name",
-  { namespace: z.string(), name: z.string(), asynchronous: z.boolean().optional() },
-  async ({ namespace, name, asynchronous }) => {
-    currentDefinition = createEmpty(namespace, name);
+  {
+    namespace: z.string(),
+    name: z.string(),
+    asynchronous: z.boolean().optional(),
+    template: z.enum(["blank", "agent_lifecycle"]).optional(),
+  },
+  async ({ namespace, name, asynchronous, template }) => {
+    currentDefinition = template === "agent_lifecycle"
+      ? createAgentLifecycleTemplate(namespace, name)
+      : createEmpty(namespace, name);
     if (asynchronous) currentDefinition.settings.asynchronous = true;
+    const templateLabel = template === "agent_lifecycle" ? " using the agent lifecycle starter" : "";
     return {
       content: [
         {
           type: "text",
-          text: `Created state machine '${name}' in namespace '${namespace}'. Add states and events next.`,
+          text: `Created state machine '${name}' in namespace '${namespace}'${templateLabel}.`,
         },
       ],
     };
@@ -545,8 +647,8 @@ server.prompt(
         role: "user",
         content: {
           type: "text",
-          text: `I want to design a state machine${name ? ` called "${name}"` : ""}${domain ? ` for the "${domain}" domain` : ""}. Guide me through:
-1. First, create the state machine with create_state_machine
+           text: `I want to design a state machine${name ? ` called "${name}"` : ""}${domain ? ` for the "${domain}" domain` : ""}. Guide me through:
+1. First, create the state machine with create_state_machine (use template="agent_lifecycle" when I need a durable work-unit lifecycle starter)
 2. Help me identify the key states and add them with add_state
 3. Define the events that trigger transitions with add_event
 4. Wire up transitions between states with add_transition
