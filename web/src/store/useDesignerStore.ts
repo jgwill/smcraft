@@ -31,6 +31,16 @@ export interface ContextMenuState {
 interface HistoryEntry {
   definition: StateMachineDefinition;
   layout: DesignerLayout;
+  fileName: string | null;
+  dirty: boolean;
+  errors: ValidationError[];
+  selection: Selection;
+  drawMode: DrawMode;
+  drawSource: string | null;
+  showCodePreview: boolean;
+  generatedCode: string | null;
+  navigationPath: string[];
+  currentParent: string;
 }
 
 interface DesignerState {
@@ -315,6 +325,23 @@ function autoLayout(def: StateMachineDefinition, existing: DesignerLayout): Desi
 
 const MAX_UNDO = 50;
 
+function createHistoryEntry(state: DesignerState): HistoryEntry {
+  return {
+    definition: JSON.parse(JSON.stringify(state.definition)),
+    layout: JSON.parse(JSON.stringify(state.layout)),
+    fileName: state.fileName,
+    dirty: state.dirty,
+    errors: JSON.parse(JSON.stringify(state.errors)),
+    selection: { ...state.selection },
+    drawMode: state.drawMode,
+    drawSource: state.drawSource,
+    showCodePreview: state.showCodePreview,
+    generatedCode: state.generatedCode,
+    navigationPath: [...state.navigationPath],
+    currentParent: state.currentParent,
+  };
+}
+
 export const useDesignerStore = create<DesignerState>((set, get) => ({
   definition: createEmptyDefinition(),
   layout: autoLayout(createEmptyDefinition(), createDefaultLayout()),
@@ -334,13 +361,10 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   currentParent: "Root",
 
   _pushHistory: () => {
-    const { definition, layout, undoStack } = get();
-    const entry: HistoryEntry = {
-      definition: JSON.parse(JSON.stringify(definition)),
-      layout: JSON.parse(JSON.stringify(layout)),
-    };
+    const state = get();
+    const entry = createHistoryEntry(state);
     set({
-      undoStack: [...undoStack.slice(-MAX_UNDO), entry],
+      undoStack: [...state.undoStack.slice(-MAX_UNDO), entry],
       redoStack: [],
     });
   },
@@ -356,6 +380,9 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
       errors: validateDefinition(def),
       fileName: null,
       selection: { kind: null, id: null },
+      drawMode: "select",
+      drawSource: null,
+      showCodePreview: false,
       navigationPath: [rootName],
       currentParent: rootName,
       generatedCode: null,
@@ -573,38 +600,50 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   hideContextMenu: () => set({ contextMenu: { visible: false, x: 0, y: 0, target: null } }),
 
   undo: () => {
-    const { undoStack, definition, layout } = get();
+    const state = get();
+    const { undoStack } = state;
     if (undoStack.length === 0) return;
     const prev = undoStack[undoStack.length - 1];
-    const current: HistoryEntry = {
-      definition: JSON.parse(JSON.stringify(definition)),
-      layout: JSON.parse(JSON.stringify(layout)),
-    };
+    const current = createHistoryEntry(state);
     set({
       definition: prev.definition,
       layout: prev.layout,
+      fileName: prev.fileName,
       undoStack: undoStack.slice(0, -1),
-      redoStack: [...get().redoStack, current],
-      dirty: true,
-      errors: validateDefinition(prev.definition),
+      redoStack: [...state.redoStack, current],
+      dirty: prev.dirty,
+      errors: prev.errors,
+      selection: prev.selection,
+      drawMode: prev.drawMode,
+      drawSource: prev.drawSource,
+      showCodePreview: prev.showCodePreview,
+      generatedCode: prev.generatedCode,
+      navigationPath: prev.navigationPath,
+      currentParent: prev.currentParent,
     });
   },
 
   redo: () => {
-    const { redoStack, definition, layout } = get();
+    const state = get();
+    const { redoStack } = state;
     if (redoStack.length === 0) return;
     const next = redoStack[redoStack.length - 1];
-    const current: HistoryEntry = {
-      definition: JSON.parse(JSON.stringify(definition)),
-      layout: JSON.parse(JSON.stringify(layout)),
-    };
+    const current = createHistoryEntry(state);
     set({
       definition: next.definition,
       layout: next.layout,
-      undoStack: [...get().undoStack, current],
+      fileName: next.fileName,
+      undoStack: [...state.undoStack, current],
       redoStack: redoStack.slice(0, -1),
-      dirty: true,
-      errors: validateDefinition(next.definition),
+      dirty: next.dirty,
+      errors: next.errors,
+      selection: next.selection,
+      drawMode: next.drawMode,
+      drawSource: next.drawSource,
+      showCodePreview: next.showCodePreview,
+      generatedCode: next.generatedCode,
+      navigationPath: next.navigationPath,
+      currentParent: next.currentParent,
     });
   },
 
@@ -626,6 +665,10 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
         dirty: false,
         errors: validateDefinition(def),
         selection: { kind: null, id: null },
+        drawMode: "select",
+        drawSource: null,
+        showCodePreview: false,
+        generatedCode: null,
         undoStack: [],
         redoStack: [],
         navigationPath: [rootName],
