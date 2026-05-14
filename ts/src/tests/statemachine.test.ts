@@ -26,6 +26,7 @@ import {
   ObserverNull,
   ObserverTrace,
   type IObserver,
+  type TraceEvent,
 } from "../runtime.js";
 import { TypeScriptCodeGenerator } from "../codegen.js";
 
@@ -72,6 +73,16 @@ describe("Parser", () => {
     assert.equal(model.definition.settings.asynchronous, true);
     assert.equal(model.allStates.length, 10);
     assert.equal(model.eventMap.size, 10);
+    assert.deepEqual(
+      model.eventMap.get("HitlRequested")?.parameters,
+      [
+        {
+          name: "reviewPacket",
+          type: "object",
+          description: "Human review bundle, evidence, and rationale.",
+        },
+      ],
+    );
   });
 });
 
@@ -270,6 +281,16 @@ describe("Runtime", () => {
     assert.equal(trace.snapshot()[0].timestamp, "2026-05-13T00:00:00.000Z");
     assert.equal(trace.snapshot()[1].transitionName, "Activate");
     assert.equal(trace.snapshot()[4].duration, 25);
+
+    const exposed = trace.events as TraceEvent[];
+    exposed.push({
+      sequence: 999,
+      timestamp: "2099-01-01T00:00:00.000Z",
+      type: "entry",
+      contextName: "Mutated",
+      stateName: "Injected",
+    });
+    assert.equal(trace.snapshot().length, 6);
   });
 });
 

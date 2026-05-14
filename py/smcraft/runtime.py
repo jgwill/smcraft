@@ -181,11 +181,11 @@ class ObserverTrace:
     def __init__(self, clock: Optional[Callable[[], str]] = None):
         self._clock = clock or (lambda: datetime.now(timezone.utc).isoformat())
         self._sequence = 0
-        self.events: list[TraceEvent] = []
+        self._events: list[TraceEvent] = []
 
     def _record(self, event_type: str, context_name: str, **kwargs: Any) -> None:
         self._sequence += 1
-        self.events.append(
+        self._events.append(
             TraceEvent(
                 sequence=self._sequence,
                 timestamp=self._clock(),
@@ -227,11 +227,16 @@ class ObserverTrace:
 
     def snapshot(self) -> list[TraceEvent]:
         """Return a shallow copy of recorded events."""
-        return [TraceEvent(**event.__dict__) for event in self.events]
+        return [TraceEvent(**event.__dict__) for event in self._events]
+
+    @property
+    def events(self) -> tuple[TraceEvent, ...]:
+        """Return an immutable snapshot of recorded events."""
+        return tuple(self.snapshot())
 
     def clear(self) -> None:
         """Reset the recorded trace."""
-        self.events.clear()
+        self._events.clear()
         self._sequence = 0
 
 

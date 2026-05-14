@@ -62,6 +62,11 @@ def test_agent_lifecycle_example():
     assert model.definition.settings.asynchronous is True
     assert len(model.all_states) == 10
     assert len(model.event_map) == 10
+    hitl_requested = model.event_map["HitlRequested"]
+    assert len(hitl_requested.parameters) == 1
+    assert hitl_requested.parameters[0].description == "Human review bundle, evidence, and rationale."
+    roundtrip = json.loads(model.definition.to_json())
+    assert roundtrip["events"][0]["events"][2]["parameters"][0]["description"] == "Human review bundle, evidence, and rationale."
     assert parser.validate(model) == []
     print("✓ test_agent_lifecycle_example passed")
 
@@ -235,6 +240,7 @@ def test_runtime_trace_observer():
     assert trace.events[0].sequence == 1
     assert trace.events[1].transition_name == "Activate"
     assert trace.events[4].duration == 25
+    assert isinstance(trace.events, tuple)
     print("✓ test_runtime_trace_observer passed")
 
 

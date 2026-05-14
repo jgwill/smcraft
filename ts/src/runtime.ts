@@ -108,7 +108,7 @@ export class ObserverConsole implements IObserver {
 }
 
 export class ObserverTrace implements IObserver {
-  readonly events: TraceEvent[] = [];
+  private readonly _events: TraceEvent[] = [];
   private sequence = 0;
   private readonly clock: () => string;
 
@@ -117,11 +117,15 @@ export class ObserverTrace implements IObserver {
   }
 
   private record(event: Omit<TraceEvent, "sequence" | "timestamp">): void {
-    this.events.push({
+    this._events.push({
       ...event,
       sequence: ++this.sequence,
       timestamp: this.clock(),
     });
+  }
+
+  get events(): ReadonlyArray<TraceEvent> {
+    return this.snapshot();
   }
 
   onEntry(contextName: string, stateName: string): void {
@@ -149,11 +153,11 @@ export class ObserverTrace implements IObserver {
   }
 
   snapshot(): TraceEvent[] {
-    return this.events.map((event) => ({ ...event }));
+    return this._events.map((event) => ({ ...event }));
   }
 
   clear(): void {
-    this.events.length = 0;
+    this._events.length = 0;
     this.sequence = 0;
   }
 }

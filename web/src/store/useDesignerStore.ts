@@ -364,14 +364,14 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
     const state = get();
     const entry = createHistoryEntry(state);
     set({
-      undoStack: [...state.undoStack.slice(-MAX_UNDO), entry],
+      undoStack: [...state.undoStack.slice(-(MAX_UNDO - 1)), entry],
       redoStack: [],
     });
   },
 
   setDefinition: (def) => {
     get()._pushHistory();
-    const layout = autoLayout(def, get().layout);
+    const layout = autoLayout(def, createDefaultLayout());
     const rootName = def.state?.name ?? "Root";
     set({
       definition: def,

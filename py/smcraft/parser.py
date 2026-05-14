@@ -272,7 +272,10 @@ class StateMachineParser:
         )
 
     def _parse_json_event(self, data: dict[str, Any]) -> EventDef:
-        params = [ParameterDef(name=p["name"], type=p["type"]) for p in data.get("parameters", [])]
+        params = [
+            ParameterDef(name=p["name"], type=p["type"], description=p.get("description"))
+            for p in data.get("parameters", [])
+        ]
         return EventDef(
             id=data["id"],
             name=data.get("name"),
@@ -373,7 +376,13 @@ class StateMachineParser:
             for evt_el in es_el.findall("sm:event", ns) + es_el.findall("event"):
                 params = []
                 for p_el in evt_el.findall("sm:parameter", ns) + evt_el.findall("parameter"):
-                    params.append(ParameterDef(name=p_el.get("name", ""), type=p_el.get("type", "")))
+                    params.append(
+                        ParameterDef(
+                            name=p_el.get("name", ""),
+                            type=p_el.get("type", ""),
+                            description=p_el.get("description"),
+                        )
+                    )
                 events.append(EventDef(
                     id=evt_el.get("id", ""),
                     name=evt_el.get("name"),

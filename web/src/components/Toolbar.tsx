@@ -3,12 +3,14 @@
 import { useRef, useState } from "react";
 import { useDesignerStore } from "@/store/useDesignerStore";
 import { createAgentLifecycleTemplate } from "@/lib/templates";
+import { generateMachineSpecification, generateTransitionContracts } from "@/lib/specification";
 
 export default function Toolbar() {
   const fileName = useDesignerStore((s) => s.fileName);
   const dirty = useDesignerStore((s) => s.dirty);
   const loadFromJson = useDesignerStore((s) => s.loadFromJson);
   const exportJson = useDesignerStore((s) => s.exportJson);
+  const definition = useDesignerStore((s) => s.definition);
   const addState = useDesignerStore((s) => s.addState);
   const setDefinition = useDesignerStore((s) => s.setDefinition);
   const validate = useDesignerStore((s) => s.validate);
@@ -65,10 +67,27 @@ export default function Toolbar() {
     setDefinition(createAgentLifecycleTemplate());
   };
 
-  const [generateLang, setGenerateLang] = useState<"python" | "typescript">("python");
+  const [generateLang, setGenerateLang] = useState<
+    "python" | "typescript" | "specification" | "contracts" | "smdf"
+  >("python");
 
   const handleGenerate = async () => {
     const json = exportJson();
+    if (generateLang === "smdf") {
+      setGeneratedCode(json);
+      setShowCodePreview(true);
+      return;
+    }
+    if (generateLang === "specification") {
+      setGeneratedCode(generateMachineSpecification(definition));
+      setShowCodePreview(true);
+      return;
+    }
+    if (generateLang === "contracts") {
+      setGeneratedCode(generateTransitionContracts(definition));
+      setShowCodePreview(true);
+      return;
+    }
     try {
       const resp = await fetch("/api/generate", {
         method: "POST",
@@ -181,11 +200,18 @@ export default function Toolbar() {
       </button>
       <select
         value={generateLang}
-        onChange={(e) => setGenerateLang(e.target.value as "python" | "typescript")}
+        onChange={(e) =>
+          setGenerateLang(
+            e.target.value as "python" | "typescript" | "specification" | "contracts" | "smdf"
+          )
+        }
         className="bg-gray-800 border border-gray-700 rounded text-xs text-gray-300 px-1 py-0.5"
       >
         <option value="python">Python</option>
         <option value="typescript">TypeScript</option>
+        <option value="smdf">SMDF JSON</option>
+        <option value="specification">Lifecycle Spec</option>
+        <option value="contracts">Transition Contracts</option>
       </select>
       <button onClick={handleGenerate} className="toolbar-btn">
         ⚡ Generate

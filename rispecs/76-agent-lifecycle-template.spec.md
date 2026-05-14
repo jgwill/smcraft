@@ -25,6 +25,26 @@ The starter template defines the following lifecycle:
 
 `Created → Planned → Running → WaitingForHITL → Approved/Rejected → Completed/Failed → Archived`
 
+The lifecycle is intentionally described as a reusable work-unit contract:
+
+```text
+state A
+  -> transition event(payload)
+    -> optional transition execution / hook
+      -> state B
+        -> optional entry behavior
+```
+
+The current starter makes the following reusable semantics explicit:
+
+- **state definitions**: durable lifecycle phases such as `Created`, `Running`, and `Archived`
+- **transition events**: named work-unit signals such as `WorkUnitStarted` or `HitlRejected`
+- **transition payload contracts**: event parameters that describe the expected lifecycle payload
+- **optional transition hooks**: `preAction` / `postAction` metadata on events plus transition action slots
+- **entry / exit behaviors**: state-level `onEntry` / `onExit` hooks supported by SMDF and codegen
+- **observable runtime traces**: `ObserverTrace` sequences entry/exit/transition/timer events
+- **specification artifacts**: the designer can now emit lifecycle specs and transition contract notes in addition to runtime code
+
 ### State Roles
 | State | Purpose |
 |------|---------|
@@ -56,6 +76,14 @@ The starter template defines the following lifecycle:
 - `ObserverTrace` records ordered lifecycle events with timestamps and sequence numbers
 - Intended for audit logs, replay, review queues, and post-run inspection
 
+### Designer Specification Outputs
+- The designer now treats the machine as both executable logic and a documentation surface
+- Generated artifacts include:
+  - Python / TypeScript runtime code
+  - SMDF JSON
+  - lifecycle specification markdown
+  - transition / event contract notes
+
 ## Non-Goals
 
 - No domain-specific posting or distribution APIs
@@ -74,6 +102,11 @@ The starter template defines the following lifecycle:
 **Current Reality**: Blank creation flows exist, but there is no canonical agent lifecycle starter.
 **Desired Outcome**: MCP, the visual designer, and examples all begin from the same lifecycle backbone.
 **Resolution Path**: Add a built-in agent lifecycle template to each surface while leaving blank-machine flows intact.
+
+### Runtime vs Semantic-Model Consumption
+**Current Reality**: Some downstream systems may want to import `smcraft` directly, while others may only need to absorb the lifecycle semantics into their own orchestration engines.
+**Desired Outcome**: Both runtime reuse and semantic reuse remain viable.
+**Resolution Path**: Keep runtime primitives package-oriented while making transition contracts, payloads, lifecycle intent, and provenance expectations explicit enough to copy or adapt.
 
 ## Dependencies
 

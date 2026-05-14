@@ -92,6 +92,18 @@ Use it from:
 - the web designer via the **🧭 Lifecycle** toolbar action
 - the MCP server via `create_state_machine(..., template: "agent_lifecycle")`
 
+The lifecycle starter now makes transition semantics more explicit by including:
+- state purposes and transition intent descriptions
+- event payload contracts for lifecycle events
+- optional event pre/post hooks for specification generation
+- stable `ObserverTrace` snapshots for provenance consumers
+
+The web designer can now preview:
+- generated TypeScript / Python runtime code
+- generated SMDF JSON
+- generated lifecycle specification markdown
+- generated transition / event contract notes
+
 Both runtimes also export `ObserverTrace`, which records structured transition/timer provenance for audit and replay use cases.
 
 ## Definition Format (`.smdf.json`)
