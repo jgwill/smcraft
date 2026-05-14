@@ -323,6 +323,18 @@ function autoLayout(def: StateMachineDefinition, existing: DesignerLayout): Desi
   return { positions };
 }
 
+function filterLayoutForDefinition(
+  def: StateMachineDefinition,
+  existing: DesignerLayout,
+): DesignerLayout {
+  const validNames = new Set(collectStateNames(def.state));
+  const rootName = def.state.name;
+  const positions = Object.fromEntries(
+    Object.entries(existing.positions).filter(([name]) => name !== rootName && validNames.has(name)),
+  );
+  return { positions };
+}
+
 const MAX_UNDO = 50;
 
 function createHistoryEntry(state: DesignerState): HistoryEntry {
@@ -371,7 +383,7 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
 
   setDefinition: (def) => {
     get()._pushHistory();
-    const layout = autoLayout(def, createDefaultLayout());
+    const layout = autoLayout(def, filterLayoutForDefinition(def, get().layout));
     const rootName = def.state?.name ?? "Root";
     set({
       definition: def,
