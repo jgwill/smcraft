@@ -120,7 +120,9 @@ def _run_skills(args: argparse.Namespace) -> int:
     for path in installed:
         print(f"- {path}")
     if args.skill == "agent-lifecycle":
-        print("Next step: run `smcg generate agent_lifecycle.smdf.json -o output -v` in that directory.")
+        print(
+            f"Next step: cd {Path(args.output).resolve()} && smcg generate agent_lifecycle.smdf.json -o output -v"
+        )
     return 0
 
 
@@ -158,7 +160,9 @@ def _run_report_issue(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     raw_args = sys.argv[1:] if argv is None else argv
-    if raw_args and raw_args[0] not in {"generate", "skills", "report-issue", "-h", "--help"}:
+    subparser_action = next(action for action in parser._actions if isinstance(action, argparse._SubParsersAction))
+    valid_commands = set(subparser_action.choices) | {"-h", "--help"}
+    if raw_args and raw_args[0] not in valid_commands:
         raw_args = ["generate", *raw_args]
     args = parser.parse_args(raw_args)
 
