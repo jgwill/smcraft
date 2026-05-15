@@ -12,8 +12,6 @@ from smcraft.parser import StateMachineParser
 from smcraft.skills import SKILLS, install_skill, list_skills
 from smcraft import __version__
 
-COMMANDS = ("generate", "skills", "report-issue")
-
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="smcg",
@@ -21,7 +19,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    generate = subparsers.add_parser(COMMANDS[0], help="Generate runtime code from a state machine definition")
+    generate = subparsers.add_parser("generate", help="Generate runtime code from a state machine definition")
     generate.add_argument("input", help="Input definition file (.smdf.json, .smdf.xml, .fsm)")
     generate.add_argument("-o", "--output", help="Output directory (default: current directory)", default=".")
     generate.add_argument("-l", "--language", choices=["python"], default="python", help="Target language")
@@ -29,7 +27,7 @@ def _build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--validate-only", action="store_true", help="Only validate, don't generate")
     generate.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
 
-    skills = subparsers.add_parser(COMMANDS[1], help="List and install built-in starter skills")
+    skills = subparsers.add_parser("skills", help="List and install built-in starter skills")
     skills_subparsers = skills.add_subparsers(dest="skills_command")
 
     skills_subparsers.add_parser("list", help="List built-in skills")
@@ -38,7 +36,7 @@ def _build_parser() -> argparse.ArgumentParser:
     install.add_argument("skill", choices=sorted(SKILLS), help="Skill to install")
     install.add_argument("-o", "--output", default=".", help="Target directory for installed files")
 
-    report = subparsers.add_parser(COMMANDS[2], help="Print a terminal-friendly issue report template")
+    report = subparsers.add_parser("report-issue", help="Print a terminal-friendly issue report template")
     report.add_argument("--title", default="Describe the issue", help="Short issue title")
     report.add_argument("--context", default="Describe what you were trying to create.", help="Current reality / scenario")
     report.add_argument("--machine", help="Path to the machine definition involved in the issue")
@@ -161,11 +159,16 @@ def _run_report_issue(args: argparse.Namespace) -> int:
     return 0
 
 
+def _looks_like_input_path(value: str) -> bool:
+    path = Path(value)
+    return path.suffix in {".json", ".xml", ".fsm"} or path.exists() or any(sep in value for sep in ("/", "\\"))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     raw_args = sys.argv[1:] if argv is None else argv
-    valid_commands = set(COMMANDS) | {"-h", "--help"}
-    if raw_args and raw_args[0] not in valid_commands:
+    valid_commands = {"generate", "skills", "report-issue", "-h", "--help"}
+    if raw_args and raw_args[0] not in valid_commands and _looks_like_input_path(str(raw_args[0])):
         raw_args = ["generate", *raw_args]
     args = parser.parse_args(raw_args)
 
