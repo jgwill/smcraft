@@ -45,6 +45,11 @@ from smcraft.runtime import (
     ObserverTrace,
     TraceEvent,
 )
+from smcraft.skills import (
+    get_agent_lifecycle_template,
+    install_skill,
+    list_skills,
+)
 
 __all__ = [
     "StateMachineDefinition",
@@ -72,4 +77,7 @@ __all__ = [
     "ObserverConsole",
     "ObserverTrace",
     "TraceEvent",
+    "get_agent_lifecycle_template",
+    "install_skill",
+    "list_skills",
 ]

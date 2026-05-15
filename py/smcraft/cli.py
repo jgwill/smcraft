@@ -1,40 +1,53 @@
-"""
-SMCG — State Machine Code Generator CLI
-
-Usage:
-    smcg <input-file> [options]
-
-Options:
-    --output, -o <dir>       Output directory (default: current directory)
-    --language, -l <lang>    Target language: python (default: python)
-    --name, -n <name>        Override state machine name
-    --validate-only          Only validate, don't generate code
-    --verbose, -v            Verbose output
-"""
+"""SMCG — State Machine Code Generator CLI."""
 
 from __future__ import annotations
 
 import argparse
+import platform
 import sys
 from pathlib import Path
 
 from smcraft.codegen import PythonCodeGenerator, to_snake_case
 from smcraft.parser import StateMachineParser
+from smcraft.skills import SKILLS, install_skill, list_skills
+from smcraft import __version__
 
-
-def main() -> int:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="smcg",
-        description="State Machine Code Generator — generates code from state machine definitions",
+        description="State Machine Code Generator — generate code, install starter skills, and prepare contribution reports",
     )
-    parser.add_argument("input", help="Input definition file (.smdf.json, .smdf.xml, .fsm)")
-    parser.add_argument("-o", "--output", help="Output directory (default: current directory)", default=".")
-    parser.add_argument("-l", "--language", choices=["python"], default="python", help="Target language")
-    parser.add_argument("-n", "--name", help="Override state machine name")
-    parser.add_argument("--validate-only", action="store_true", help="Only validate, don't generate")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    subparsers = parser.add_subparsers(dest="command")
 
-    args = parser.parse_args()
+    generate = subparsers.add_parser("generate", help="Generate runtime code from a state machine definition")
+    generate.add_argument("input", help="Input definition file (.smdf.json, .smdf.xml, .fsm)")
+    generate.add_argument("-o", "--output", help="Output directory (default: current directory)", default=".")
+    generate.add_argument("-l", "--language", choices=["python"], default="python", help="Target language")
+    generate.add_argument("-n", "--name", help="Override state machine name")
+    generate.add_argument("--validate-only", action="store_true", help="Only validate, don't generate")
+    generate.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+
+    skills = subparsers.add_parser("skills", help="List and install built-in starter skills")
+    skills_subparsers = skills.add_subparsers(dest="skills_command")
+
+    skills_subparsers.add_parser("list", help="List built-in skills")
+
+    install = skills_subparsers.add_parser("install", help="Install a built-in skill into a directory")
+    install.add_argument("skill", choices=sorted(SKILLS), help="Skill to install")
+    install.add_argument("-o", "--output", default=".", help="Target directory for installed files")
+
+    report = subparsers.add_parser("report-issue", help="Print a terminal-friendly issue report template")
+    report.add_argument("--title", default="Describe the issue", help="Short issue title")
+    report.add_argument("--context", default="Describe what you were trying to create.", help="Current reality / scenario")
+    report.add_argument("--machine", help="Path to the machine definition involved in the issue")
+    report.add_argument("--trace", help="Path to a trace / log artifact, if available")
+    report.add_argument("--spec", help="Path to a specification artifact, if available")
+    report.add_argument("--include-env", action="store_true", help="Include CLI and Python environment details")
+
+    return parser
+
+
+def _run_generate(args: argparse.Namespace) -> int:
     input_path = Path(args.input)
 
     if not input_path.exists():
@@ -91,6 +104,72 @@ def main() -> int:
         print(f"  Events: {len(model.event_map)}")
         print(f"  Feeders: {len(model.feeders_map)}")
 
+    return 0
+
+
+def _run_skills(args: argparse.Namespace) -> int:
+    if args.skills_command in (None, "list"):
+        print("Built-in skills:")
+        for skill in list_skills():
+            print(f"- {skill.name}: {skill.summary}")
+            print(f"  files: {', '.join(skill.files)}")
+        return 0
+
+    installed = install_skill(args.skill, args.output)
+    print(f"Installed skill '{args.skill}' into {Path(args.output).resolve()}:")
+    for path in installed:
+        print(f"- {path}")
+    if args.skill == "agent-lifecycle":
+        print("Next step: run `smcg generate agent_lifecycle.smdf.json -o output -v` in that directory.")
+    return 0
+
+
+def _run_report_issue(args: argparse.Namespace) -> int:
+    print(f"# {args.title}")
+    print("")
+    print("## Current reality")
+    print(args.context)
+    print("")
+    print("## Desired outcome")
+    print("- Describe what you expected to create or achieve.")
+    print("")
+    print("## Reproduction artifacts")
+    print(f"- Machine definition: {args.machine or 'attach the .smdf file or generated JSON'}")
+    print(f"- Specification artifact: {args.spec or 'attach generated lifecycle/spec output if relevant'}")
+    print(f"- Trace / provenance: {args.trace or 'attach ObserverTrace or terminal logs if available'}")
+    print("")
+    print("## Steps to reproduce")
+    print("1. Provide the exact command or runtime action.")
+    print("2. Describe the transition or state where behavior diverged.")
+    print("3. Include any generated code/spec output that demonstrates the problem.")
+    print("")
+    print("## Contribution notes")
+    print("- Highlight the state, event payload, and transition contract involved.")
+    print("- Call out any edge case, retry path, or HITL branch that triggered the issue.")
+    if args.include_env:
+        print("")
+        print("## Environment")
+        print(f"- smcraft: {__version__}")
+        print(f"- python: {platform.python_version()}")
+        print(f"- platform: {platform.platform()}")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    if raw_args and raw_args[0] not in {"generate", "skills", "report-issue", "-h", "--help"}:
+        raw_args = ["generate", *raw_args]
+    args = parser.parse_args(raw_args)
+
+    if args.command == "generate":
+        return _run_generate(args)
+    if args.command == "skills":
+        return _run_skills(args)
+    if args.command == "report-issue":
+        return _run_report_issue(args)
+
+    parser.print_help()
     return 0
 
 

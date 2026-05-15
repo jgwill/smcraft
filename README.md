@@ -20,6 +20,13 @@ cd py && pip install -e .
 smcg examples/bdbo_strategy.smdf.json -o output/ -v
 ```
 
+Consumer-oriented CLI entrypoints:
+```bash
+smcg skills list
+smcg skills install agent-lifecycle -o ./starter
+smcg report-issue --title "Describe the issue" --machine ./starter/agent_lifecycle.smdf.json --include-env
+```
+
 ### TypeScript
 ```bash
 cd ts && npm install && npm run build && npm test
@@ -105,6 +112,34 @@ The web designer can now preview:
 - generated transition / event contract notes
 
 Both runtimes also export `ObserverTrace`, which records structured transition/timer provenance for audit and replay use cases.
+
+## Consumer Install / Contribution Workflow
+
+If you are consuming `smcraft` as a runtime package or as a semantic/design reference:
+
+- use the Python package for CLI/codegen/runtime flows:
+  - `cd py && pip install -e .`
+- use the TypeScript package for parser/runtime/codegen flows:
+  - `cd ts && npm install && npm run build`
+- use the web designer when you want to author/edit/export machines visually:
+  - `cd web && npm install && npm run dev`
+
+The Python CLI now includes contribution-oriented terminal workflows:
+
+- `smcg skills list`
+  - discover built-in starter skills intended to help consumers bootstrap usage
+- `smcg skills install agent-lifecycle -o ./starter`
+  - installs the reusable lifecycle starter as a local `.smdf.json`
+- `smcg skills install observer-trace -o ./starter`
+  - installs a runnable provenance example for runtime consumers
+- `smcg report-issue --machine ./starter/agent_lifecycle.smdf.json --include-env`
+  - prints a terminal-friendly issue template that captures current reality, desired outcome, reproduction artifacts, and environment details
+
+When reporting issues or contributing edge cases, include:
+- the machine definition or generated SMDF JSON
+- the generated specification / contract artifact when relevant
+- runtime provenance from `ObserverTrace` or terminal logs
+- the specific state / event / transition contract that behaved unexpectedly
 
 ## Definition Format (`.smdf.json`)
 
