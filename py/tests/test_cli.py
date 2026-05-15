@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 
 from smcraft.cli import main
+from smcraft.skills import install_skill
+import pytest
 
 EXAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "examples")
 AGENT_LIFECYCLE_JSON = os.path.join(EXAMPLE_DIR, "agent_lifecycle.smdf.json")
@@ -52,3 +54,8 @@ def test_legacy_generate_entrypoint_validate_only(capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "Validation passed." in out
+
+
+def test_install_skill_rejects_unknown_name(tmp_path: Path):
+    with pytest.raises(ValueError, match="Unknown skill: unknown"):
+        install_skill("unknown", tmp_path)

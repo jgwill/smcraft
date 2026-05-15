@@ -318,4 +318,4 @@ def install_skill(name: str, output_dir: str | Path) -> list[Path]:
         output_file.write_text(OBSERVER_TRACE_EXAMPLE, encoding="utf-8")
         return [output_file]
 
-    raise KeyError(name)
+    raise ValueError(f"Unknown skill: {name}. Available skills: {', '.join(sorted(SKILLS))}")

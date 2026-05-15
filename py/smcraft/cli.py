@@ -157,7 +157,7 @@ def _run_report_issue(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
-    raw_args = list(sys.argv[1:] if argv is None else argv)
+    raw_args = sys.argv[1:] if argv is None else argv
     if raw_args and raw_args[0] not in {"generate", "skills", "report-issue", "-h", "--help"}:
         raw_args = ["generate", *raw_args]
     args = parser.parse_args(raw_args)
