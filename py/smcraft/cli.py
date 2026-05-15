@@ -12,6 +12,8 @@ from smcraft.parser import StateMachineParser
 from smcraft.skills import SKILLS, install_skill, list_skills
 from smcraft import __version__
 
+COMMANDS = ("generate", "skills", "report-issue")
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="smcg",
@@ -19,7 +21,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    generate = subparsers.add_parser("generate", help="Generate runtime code from a state machine definition")
+    generate = subparsers.add_parser(COMMANDS[0], help="Generate runtime code from a state machine definition")
     generate.add_argument("input", help="Input definition file (.smdf.json, .smdf.xml, .fsm)")
     generate.add_argument("-o", "--output", help="Output directory (default: current directory)", default=".")
     generate.add_argument("-l", "--language", choices=["python"], default="python", help="Target language")
@@ -27,7 +29,7 @@ def _build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--validate-only", action="store_true", help="Only validate, don't generate")
     generate.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
 
-    skills = subparsers.add_parser("skills", help="List and install built-in starter skills")
+    skills = subparsers.add_parser(COMMANDS[1], help="List and install built-in starter skills")
     skills_subparsers = skills.add_subparsers(dest="skills_command")
 
     skills_subparsers.add_parser("list", help="List built-in skills")
@@ -36,7 +38,7 @@ def _build_parser() -> argparse.ArgumentParser:
     install.add_argument("skill", choices=sorted(SKILLS), help="Skill to install")
     install.add_argument("-o", "--output", default=".", help="Target directory for installed files")
 
-    report = subparsers.add_parser("report-issue", help="Print a terminal-friendly issue report template")
+    report = subparsers.add_parser(COMMANDS[2], help="Print a terminal-friendly issue report template")
     report.add_argument("--title", default="Describe the issue", help="Short issue title")
     report.add_argument("--context", default="Describe what you were trying to create.", help="Current reality / scenario")
     report.add_argument("--machine", help="Path to the machine definition involved in the issue")
@@ -107,7 +109,7 @@ def _run_generate(args: argparse.Namespace) -> int:
     return 0
 
 
-def _run_skills(args: argparse.Namespace) -> int:
+def _run_skills(args: argparse.Namespace, prog_name: str = "smcg") -> int:
     if args.skills_command in (None, "list"):
         print("Built-in skills:")
         for skill in list_skills():
@@ -123,7 +125,7 @@ def _run_skills(args: argparse.Namespace) -> int:
         skill_file = Path(args.output).resolve() / "agent_lifecycle.smdf.json"
         output_dir = Path(args.output).resolve() / "output"
         print(
-            f"Next step: run `{args.prog_name} generate {skill_file} -o {output_dir} -v` from your current shell."
+            f"Next step: run `{prog_name} generate {skill_file} -o {output_dir} -v` from your current shell."
         )
     return 0
 
@@ -162,21 +164,15 @@ def _run_report_issue(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     raw_args = sys.argv[1:] if argv is None else argv
-    subparser_action = next(
-        (action for action in parser._actions if isinstance(action, argparse._SubParsersAction)),
-        None,
-    )
-    valid_commands = set(subparser_action.choices) if subparser_action else set()
-    valid_commands |= {"-h", "--help"}
+    valid_commands = set(COMMANDS) | {"-h", "--help"}
     if raw_args and raw_args[0] not in valid_commands:
         raw_args = ["generate", *raw_args]
     args = parser.parse_args(raw_args)
-    args.prog_name = parser.prog
 
     if args.command == "generate":
         return _run_generate(args)
     if args.command == "skills":
-        return _run_skills(args)
+        return _run_skills(args, parser.prog)
     if args.command == "report-issue":
         return _run_report_issue(args)
 

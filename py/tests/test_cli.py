@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
+
+import pytest
 
 from smcraft.cli import main
 from smcraft.skills import install_skill
-import pytest
 
-EXAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "examples")
-AGENT_LIFECYCLE_JSON = os.path.join(EXAMPLE_DIR, "agent_lifecycle.smdf.json")
+EXAMPLE_DIR = Path(__file__).resolve().parents[2] / "examples"
+AGENT_LIFECYCLE_JSON = EXAMPLE_DIR / "agent_lifecycle.smdf.json"
 
 
 def test_skills_list(capsys):
@@ -50,7 +50,7 @@ def test_report_issue_template(capsys):
 
 
 def test_legacy_generate_entrypoint_validate_only(capsys):
-    rc = main([AGENT_LIFECYCLE_JSON, "--validate-only"])
+    rc = main([str(AGENT_LIFECYCLE_JSON), "--validate-only"])
     out = capsys.readouterr().out
     assert rc == 0
     assert "Validation passed." in out

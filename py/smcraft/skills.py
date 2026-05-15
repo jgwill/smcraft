@@ -255,7 +255,13 @@ AGENT_LIFECYCLE_TEMPLATE = {
     },
 }
 
-OBSERVER_TRACE_EXAMPLE = """from smcraft import Context, ObserverTrace, State, StateKind, TransitionHelper
+OBSERVER_TRACE_EXAMPLE = '''"""Minimal runtime provenance example for consumers.
+
+This snippet demonstrates how to attach ObserverTrace to a context,
+run a transition, and inspect the ordered immutable trace snapshot.
+"""
+
+from smcraft import Context, ObserverTrace, State, StateKind, TransitionHelper
 
 root = State("Root", StateKind.ROOT)
 created = State("Created", StateKind.LEAF, root)
@@ -272,7 +278,7 @@ TransitionHelper.process_transition_end(ctx, created, running)
 
 for event in trace.snapshot():
     print(event)
-"""
+'''
 
 
 @dataclass(frozen=True)
