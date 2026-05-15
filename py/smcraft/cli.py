@@ -120,8 +120,10 @@ def _run_skills(args: argparse.Namespace) -> int:
     for path in installed:
         print(f"- {path}")
     if args.skill == "agent-lifecycle":
+        skill_file = Path(args.output).resolve() / "agent_lifecycle.smdf.json"
+        output_dir = Path(args.output).resolve() / "output"
         print(
-            f"Next step: cd {Path(args.output).resolve()} && {args.prog_name} generate agent_lifecycle.smdf.json -o output -v"
+            f"Next step: run `{args.prog_name} generate {skill_file} -o {output_dir} -v` from your current shell."
         )
     return 0
 

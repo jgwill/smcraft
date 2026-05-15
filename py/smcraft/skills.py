@@ -29,7 +29,7 @@ AGENT_LIFECYCLE_TEMPLATE = {
                             "description": "Planning output, routing notes, and dependencies.",
                         },
                     ],
-                    "postAction": "ObserverTrace emits transition_begin/transition_end around Created -> Planned.",
+                    "postAction": "Suggested provenance expectation: implementations may emit ObserverTrace transition_begin/transition_end around Created -> Planned.",
                 },
                 {
                     "id": "WorkUnitStarted",
