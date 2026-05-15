@@ -121,7 +121,7 @@ def _run_skills(args: argparse.Namespace) -> int:
         print(f"- {path}")
     if args.skill == "agent-lifecycle":
         print(
-            f"Next step: cd {Path(args.output).resolve()} && smcg generate agent_lifecycle.smdf.json -o output -v"
+            f"Next step: cd {Path(args.output).resolve()} && {args.prog_name} generate agent_lifecycle.smdf.json -o output -v"
         )
     return 0
 
@@ -160,11 +160,16 @@ def _run_report_issue(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     raw_args = sys.argv[1:] if argv is None else argv
-    subparser_action = next(action for action in parser._actions if isinstance(action, argparse._SubParsersAction))
-    valid_commands = set(subparser_action.choices) | {"-h", "--help"}
+    subparser_action = next(
+        (action for action in parser._actions if isinstance(action, argparse._SubParsersAction)),
+        None,
+    )
+    valid_commands = set(subparser_action.choices) if subparser_action else set()
+    valid_commands |= {"-h", "--help"}
     if raw_args and raw_args[0] not in valid_commands:
         raw_args = ["generate", *raw_args]
     args = parser.parse_args(raw_args)
+    args.prog_name = parser.prog
 
     if args.command == "generate":
         return _run_generate(args)

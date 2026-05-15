@@ -59,3 +59,11 @@ def test_legacy_generate_entrypoint_validate_only(capsys):
 def test_install_skill_rejects_unknown_name(tmp_path: Path):
     with pytest.raises(ValueError, match="Unknown skill: unknown"):
         install_skill("unknown", tmp_path)
+
+
+def test_install_observer_trace_skill(tmp_path: Path):
+    rc = main(["skills", "install", "observer-trace", "--output", str(tmp_path)])
+    installed = tmp_path / "observer_trace_example.py"
+    assert rc == 0
+    assert installed.exists()
+    assert "ObserverTrace" in installed.read_text()

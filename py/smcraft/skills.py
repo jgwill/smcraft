@@ -42,7 +42,7 @@ AGENT_LIFECYCLE_TEMPLATE = {
                         },
                         {
                             "name": "attempt",
-                            "type": "int",
+                            "type": "integer",
                             "description": "Execution attempt number for retry-aware flows.",
                         },
                     ],
@@ -92,7 +92,7 @@ AGENT_LIFECYCLE_TEMPLATE = {
                     "id": "RetryScheduled",
                     "description": "A failed or rejected unit was rescheduled.",
                     "parameters": [
-                        {"name": "attempt", "type": "int", "description": "The next attempt number."},
+                        {"name": "attempt", "type": "integer", "description": "The next attempt number."},
                         {"name": "reason", "type": "string", "description": "Why the retry was scheduled."},
                     ],
                 },
