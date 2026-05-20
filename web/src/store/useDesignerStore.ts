@@ -78,6 +78,13 @@ interface DesignerState {
   navigationPath: string[];  // breadcrumb path, e.g. ["Root", "Composite1"]
   currentParent: string;     // which state's children to display
 
+  // Viewport (zoom + pan) – not part of undo history
+  viewport: { scale: number; panX: number; panY: number };
+  zoomRequest: { token: number; factor: number } | null;
+  /** Increments trigger Canvas to recompute fit-to-frame from current children bounds. */
+  fitRequestToken: number;
+  resetRequestToken: number;
+
   // Internal: push history before mutation
   _pushHistory: () => void;
 
@@ -155,6 +162,13 @@ interface DesignerState {
   navigateInto: (stateName: string) => void;
   navigateUp: (toLevel?: number) => void;
   getCurrentChildren: () => StateDef[];
+
+  // Viewport actions
+  setViewport: (scale: number, panX: number, panY: number) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetViewport: () => void;
+  requestFitToFrame: () => void;
 }
 
 function createEmptyDefinition(): StateMachineDefinition {
@@ -371,6 +385,10 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   generatedCode: null,
   navigationPath: ["Root"],
   currentParent: "Root",
+  viewport: { scale: 1, panX: 0, panY: 0 },
+  zoomRequest: null,
+  fitRequestToken: 0,
+  resetRequestToken: 0,
 
   _pushHistory: () => {
     const state = get();
@@ -398,6 +416,10 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
       navigationPath: [rootName],
       currentParent: rootName,
       generatedCode: null,
+      viewport: { scale: 1, panX: 0, panY: 0 },
+      zoomRequest: null,
+      fitRequestToken: get().fitRequestToken + 1,
+      resetRequestToken: 0,
     });
   },
 
@@ -685,6 +707,10 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
         redoStack: [],
         navigationPath: [rootName],
         currentParent: rootName,
+        viewport: { scale: 1, panX: 0, panY: 0 },
+        zoomRequest: null,
+        fitRequestToken: get().fitRequestToken + 1,
+        resetRequestToken: 0,
       });
     } catch (e) {
       console.error("Failed to parse definition:", e);
@@ -713,6 +739,7 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
         navigationPath: [...navigationPath, stateName],
         currentParent: stateName,
         selection: { kind: null, id: null },
+        fitRequestToken: get().fitRequestToken + 1,
       });
     }
   },
@@ -726,6 +753,7 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
       navigationPath: newPath,
       currentParent: newPath[newPath.length - 1],
       selection: { kind: null, id: null },
+      fitRequestToken: get().fitRequestToken + 1,
     });
   },
 
@@ -734,4 +762,31 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
     const parent = findState(definition.state, currentParent);
     return parent?.states ?? [];
   },
+
+  // Viewport actions – viewport is intentionally outside undo history (navigation only)
+  setViewport: (scale, panX, panY) => set({
+    viewport: {
+      scale: Math.min(Math.max(scale, 0.1), 5),
+      panX,
+      panY,
+    },
+  }),
+
+  zoomIn: () => set({
+    zoomRequest: {
+      token: (get().zoomRequest?.token ?? 0) + 1,
+      factor: 1.1,
+    },
+  }),
+
+  zoomOut: () => set({
+    zoomRequest: {
+      token: (get().zoomRequest?.token ?? 0) + 1,
+      factor: 1 / 1.1,
+    },
+  }),
+
+  resetViewport: () => set({ resetRequestToken: get().resetRequestToken + 1 }),
+
+  requestFitToFrame: () => set({ fitRequestToken: get().fitRequestToken + 1 }),
 }));

@@ -23,6 +23,12 @@ export default function Toolbar() {
   const redo = useDesignerStore((s) => s.redo);
   const undoStack = useDesignerStore((s) => s.undoStack);
   const redoStack = useDesignerStore((s) => s.redoStack);
+  const viewport = useDesignerStore((s) => s.viewport);
+  const zoomIn = useDesignerStore((s) => s.zoomIn);
+  const zoomOut = useDesignerStore((s) => s.zoomOut);
+  const resetViewport = useDesignerStore((s) => s.resetViewport);
+  const requestFitToFrame = useDesignerStore((s) => s.requestFitToFrame);
+  const canFit = useDesignerStore((s) => s.getCurrentChildren().length > 0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [addingState, setAddingState] = useState(false);
@@ -152,6 +158,39 @@ export default function Toolbar() {
         title={drawMode === "transition" ? "Exit draw mode (Esc)" : "Draw transition mode"}
       >
         {drawMode === "transition" ? "✏️ Drawing" : "↗ Draw"}
+      </button>
+
+      <div className="w-px h-4 bg-gray-700" />
+
+      {/* Zoom controls */}
+      <button
+        onClick={zoomOut}
+        className="toolbar-btn-sm"
+        title="Zoom out"
+      >
+        −
+      </button>
+      <button
+        onClick={resetViewport}
+        className="toolbar-btn-sm tabular-nums min-w-[42px] text-center"
+        title="Reset to 100% and center"
+      >
+        {Math.round(viewport.scale * 100)}%
+      </button>
+      <button
+        onClick={zoomIn}
+        className="toolbar-btn-sm"
+        title="Zoom in"
+      >
+        ＋
+      </button>
+      <button
+        onClick={requestFitToFrame}
+        disabled={!canFit}
+        className="toolbar-btn-sm disabled:opacity-30"
+        title="Fit diagram to frame"
+      >
+        ⊡
       </button>
 
       <div className="w-px h-4 bg-gray-700" />
