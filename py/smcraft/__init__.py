@@ -13,7 +13,7 @@ Modules:
   - cli: Command-line interface for code generation
 """
 
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 
 from smcraft.model import (
     StateMachineDefinition,
@@ -42,6 +42,13 @@ from smcraft.runtime import (
     IObserver,
     ObserverNull,
     ObserverConsole,
+    ObserverTrace,
+    TraceEvent,
+)
+from smcraft.skills import (
+    get_agent_lifecycle_template,
+    install_skill,
+    list_skills,
 )
 
 __all__ = [
@@ -68,4 +75,9 @@ __all__ = [
     "IObserver",
     "ObserverNull",
     "ObserverConsole",
+    "ObserverTrace",
+    "TraceEvent",
+    "get_agent_lifecycle_template",
+    "install_skill",
+    "list_skills",
 ]

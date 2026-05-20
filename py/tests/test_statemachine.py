@@ -21,10 +21,12 @@ from smcraft.runtime import (
     TransitionHelper,
     ObserverConsole,
     ObserverNull,
+    ObserverTrace,
 )
 
 EXAMPLE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "examples")
 BDBO_JSON = os.path.join(EXAMPLE_DIR, "bdbo_strategy.smdf.json")
+AGENT_LIFECYCLE_JSON = os.path.join(EXAMPLE_DIR, "agent_lifecycle.smdf.json")
 
 
 def test_parse_json():
@@ -49,6 +51,24 @@ def test_validation():
     errors = parser.validate(model)
     assert len(errors) == 0, f"Unexpected errors: {errors}"
     print("✓ test_validation passed")
+
+
+def test_agent_lifecycle_example():
+    """Test the built-in agent lifecycle starter definition."""
+    parser = StateMachineParser()
+    model = parser.parse_file(AGENT_LIFECYCLE_JSON)
+
+    assert model.definition.settings.name == "AgentLifecycle"
+    assert model.definition.settings.asynchronous is True
+    assert len(model.all_states) == 10
+    assert len(model.event_map) == 10
+    hitl_requested = model.event_map["HitlRequested"]
+    assert len(hitl_requested.parameters) == 1
+    assert hitl_requested.parameters[0].description == "Human review bundle, evidence, and rationale."
+    roundtrip = json.loads(model.definition.to_json())
+    assert roundtrip["events"][0]["events"][2]["parameters"][0]["description"] == "Human review bundle, evidence, and rationale."
+    assert parser.validate(model) == []
+    print("✓ test_agent_lifecycle_example passed")
 
 
 def test_validation_catches_errors():
@@ -190,6 +210,38 @@ def test_runtime_hierarchical_transitions():
     enter_b1_idx = log.index("enter:ChildB1")
     assert exit_a1_idx < enter_b1_idx
     print("✓ test_runtime_hierarchical_transitions passed")
+
+
+def test_runtime_trace_observer():
+    """Test structured runtime provenance recording."""
+    root = State("Root", StateKind.ROOT)
+    idle = State("Idle", StateKind.LEAF, parent=root)
+    active = State("Active", StateKind.LEAF, parent=root)
+
+    trace = ObserverTrace(clock=lambda: "2026-05-13T00:00:00+00:00")
+    ctx = Context(name="TraceTest")
+    ctx.state_current = idle
+    ctx.set_observer(trace)
+
+    TransitionHelper.process_transition_begin(ctx, idle, active, "Activate")
+    ctx.state_current = active
+    TransitionHelper.process_transition_end(ctx, idle, active)
+    ctx.start_timer("retry", 25, lambda: None)
+    ctx.stop_timer("retry")
+
+    assert [event.event_type for event in trace.snapshot()] == [
+        "exit",
+        "transition_begin",
+        "entry",
+        "transition_end",
+        "timer_start",
+        "timer_stop",
+    ]
+    assert trace.events[0].sequence == 1
+    assert trace.events[1].transition_name == "Activate"
+    assert trace.events[4].duration == 25
+    assert isinstance(trace.events, tuple)
+    print("✓ test_runtime_trace_observer passed")
 
 
 def test_generated_code_runs():

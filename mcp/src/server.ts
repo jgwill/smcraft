@@ -52,9 +52,25 @@ interface TransitionDef {
   description?: string;
 }
 
+interface ParameterDef {
+  name: string;
+  type: string;
+  description?: string;
+}
+
 interface EventDef {
   id: string;
   description?: string;
+  parameters?: ParameterDef[];
+  preAction?: string;
+  postAction?: string;
+}
+
+interface EventSourceDef {
+  name: string;
+  feeder?: string;
+  description?: string;
+  events: EventDef[];
 }
 
 interface Definition {
@@ -63,7 +79,7 @@ interface Definition {
     name: string;
     asynchronous: boolean;
   };
-  events: { name: string; events: EventDef[] }[];
+  events: EventSourceDef[];
   state: StateDef;
 }
 
@@ -74,6 +90,224 @@ function createEmpty(namespace: string, name: string): Definition {
     settings: { namespace, name, asynchronous: false },
     events: [{ name: "Internal", events: [] }],
     state: { name: "Root", states: [] },
+  };
+}
+
+function createAgentLifecycleTemplate(namespace: string, name: string): Definition {
+  return {
+    settings: { namespace, name, asynchronous: true },
+    events: [
+      {
+        name: "WorkUnitEvents",
+        feeder: "WorkUnitFeeder",
+        events: [
+          {
+            id: "WorkUnitPlanned",
+            description: "Planning metadata has been captured.",
+            parameters: [
+              { name: "workUnitId", type: "string", description: "Stable identifier for the work unit." },
+              { name: "planSummary", type: "object", description: "Planning output, routing notes, and dependencies." },
+            ],
+            postAction: "ObserverTrace emits transition_begin/transition_end around Created -> Planned.",
+          },
+          {
+            id: "WorkUnitStarted",
+            description: "Execution has started.",
+            parameters: [
+              { name: "executor", type: "string", description: "Runtime or agent responsible for execution." },
+              { name: "attempt", type: "int", description: "Execution attempt number for retry-aware flows." },
+            ],
+            preAction: "Validate the planning envelope before entering Running.",
+          },
+          {
+            id: "HitlRequested",
+            description: "Execution is waiting for human review.",
+            parameters: [
+              { name: "reviewPacket", type: "object", description: "Human review bundle, evidence, and rationale." },
+            ],
+            preAction: "Pause execution and prepare a human-readable review artifact.",
+            postAction: "Queue the work unit for HITL review and emit provenance.",
+          },
+          {
+            id: "HitlApproved",
+            description: "A human approved the pending work.",
+            parameters: [
+              { name: "reviewer", type: "string", description: "Human reviewer identity." },
+              { name: "notes", type: "string", description: "Optional approval notes." },
+            ],
+          },
+          {
+            id: "HitlRejected",
+            description: "A human rejected the pending work.",
+            parameters: [
+              { name: "reviewer", type: "string", description: "Human reviewer identity." },
+              { name: "reason", type: "string", description: "Why the work unit was rejected." },
+            ],
+          },
+          {
+            id: "ExecutionResumed",
+            description: "Approved work resumed execution.",
+            parameters: [
+              { name: "resumeToken", type: "string", description: "Correlation token proving the review gate was cleared." },
+            ],
+          },
+          {
+            id: "RetryScheduled",
+            description: "A failed or rejected unit was rescheduled.",
+            parameters: [
+              { name: "attempt", type: "int", description: "The next attempt number." },
+              { name: "reason", type: "string", description: "Why the retry was scheduled." },
+            ],
+          },
+          {
+            id: "WorkUnitCompleted",
+            description: "Execution completed successfully.",
+            parameters: [
+              { name: "resultSummary", type: "object", description: "Runtime outputs and completion metadata." },
+            ],
+          },
+          {
+            id: "WorkUnitFailed",
+            description: "Execution failed and needs recovery.",
+            parameters: [
+              { name: "errorCode", type: "string", description: "Failure category or code." },
+              { name: "details", type: "string", description: "Human-readable failure context." },
+            ],
+            postAction: "Persist failure provenance before routing to retry or archive.",
+          },
+          {
+            id: "WorkUnitArchived",
+            description: "Execution provenance was archived.",
+            parameters: [
+              { name: "archiveUri", type: "string", description: "Location of archived provenance or artifacts." },
+            ],
+          },
+        ],
+      },
+    ],
+    state: {
+      name: "Root",
+      states: [
+        {
+          name: "Created",
+          description: "A work unit exists but has not been planned yet.",
+          transitions: [
+            {
+              event: "WorkUnitPlanned",
+              nextState: "Planned",
+              description: "Capture planning intent, payload contracts, and retry metadata before execution begins.",
+            },
+          ],
+        },
+        {
+          name: "Planned",
+          description: "The work unit has inputs, routing, and retry metadata.",
+          transitions: [
+            {
+              event: "WorkUnitStarted",
+              nextState: "Running",
+              description: "Promote the planned work unit into active execution when runtime preconditions pass.",
+            },
+          ],
+        },
+        {
+          name: "Running",
+          description: "Runtime adapters are actively executing the work unit.",
+          transitions: [
+            {
+              event: "HitlRequested",
+              nextState: "WaitingForHITL",
+              description: "Pause autonomous execution and route the work unit into a human review checkpoint.",
+            },
+            {
+              event: "WorkUnitCompleted",
+              nextState: "Completed",
+              description: "Finalize the successful execution branch before archival.",
+            },
+            {
+              event: "WorkUnitFailed",
+              nextState: "Failed",
+              description: "Capture runtime failure context so recovery or archival can be decided explicitly.",
+            },
+          ],
+        },
+        {
+          name: "WaitingForHITL",
+          description: "Execution is paused behind a human review gate.",
+          transitions: [
+            {
+              event: "HitlApproved",
+              nextState: "Approved",
+              description: "Record approval provenance and allow the work unit to continue.",
+            },
+            {
+              event: "HitlRejected",
+              nextState: "Rejected",
+              description: "Record rejection rationale so the workflow can retry or terminate safely.",
+            },
+          ],
+        },
+        {
+          name: "Approved",
+          description: "The work unit passed human review and can resume.",
+          transitions: [
+            {
+              event: "ExecutionResumed",
+              nextState: "Running",
+              description: "Resume the autonomous path after human approval has been preserved in provenance.",
+            },
+          ],
+        },
+        {
+          name: "Rejected",
+          description: "The work unit was rejected and must be replanned or abandoned.",
+          transitions: [
+            {
+              event: "RetryScheduled",
+              nextState: "Planned",
+              description: "Route rejected work back through planning with explicit retry context.",
+            },
+            {
+              event: "WorkUnitArchived",
+              nextState: "Archived",
+              description: "Archive rejected work units that should not be retried.",
+            },
+          ],
+        },
+        {
+          name: "Completed",
+          description: "Execution finished successfully and is ready for archival.",
+          transitions: [
+            {
+              event: "WorkUnitArchived",
+              nextState: "Archived",
+              description: "Persist provenance, outputs, and terminal metadata for completed work.",
+            },
+          ],
+        },
+        {
+          name: "Failed",
+          description: "Execution failed and can either be retried or archived.",
+          transitions: [
+            {
+              event: "RetryScheduled",
+              nextState: "Planned",
+              description: "Re-enter planning with failure context so the next attempt is intentional.",
+            },
+            {
+              event: "WorkUnitArchived",
+              nextState: "Archived",
+              description: "Close out failed work units whose provenance should be retained without another attempt.",
+            },
+          ],
+        },
+        {
+          name: "Archived",
+          kind: "final",
+          description: "Execution lineage has been captured for provenance and replay.",
+        },
+      ],
+    },
   };
 }
 
@@ -298,15 +532,23 @@ const server = new McpServer({
 server.tool(
   "create_state_machine",
   "Create a new state machine definition with namespace and name",
-  { namespace: z.string(), name: z.string(), asynchronous: z.boolean().optional() },
-  async ({ namespace, name, asynchronous }) => {
-    currentDefinition = createEmpty(namespace, name);
-    if (asynchronous) currentDefinition.settings.asynchronous = true;
+  {
+    namespace: z.string(),
+    name: z.string(),
+    asynchronous: z.boolean().optional(),
+    template: z.enum(["blank", "agent_lifecycle"]).optional(),
+  },
+  async ({ namespace, name, asynchronous, template }) => {
+    currentDefinition = template === "agent_lifecycle"
+      ? createAgentLifecycleTemplate(namespace, name)
+      : createEmpty(namespace, name);
+    if (asynchronous !== undefined) currentDefinition.settings.asynchronous = asynchronous;
+    const templateLabel = template === "agent_lifecycle" ? " using the agent lifecycle starter" : "";
     return {
       content: [
         {
           type: "text",
-          text: `Created state machine '${name}' in namespace '${namespace}'. Add states and events next.`,
+          text: `Created state machine '${name}' in namespace '${namespace}'${templateLabel}.`,
         },
       ],
     };
@@ -545,8 +787,8 @@ server.prompt(
         role: "user",
         content: {
           type: "text",
-          text: `I want to design a state machine${name ? ` called "${name}"` : ""}${domain ? ` for the "${domain}" domain` : ""}. Guide me through:
-1. First, create the state machine with create_state_machine
+           text: `I want to design a state machine${name ? ` called "${name}"` : ""}${domain ? ` for the "${domain}" domain` : ""}. Guide me through:
+1. First, create the state machine with create_state_machine (use template="agent_lifecycle" when I need a durable work-unit lifecycle starter)
 2. Help me identify the key states and add them with add_state
 3. Define the events that trigger transitions with add_event
 4. Wire up transitions between states with add_transition

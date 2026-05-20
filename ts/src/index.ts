@@ -40,8 +40,9 @@ export {
   TransitionHelper,
   ObserverNull,
   ObserverConsole,
+  ObserverTrace,
 } from "./runtime.js";
-export type { IObserver, EndHandler } from "./runtime.js";
+export type { IObserver, EndHandler, TraceEvent, TraceEventType } from "./runtime.js";
 
 // Code Generator (Spec 62)
 export { TypeScriptCodeGenerator } from "./codegen.js";

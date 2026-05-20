@@ -24,16 +24,25 @@ import {
   TransitionHelper,
   ObserverConsole,
   ObserverNull,
+  ObserverTrace,
   type IObserver,
+  type TraceEvent,
 } from "../runtime.js";
 import { TypeScriptCodeGenerator } from "../codegen.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const EXAMPLES_DIR = join(__dirname, "..", "..", "..", "examples");
 const BDBO_JSON_PATH = join(EXAMPLES_DIR, "bdbo_strategy.smdf.json");
+const AGENT_LIFECYCLE_JSON_PATH = join(EXAMPLES_DIR, "agent_lifecycle.smdf.json");
 
 function loadBdboModel(): EnrichedModel {
   const content = readFileSync(BDBO_JSON_PATH, "utf-8");
+  const definition = parseJson(content);
+  return enrich(definition);
+}
+
+function loadAgentLifecycleModel(): EnrichedModel {
+  const content = readFileSync(AGENT_LIFECYCLE_JSON_PATH, "utf-8");
   const definition = parseJson(content);
   return enrich(definition);
 }
@@ -56,6 +65,24 @@ describe("Parser", () => {
     assert.equal(model.parentMap.get("Idle"), "Root");
     assert.equal(model.parentMap.get("Active"), "Root");
     assert.equal(model.parentMap.get("Active_WaitingBreakout"), "Active");
+  });
+
+  it("should parse the agent lifecycle starter JSON", () => {
+    const model = loadAgentLifecycleModel();
+    assert.equal(model.definition.settings.name, "AgentLifecycle");
+    assert.equal(model.definition.settings.asynchronous, true);
+    assert.equal(model.allStates.length, 10);
+    assert.equal(model.eventMap.size, 10);
+    assert.deepEqual(
+      model.eventMap.get("HitlRequested")?.parameters,
+      [
+        {
+          name: "reviewPacket",
+          type: "object",
+          description: "Human review bundle, evidence, and rationale.",
+        },
+      ],
+    );
   });
 });
 
@@ -121,6 +148,12 @@ describe("Validation", () => {
     const errors = validate(model);
     const ruleIds = new Set(errors.map((e) => e.ruleId));
     assert.ok(ruleIds.has("V007"), "Should catch final state with transitions");
+  });
+
+  it("should validate the agent lifecycle starter definition", () => {
+    const model = loadAgentLifecycleModel();
+    const errors = validate(model);
+    assert.equal(errors.length, 0, `Unexpected errors: ${JSON.stringify(errors)}`);
   });
 });
 
@@ -222,6 +255,42 @@ describe("Runtime", () => {
     ctx.startTimer("test", 50, () => { fired = true; });
     ctx.stopTimer("test");
     assert.equal(fired, false);
+  });
+
+  it("should record structured runtime provenance", () => {
+    const root = new State("Root", StateKind.ROOT);
+    const idle = new State("Idle", StateKind.LEAF, root);
+    const active = new State("Active", StateKind.LEAF, root);
+    const trace = new ObserverTrace(() => "2026-05-13T00:00:00.000Z");
+
+    const ctx = new Context("TraceTest");
+    ctx.stateCurrent = idle;
+    ctx.setObserver(trace);
+
+    TransitionHelper.processTransitionBegin(ctx, idle, active, "Activate");
+    ctx.stateCurrent = active;
+    TransitionHelper.processTransitionEnd(ctx, idle, active);
+    ctx.startTimer("retry", 25, () => undefined);
+    ctx.stopTimer("retry");
+
+    assert.deepEqual(
+      trace.snapshot().map((event) => event.type),
+      ["exit", "transition_begin", "entry", "transition_end", "timer_start", "timer_stop"],
+    );
+    assert.equal(trace.snapshot()[0].sequence, 1);
+    assert.equal(trace.snapshot()[0].timestamp, "2026-05-13T00:00:00.000Z");
+    assert.equal(trace.snapshot()[1].transitionName, "Activate");
+    assert.equal(trace.snapshot()[4].duration, 25);
+
+    const exposed = trace.events as TraceEvent[];
+    exposed.push({
+      sequence: 999,
+      timestamp: "2099-01-01T00:00:00.000Z",
+      type: "entry",
+      contextName: "Mutated",
+      stateName: "Injected",
+    });
+    assert.equal(trace.snapshot().length, 6);
   });
 });
 

@@ -2,15 +2,17 @@
 
 import { useRef, useState } from "react";
 import { useDesignerStore } from "@/store/useDesignerStore";
-import type { StateDef } from "@/types/definition";
+import { createAgentLifecycleTemplate } from "@/lib/templates";
+import { generateMachineSpecification, generateTransitionContracts } from "@/lib/specification";
 
 export default function Toolbar() {
-  const definition = useDesignerStore((s) => s.definition);
   const fileName = useDesignerStore((s) => s.fileName);
   const dirty = useDesignerStore((s) => s.dirty);
   const loadFromJson = useDesignerStore((s) => s.loadFromJson);
   const exportJson = useDesignerStore((s) => s.exportJson);
+  const definition = useDesignerStore((s) => s.definition);
   const addState = useDesignerStore((s) => s.addState);
+  const setDefinition = useDesignerStore((s) => s.setDefinition);
   const validate = useDesignerStore((s) => s.validate);
   const showCodePreview = useDesignerStore((s) => s.showCodePreview);
   const setShowCodePreview = useDesignerStore((s) => s.setShowCodePreview);
@@ -21,6 +23,12 @@ export default function Toolbar() {
   const redo = useDesignerStore((s) => s.redo);
   const undoStack = useDesignerStore((s) => s.undoStack);
   const redoStack = useDesignerStore((s) => s.redoStack);
+  const viewport = useDesignerStore((s) => s.viewport);
+  const zoomIn = useDesignerStore((s) => s.zoomIn);
+  const zoomOut = useDesignerStore((s) => s.zoomOut);
+  const resetViewport = useDesignerStore((s) => s.resetViewport);
+  const requestFitToFrame = useDesignerStore((s) => s.requestFitToFrame);
+  const canFit = useDesignerStore((s) => s.getCurrentChildren().length > 0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [addingState, setAddingState] = useState(false);
@@ -58,10 +66,34 @@ export default function Toolbar() {
     setAddingState(false);
   };
 
-  const [generateLang, setGenerateLang] = useState<"python" | "typescript">("python");
+  const handleLoadAgentLifecycle = () => {
+    if (dirty && !window.confirm("Replace the current definition with the agent lifecycle starter?")) {
+      return;
+    }
+    setDefinition(createAgentLifecycleTemplate());
+  };
+
+  const [generateLang, setGenerateLang] = useState<
+    "python" | "typescript" | "specification" | "contracts" | "smdf"
+  >("python");
 
   const handleGenerate = async () => {
     const json = exportJson();
+    if (generateLang === "smdf") {
+      setGeneratedCode(json);
+      setShowCodePreview(true);
+      return;
+    }
+    if (generateLang === "specification") {
+      setGeneratedCode(generateMachineSpecification(definition));
+      setShowCodePreview(true);
+      return;
+    }
+    if (generateLang === "contracts") {
+      setGeneratedCode(generateTransitionContracts(definition));
+      setShowCodePreview(true);
+      return;
+    }
     try {
       const resp = await fetch("/api/generate", {
         method: "POST",
@@ -130,6 +162,39 @@ export default function Toolbar() {
 
       <div className="w-px h-4 bg-gray-700" />
 
+      {/* Zoom controls */}
+      <button
+        onClick={zoomOut}
+        className="toolbar-btn-sm"
+        title="Zoom out"
+      >
+        −
+      </button>
+      <button
+        onClick={resetViewport}
+        className="toolbar-btn-sm tabular-nums min-w-[42px] text-center"
+        title="Reset to 100% and center"
+      >
+        {Math.round(viewport.scale * 100)}%
+      </button>
+      <button
+        onClick={zoomIn}
+        className="toolbar-btn-sm"
+        title="Zoom in"
+      >
+        ＋
+      </button>
+      <button
+        onClick={requestFitToFrame}
+        disabled={!canFit}
+        className="toolbar-btn-sm disabled:opacity-30"
+        title="Fit diagram to frame"
+      >
+        ⊡
+      </button>
+
+      <div className="w-px h-4 bg-gray-700" />
+
       {/* File ops */}
       <button onClick={handleOpen} className="toolbar-btn" title="Open .smdf.json">
         📂
@@ -162,6 +227,9 @@ export default function Toolbar() {
           ＋State
         </button>
       )}
+      <button onClick={handleLoadAgentLifecycle} className="toolbar-btn" title="Load agent lifecycle starter">
+        🧭 Lifecycle
+      </button>
 
       <div className="w-px h-4 bg-gray-700" />
 
@@ -171,11 +239,18 @@ export default function Toolbar() {
       </button>
       <select
         value={generateLang}
-        onChange={(e) => setGenerateLang(e.target.value as "python" | "typescript")}
+        onChange={(e) =>
+          setGenerateLang(
+            e.target.value as "python" | "typescript" | "specification" | "contracts" | "smdf"
+          )
+        }
         className="bg-gray-800 border border-gray-700 rounded text-xs text-gray-300 px-1 py-0.5"
       >
         <option value="python">Python</option>
         <option value="typescript">TypeScript</option>
+        <option value="smdf">SMDF JSON</option>
+        <option value="specification">Lifecycle Spec</option>
+        <option value="contracts">Transition Contracts</option>
       </select>
       <button onClick={handleGenerate} className="toolbar-btn">
         ⚡ Generate
