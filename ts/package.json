@@ -1,6 +1,6 @@
 {
   "name": "smcraft",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "State Machine Craft — design, generate, and run hierarchical state machines",
   "type": "module",
   "main": "dist/index.js",
@@ -13,6 +13,10 @@
     "./runtime": {
       "import": "./dist/runtime.js",
       "types": "./dist/runtime.d.ts"
+    },
+    "./machine": {
+      "import": "./dist/machine.js",
+      "types": "./dist/machine.d.ts"
     },
     "./parser": {
       "import": "./dist/parser.js",
@@ -41,6 +45,7 @@
   },
   "files": [
     "dist/**/*.js",
-    "dist/**/*.d.ts"
+    "dist/**/*.d.ts",
+    "!dist/tests/"
   ]
 }
