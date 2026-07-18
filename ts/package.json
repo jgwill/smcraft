@@ -1,7 +1,7 @@
 {
   "name": "smcraft",
-  "version": "0.2.0",
-  "description": "State Machine Craft — design, generate, and run hierarchical state machines",
+  "version": "0.3.0",
+  "description": "State Machine Craft \u2014 design, generate, and run hierarchical state machines",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
