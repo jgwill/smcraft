@@ -25,3 +25,68 @@ body {
 .toolbar-btn-sm {
   @apply text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-1.5 py-0.5 rounded;
 }
+
+/* --- WS7b: live Canvas animations (SVG/CSS only, no libraries) --- */
+
+/* Node bloom-in: fade + scale from ~0.92 to 1 around the node's own center. */
+@keyframes sm-node-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Node fade-out: fade + scale down as the state leaves the definition. */
+@keyframes sm-node-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.9); }
+}
+
+/* Edge draw-on: reveal the stroke (pathLength=1 normalises the dash units). */
+@keyframes sm-edge-draw {
+  from { stroke-dashoffset: 1; opacity: 0; }
+  to   { stroke-dashoffset: 0; opacity: 1; }
+}
+
+/* Runtime-active pulse: a green (#22c55e) glow that layers over any stroke. */
+@keyframes sm-pulse {
+  0%, 100% { filter: drop-shadow(0 0 1px rgba(34, 197, 94, 0.55)); }
+  50%      { filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.95)); }
+}
+
+.sm-node-enter {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sm-node-in 220ms ease-out both;
+}
+
+.sm-node-exit {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sm-node-out 200ms ease-in forwards;
+}
+
+.sm-edge-enter {
+  stroke-dasharray: 1;
+  animation: sm-edge-draw 260ms ease-out both;
+}
+
+.sm-node-active {
+  animation: sm-pulse 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sm-node-enter,
+  .sm-edge-enter {
+    animation: none;
+  }
+  /* Keep exit near-instant so onAnimationEnd still fires and the node is
+     cleaned up from the exiting layer. */
+  .sm-node-exit {
+    animation-duration: 1ms;
+  }
+  /* Drop the infinite motion but keep a static glow so active states stay
+     distinguishable without relying on motion. */
+  .sm-node-active {
+    animation: none;
+    filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.85));
+  }
+}
