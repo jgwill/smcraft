@@ -649,6 +649,26 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
       const def: StateMachineDefinition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
       const layout = autoLayout(def, get().layout);
       const rootName = def.state?.name ?? "Root";
+
+      // Preserve the user's drill-down + selection across live syncs when the
+      // referenced states still exist — so watching an agent build out a
+      // composite doesn't snap the canvas back to Root on every tool call.
+      const prev = get();
+      const names = new Set(collectStateNames(def.state));
+      const keptPath = prev.navigationPath.filter((n) => names.has(n));
+      const navigationPath = keptPath.length ? keptPath : [rootName];
+      const currentParent = navigationPath[navigationPath.length - 1];
+      const sel = prev.selection;
+      const selectionValid =
+        sel.kind === "state"
+          ? !!sel.id && names.has(sel.id)
+          : sel.kind === "transition"
+          ? !!sel.id && names.has(sel.id.split(":")[0])
+          : sel.kind === "event"
+          ? !!sel.id && collectEventIds(def).includes(sel.id)
+          : false;
+      const selection = selectionValid ? sel : { kind: null, id: null };
+
       set({
         definition: def,
         layout,
@@ -658,9 +678,9 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
         remoteStatus: "synced",
         remoteMessage: null,
         errors: validateDefinition(def),
-        selection: { kind: null, id: null },
-        navigationPath: [rootName],
-        currentParent: rootName,
+        selection,
+        navigationPath,
+        currentParent,
       });
     } catch (e) {
       set({ remoteStatus: "error", remoteMessage: String(e) });

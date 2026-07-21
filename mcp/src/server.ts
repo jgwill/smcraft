@@ -28,7 +28,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { writeFileSync, readFileSync, mkdtempSync, rmSync, existsSync } from "fs";
 import { join, resolve } from "path";
 import { tmpdir } from "os";
@@ -189,7 +189,9 @@ function validate(def: Definition): ValidationError[] {
 
 function generateViaSmcg(def: Definition, language: string): string {
   const tmpDir = mkdtempSync(join(tmpdir(), "smcraft-"));
-  const inputFile = join(tmpDir, `${def.settings.name ?? "machine"}.smdf.json`);
+  // Sanitize the input filename — settings.name is agent-controlled free text.
+  const safeName = String(def.settings.name ?? "machine").replace(/[^A-Za-z0-9_.-]/g, "_");
+  const inputFile = join(tmpDir, `${safeName}.smdf.json`);
   const outputDir = join(tmpDir, "output");
 
   try {
@@ -197,8 +199,9 @@ function generateViaSmcg(def: Definition, language: string): string {
     const smdf = { settings: def.settings, events: def.events, state: def.state };
     writeFileSync(inputFile, JSON.stringify(smdf, null, 2));
 
-    // Call real smcg CLI
-    execSync(`smcg "${inputFile}" -l ${language} -o "${outputDir}"`, {
+    // Call real smcg CLI — execFileSync (no shell) so a crafted name cannot
+    // inject shell commands.
+    execFileSync("smcg", [inputFile, "-l", language, "-o", outputDir], {
       encoding: "utf-8",
       timeout: 30000,
     });
