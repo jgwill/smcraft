@@ -144,7 +144,25 @@ forgewright imports `@smcraft/bridge-react`, retires its bespoke `setupWsBridge`
 
 ## Implementation Status
 
-1. ⬜ `@smcraft/bridge-protocol`  2. ⬜ `@smcraft/bridge-client`  3. ⬜ `@smcraft/bridge` hub  4. ⬜ `@smcraft/bridge-react`  5. ⬜ `@smcraft/cli`  6. ⬜ MCP bridge client (env-gated)  7. ⬜ Web provider + store + Canvas animation  8. ⬜ forgewright reuse  9. ⬜ Test suites
+1. ✅ `@smcraft/bridge-protocol` (19 tests) 2. ✅ `@smcraft/bridge-client` (1) 3. ✅ `@smcraft/bridge` hub (5) 4. ✅ `@smcraft/bridge-react` (1) 5. ✅ `@smcraft/cli` `smcx` (4) 6. ✅ MCP bridge client (env-gated, smoke-verified) 7. ✅ Web provider + store + Canvas animation (build + lint clean) 8. ✅ forgewright reuse (408 tests still green) 9. ✅ Full-loop integration proven (CLI → hub → web-role client receives live granular patches; hub binary boots + serves socket.io)
+
+## Running it live
+
+```bash
+# 1. build the packages (once), in dependency order
+for p in bridge-protocol bridge-client bridge bridge-react cli; do (cd $p && npm install && npm run build); done
+
+# 2. start the hub against a project file
+SMCRAFT_PROJECT_FILE=./demo.smdf.json SMCRAFT_BRIDGE_PORT=4599 node bridge/dist/bin.js
+
+# 3. start the web designer pointed at the hub (NEXT_PUBLIC_* is read at dev/build time)
+cd web && SMCRAFT_PROJECT_FILE=../demo.smdf.json NEXT_PUBLIC_SMCRAFT_BRIDGE_URL=http://127.0.0.1:4599 npm run dev
+
+# 4. drive the live canvas from the terminal (or point an MCP agent at the same file + SMCRAFT_BRIDGE_URL)
+node cli/dist/index.js --bridge http://127.0.0.1:4599 --doc ./demo.smdf.json add-state Green
+node cli/dist/index.js --bridge http://127.0.0.1:4599 --doc ./demo.smdf.json watch --as mermaid
+```
+The node blooms onto the browser canvas the instant the CLI (or agent) emits it; `smcx watch` mirrors the same live machine as mermaid/ascii in the terminal.
 
 ## Dependencies
 
