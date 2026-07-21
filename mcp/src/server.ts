@@ -29,9 +29,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { execFileSync } from "child_process";
-import { writeFileSync, readFileSync, mkdtempSync, rmSync, existsSync } from "fs";
+import { writeFileSync, readFileSync, mkdtempSync, rmSync, existsSync, statSync } from "fs";
 import { join, resolve } from "path";
 import { tmpdir } from "os";
+import { createBridgeClient, type BridgeClient } from "@smcraft/bridge-client";
+import type { PatchOp, StateMachineDefinition } from "@smcraft/bridge-protocol";
 
 // ─── In-memory state machine definition ──────────────────────────────
 
@@ -97,6 +99,75 @@ function readDef(): Definition | null {
 
 function writeDef(def: Definition): void {
   writeFileSync(PROJECT_FILE, JSON.stringify({ stateMachine: def }, null, 2), "utf8");
+}
+
+// ─── Optional real-time design bridge (env-gated, best-effort) ───────
+// When SMCRAFT_BRIDGE_URL is set, each mutation is mirrored to the bridge
+// hub so a live web canvas updates as the agent edits. Fully backward-
+// compatible: the file on disk remains the durable truth, every bridge
+// call is wrapped so any failure degrades to a no-op, and standalone
+// operation (no SMCRAFT_BRIDGE_URL) is untouched.
+
+let bridge: BridgeClient | undefined;
+if (process.env.SMCRAFT_BRIDGE_URL) {
+  try {
+    bridge = createBridgeClient({
+      url: process.env.SMCRAFT_BRIDGE_URL,
+      role: "agent",
+      docId: PROJECT_FILE,
+      name: process.env.SMCRAFT_AGENT_NAME ?? "mcp-agent",
+      token: process.env.SMCRAFT_BRIDGE_TOKEN,
+    });
+  } catch (e) {
+    console.error("[smcraft-mcp] bridge init failed (continuing standalone):", e);
+    bridge = undefined;
+  }
+
+  // Best-effort teardown on process exit.
+  let bridgeClosed = false;
+  const closeBridge = (): void => {
+    if (bridgeClosed) return;
+    bridgeClosed = true;
+    try {
+      bridge?.disconnect();
+    } catch {
+      /* best-effort */
+    }
+  };
+  process.on("exit", closeBridge);
+  process.on("SIGINT", () => {
+    closeBridge();
+    process.exit(0);
+  });
+  process.on("SIGTERM", () => {
+    closeBridge();
+    process.exit(0);
+  });
+}
+
+// Emit precise granular ops (never diffs) AFTER writeDef. The mtime is
+// stamped from the file we just wrote so the hub can dedup its own
+// file-watch echo of this same change.
+function bridgeEmitPatch(ops: PatchOp[]): void {
+  if (!bridge || bridge.status !== "connected") return;
+  try {
+    const mtime = statSync(PROJECT_FILE).mtimeMs;
+    bridge.emitPatch(ops, mtime);
+  } catch {
+    /* best-effort */
+  }
+}
+
+function bridgeEmitFull(def: Definition): void {
+  if (!bridge || bridge.status !== "connected") return;
+  try {
+    const mtime = statSync(PROJECT_FILE).mtimeMs;
+    // Local Definition/StateDef differ slightly from the protocol's
+    // StateMachineDefinition; the payload is serialized as-is over the wire.
+    bridge.emitFull(def as unknown as StateMachineDefinition, mtime);
+  } catch {
+    /* best-effort */
+  }
 }
 
 function createEmpty(namespace: string, name: string): Definition {
@@ -573,6 +644,7 @@ server.tool(
     const def = createEmpty(namespace, name);
     if (asynchronous) def.settings.asynchronous = true;
     writeDef(def);
+    bridgeEmitFull(def);
     return {
       content: [
         {
@@ -610,6 +682,9 @@ server.tool(
     if (!parentState.states) parentState.states = [];
     parentState.states.push({ name, kind: kind ?? "normal", description });
     writeDef(def);
+    bridgeEmitPatch([
+      { op: "state.add", parent: parentName, state: { name, kind: kind ?? "normal", description } },
+    ]);
     return {
       content: [{ type: "text", text: `Added state '${name}' under '${parentName}' (${kind ?? "normal"}).` }],
     };
@@ -630,6 +705,7 @@ server.tool(
     const source = def.events[0];
     source.events.push({ id, description });
     writeDef(def);
+    bridgeEmitPatch([{ op: "event.add", sourceIndex: 0, event: { id, description } }]);
     return {
       content: [{ type: "text", text: `Added event '${id}'.` }],
     };
@@ -662,6 +738,9 @@ server.tool(
     if (!target.transitions) target.transitions = [];
     target.transitions.push({ event, nextState, condition, description });
     writeDef(def);
+    bridgeEmitPatch([
+      { op: "transition.add", state, transition: { event, nextState, condition, description } },
+    ]);
     const desc = nextState ? `${state} --[${event}]--> ${nextState}` : `${state} --[${event}]--> (internal)`;
     return { content: [{ type: "text", text: `Added transition: ${desc}` }] };
   }
@@ -679,6 +758,7 @@ server.tool(
       return { content: [{ type: "text", text: "Cannot remove Root state." }], isError: true };
     def.state = removeState(def.state, name);
     writeDef(def);
+    bridgeEmitPatch([{ op: "state.remove", name }]);
     return { content: [{ type: "text", text: `Removed state '${name}'.` }] };
   }
 );
@@ -745,6 +825,7 @@ server.tool(
       const parsed = JSON.parse(json);
       const def: Definition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
       writeDef(def);
+      bridgeEmitFull(def);
       const stateCount = collectStateNames(def.state).length;
       const eventCount = collectEventIds(def).length;
       return {
@@ -865,6 +946,18 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error(`SMCraft MCP server running on stdio (project file: ${PROJECT_FILE})`);
+
+  // Best-effort, non-blocking bridge join. Failure never blocks tool handling.
+  if (bridge) {
+    bridge
+      .join()
+      .then(() => {
+        console.error(`[smcraft-mcp] bridge connected (${process.env.SMCRAFT_BRIDGE_URL})`);
+      })
+      .catch((e) => {
+        console.error("[smcraft-mcp] bridge join failed (continuing standalone):", e?.message ?? e);
+      });
+  }
 }
 
 main().catch(console.error);
