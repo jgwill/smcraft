@@ -140,12 +140,19 @@ export function createBridgeClient(opts: BridgeClientOptions): BridgeClient {
   });
 
   // --- def channel (server -> client) ---
+  // The hub broadcasts to the whole room INCLUDING the origin so the sender
+  // learns its hub-assigned seq. A bidirectional client (the web UI) has
+  // already applied its own edit locally/optimistically, so it must advance
+  // lastSeq from its own echo but NOT re-apply it — otherwise `state.add`
+  // duplicates and `state.remove` throws-then-flags-error on every self edit.
   socket.on(EV.PATCH_OUT, (env: PatchEnvelope) => {
     handleSeq(env?.seq);
+    if (env?.origin && env.origin === selfId) return;
     fire('patch', env);
   });
   socket.on(EV.FULL_OUT, (env: FullEnvelope) => {
     handleSeq(env?.seq);
+    if (env?.origin && env.origin === selfId) return;
     fire('full', env);
   });
   socket.on(EV.ACK, (env: AckPayload) => {

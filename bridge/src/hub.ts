@@ -176,8 +176,35 @@ export function startBridge(opts: StartBridgeOpts = {}): Promise<BridgeHandle> {
         return;
       }
 
+      // No base def yet (fresh project, file not seen at room-seed time). A
+      // mutating client persists BEFORE it emits (durable-first), so recover
+      // the authoritative full state from disk and broadcast that, rather than
+      // apply a patch onto nothing. Never broadcast a null def to the room.
+      if (!room.def) {
+        const recovered = readDefFile(roomId);
+        if (recovered) {
+          room.def = recovered;
+          room.seq += 1;
+          room.mtime = mtimeOf(roomId);
+          pushRing(room, { mtime: env.mtime ?? statish(room), hash: hashDef(room.def) });
+          io.to(roomId).emit(EV.FULL_OUT, {
+            docId: roomId,
+            seq: room.seq,
+            def: room.def,
+            origin: socket.id,
+            mtime: env.mtime,
+          });
+          socket.emit(EV.ACK, { docId: roomId, baseSeq: env.baseSeq, seq: room.seq });
+        } else {
+          socket.emit(EV.ERROR, {
+            docId: roomId,
+            message: "bridge: no base definition to patch (send def:full first)",
+          });
+        }
+        return;
+      }
+
       try {
-        if (!room.def) throw new Error("bridge: no base definition to patch");
         room.def = applyPatchOps(room.def, env.ops);
         room.seq += 1;
         pushRing(room, { mtime: env.mtime ?? statish(room), hash: hashDef(room.def) });
@@ -194,13 +221,15 @@ export function startBridge(opts: StartBridgeOpts = {}): Promise<BridgeHandle> {
           docId: roomId,
           message: err instanceof Error ? err.message : String(err),
         });
-        // Resync everyone to the current authoritative def.
-        io.to(roomId).emit(EV.FULL_OUT, {
-          docId: roomId,
-          seq: room.seq,
-          def: room.def,
-          origin: "hub",
-        });
+        // Resync everyone to the current authoritative def (never null).
+        if (room.def) {
+          io.to(roomId).emit(EV.FULL_OUT, {
+            docId: roomId,
+            seq: room.seq,
+            def: room.def,
+            origin: "hub",
+          });
+        }
       }
     });
 

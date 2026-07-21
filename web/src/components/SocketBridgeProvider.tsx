@@ -84,6 +84,14 @@ export default function SocketBridgeProvider() {
         debounceTimer = setTimeout(() => {
           if (!session || session.getSnapshot().status !== "connected") return;
           const cur = useDesignerStore.getState().definition;
+          // No established base yet (fresh project, hub had no def): send a full
+          // snapshot so the hub can seed its room, instead of a patch it cannot
+          // apply onto nothing.
+          if (lastSentDef === null) {
+            session.emitFull(cur);
+            lastSentDef = cur;
+            return;
+          }
           const ops = diffDefinition(lastSentDef, cur);
           if (ops.length === 0) return;
           session.emitPatch(ops);

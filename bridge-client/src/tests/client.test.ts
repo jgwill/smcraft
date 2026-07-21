@@ -122,3 +122,69 @@ test("bridge-client: join, emit, gap-resync, disconnect", async () => {
     await once(httpServer, "close").catch(() => {});
   }
 });
+
+test("bridge-client: own echoed frame advances seq but is NOT re-applied", async () => {
+  // The hub broadcasts to the whole room including the origin (so the sender
+  // learns its seq). A bidirectional client must advance lastSeq from its own
+  // echo but must NOT fire 'patch'/'full' for it — else it double-applies its
+  // own edit (duplicate state on add, throw-then-error on remove).
+  const httpServer: HttpServer = createServer();
+  const io = new Server(httpServer);
+  let serverSocket: import("socket.io").Socket | undefined;
+  io.on("connection", (s) => {
+    serverSocket = s;
+    s.on(EV.JOIN, (payload: { docId: string }, ack: (r: unknown) => void) => {
+      ack({
+        selfId: "self-1",
+        snapshot: { docId: payload.docId, def: minimalDef, seq: 0, mtime: 0 },
+        presence: [],
+      });
+    });
+  });
+  httpServer.listen(0);
+  await once(httpServer, "listening");
+  const address = httpServer.address();
+  const port =
+    typeof address === "object" && address !== null ? address.port : Number(address);
+
+  const client = createBridgeClient({
+    url: `http://localhost:${port}`,
+    role: "web",
+    docId: "doc-1",
+  });
+  try {
+    await client.join();
+    assert.equal(client.lastSeq, 0);
+    let fired = 0;
+    client.on("patch", () => {
+      fired++;
+    });
+
+    // Frame echoed back to us (origin === our selfId "self-1").
+    serverSocket!.emit(EV.PATCH_OUT, {
+      docId: "doc-1",
+      seq: 1,
+      ops: [{ op: "state.add", parent: "Root", state: { name: "Own" } }],
+      origin: "self-1",
+    });
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(fired, 0, "own echo must NOT fire 'patch'");
+    assert.equal(client.lastSeq, 1, "own echo must still advance lastSeq");
+
+    // Frame from a different origin: must be delivered.
+    serverSocket!.emit(EV.PATCH_OUT, {
+      docId: "doc-1",
+      seq: 2,
+      ops: [],
+      origin: "someone-else",
+    });
+    await new Promise((r) => setTimeout(r, 40));
+    assert.equal(fired, 1, "foreign frame must fire 'patch'");
+    assert.equal(client.lastSeq, 2);
+  } finally {
+    client.disconnect();
+    io.close();
+    httpServer.close();
+    await once(httpServer, "close").catch(() => {});
+  }
+});

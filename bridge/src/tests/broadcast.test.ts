@@ -160,3 +160,41 @@ test("smcraft bridge hub — presence, granular patch, external diff, dedup", as
     await handle.close();
   }
 });
+
+test("smcraft bridge hub — no base def: errors the sender, never broadcasts null", async () => {
+  // File intentionally does NOT exist → the room seeds with def === null.
+  const docPath = pathJoin(tmpdir(), `smcraft-bridge-nb-${process.pid}-${Date.now()}.smdf.json`);
+  const handle: BridgeHandle = await startBridge({ port: 0, host: "127.0.0.1", file: docPath });
+  let a: ClientSocket | null = null;
+  let b: ClientSocket | null = null;
+  try {
+    a = connect(handle.url);
+    b = connect(handle.url);
+    await waitEvent(a, "connect");
+    await waitEvent(b, "connect");
+    const ackA = await join(a, { role: "cli", name: "A", docId: docPath });
+    await join(b, { role: "web", name: "B", docId: docPath });
+    assert.equal(ackA.snapshot.def, null, "no base def on a fresh, file-less project");
+
+    // A patch with no base and no file on disk: the sender must be told, and the
+    // room must NOT receive a def:full carrying a null def.
+    let bGotBroadcast = false;
+    const markP = (): void => { bGotBroadcast = true; };
+    const markF = (): void => { bGotBroadcast = true; };
+    b!.on(EV.PATCH_OUT, markP);
+    b!.on(EV.FULL_OUT, markF);
+
+    const aErr = waitEvent(a, EV.ERROR);
+    a!.emit(EV.PATCH_IN, { docId: docPath, ops: opsAdd("Ghost"), origin: ackA.selfId, mtime: 1 });
+    await aErr; // sender is told there is no base to patch
+    await delay(300);
+
+    b!.off(EV.PATCH_OUT, markP);
+    b!.off(EV.FULL_OUT, markF);
+    assert.equal(bGotBroadcast, false, "hub never broadcasts a null def to the room");
+  } finally {
+    a?.disconnect();
+    b?.disconnect();
+    await handle.close();
+  }
+});
