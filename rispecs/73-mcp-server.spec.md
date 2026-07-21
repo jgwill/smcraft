@@ -4,9 +4,10 @@
 > References: CAISHEN Spec 63 (State Machine Designer), MCP SDK
 
 **Spec ID**: 73
-**Version**: 1.0
+**Version**: 2.0
 **Source**: Extracted from `smcraft/mcp/src/server.ts`
 **Implementation**: TypeScript (`mcp/src/server.ts`), Node.js MCP server on stdio
+**Revised**: Issue #10 / PR #11 (2026-04-16) — in-memory state replaced by file-backed store; `generate_rispec` added
 
 ## Creative Intent
 
@@ -47,6 +48,7 @@ A conversational state machine design workflow where LLM agents create, modify, 
 |------|-----------|---------|
 | `validate_definition` | — | Run validation rules, return errors |
 | `generate_code` | language? | Generate executable code (python/typescript) |
+| `generate_rispec` | intent? | Emit RISE framework rispec markdown from current SMDF (see Spec 76) |
 
 ## Design Session Protocol
 
@@ -57,8 +59,8 @@ A conversational state machine design workflow where LLM agents create, modify, 
 4. **Generate**: `generate_code` → production-ready output
 5. **Export**: `get_definition` → save `.smdf.json` for version control
 
-### In-Memory State
-Current implementation holds one definition in server memory. Lost on restart.
+### File-Backed State (2026-04-16)
+Every tool handler reads the current definition from `SMCRAFT_PROJECT_FILE` (absolute path, default `./statemachine.smdf.json`) via `readDef()`, mutates, and writes back via `writeDef()`. There is no in-memory definition; the file *is* the session. The same file is observed by the web designer via `fs.watch` + SSE — see Spec 75.
 
 ## Structural Tensions
 
@@ -73,10 +75,10 @@ const result = execSync(`smcg ${tmpFile} -l ${language} -o /tmp/output`);
 return readGeneratedFile('/tmp/output/');
 ```
 
-### Session Persistence
-**Current Reality**: In-memory only — design lost on server restart
+### Session Persistence — **resolved**
+~~**Current Reality**: In-memory only — design lost on server restart~~
 **Desired Outcome**: Sessions auto-save to filesystem, recoverable
-**Resolution Path**: Write definition to `.smcraft-session.json` after each mutation, load on startup
+**Resolution**: File-backed store (`SMCRAFT_PROJECT_FILE`) — mutations are written synchronously to disk, recovery is `readDef()` on first tool call. The web designer watches the same file via SSE.
 
 ### Hierarchical Tool Support
 **Current Reality**: Tools operate on flat state list — `add_state` defaults to Root parent

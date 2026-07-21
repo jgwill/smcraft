@@ -28,9 +28,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { execSync } from "child_process";
-import { writeFileSync, readFileSync, mkdtempSync, rmSync } from "fs";
-import { join } from "path";
+import { execFileSync } from "child_process";
+import { writeFileSync, readFileSync, mkdtempSync, rmSync, existsSync } from "fs";
+import { join, resolve } from "path";
 import { tmpdir } from "os";
 
 // ─── In-memory state machine definition ──────────────────────────────
@@ -62,12 +62,42 @@ interface Definition {
     namespace: string;
     name: string;
     asynchronous: boolean;
+    _source?: {
+      kind?: string;
+      pdeId?: string;
+      pdeFolder?: string;
+      originalPrompt?: string;
+      engine?: string;
+    };
   };
   events: { name: string; events: EventDef[] }[];
   state: StateDef;
 }
 
-let currentDefinition: Definition | null = null;
+// ─── File-backed shared store ────────────────────────────────────────
+// Both web/ and mcp/ resolve the same path from SMCRAFT_PROJECT_FILE.
+// Web reads/writes via /api/file; mcp reads/writes here. fs.watch on
+// the web side broadcasts disk changes back to the canvas.
+
+const PROJECT_FILE = resolve(
+  process.env.SMCRAFT_PROJECT_FILE ?? "./statemachine.smdf.json"
+);
+
+function readDef(): Definition | null {
+  if (!existsSync(PROJECT_FILE)) return null;
+  try {
+    const raw = readFileSync(PROJECT_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed.stateMachine ?? parsed.StateMachine ?? parsed;
+  } catch (e) {
+    console.error(`[smcraft-mcp] Failed to read ${PROJECT_FILE}:`, e);
+    return null;
+  }
+}
+
+function writeDef(def: Definition): void {
+  writeFileSync(PROJECT_FILE, JSON.stringify({ stateMachine: def }, null, 2), "utf8");
+}
 
 function createEmpty(namespace: string, name: string): Definition {
   return {
@@ -159,7 +189,9 @@ function validate(def: Definition): ValidationError[] {
 
 function generateViaSmcg(def: Definition, language: string): string {
   const tmpDir = mkdtempSync(join(tmpdir(), "smcraft-"));
-  const inputFile = join(tmpDir, `${def.settings.name ?? "machine"}.smdf.json`);
+  // Sanitize the input filename — settings.name is agent-controlled free text.
+  const safeName = String(def.settings.name ?? "machine").replace(/[^A-Za-z0-9_.-]/g, "_");
+  const inputFile = join(tmpDir, `${safeName}.smdf.json`);
   const outputDir = join(tmpDir, "output");
 
   try {
@@ -167,8 +199,9 @@ function generateViaSmcg(def: Definition, language: string): string {
     const smdf = { settings: def.settings, events: def.events, state: def.state };
     writeFileSync(inputFile, JSON.stringify(smdf, null, 2));
 
-    // Call real smcg CLI
-    execSync(`smcg "${inputFile}" -l ${language} -o "${outputDir}"`, {
+    // Call real smcg CLI — execFileSync (no shell) so a crafted name cannot
+    // inject shell commands.
+    execFileSync("smcg", [inputFile, "-l", language, "-o", outputDir], {
       encoding: "utf-8",
       timeout: 30000,
     });
@@ -286,6 +319,243 @@ function generateTypeScriptFallback(def: Definition): string {
   return lines.join("\n");
 }
 
+// ─── RISE rispec generator ───────────────────────────────────────────
+// Reverse-Engineering → Intent → Specifications → Exportation.
+// Reads the SMDF (and optionally its source PDE) and emits a markdown
+// rispec following the workspace's spec conventions:
+//   Title → Tagline → Desired Outcome → Structural Tension →
+//   States/Events/Transitions → Action Steps → Exportation.
+
+interface PdeSource {
+  prompt?: string;
+  primary?: { action?: string; target?: string; urgency?: string; confidence?: number };
+  secondary?: Array<{ action?: string; target?: string; confidence?: number }>;
+  directions?: {
+    east?: Array<{ text: string; confidence?: number }>;
+    south?: Array<{ text: string; confidence?: number }>;
+    west?: Array<{ text: string; confidence?: number }>;
+    north?: Array<{ text: string; confidence?: number }>;
+  };
+  actionStack?: Array<{ text: string; direction?: string; completed?: boolean }>;
+  ambiguities?: Array<{ text: string; suggestion?: string }>;
+}
+
+function loadPde(def: Definition): PdeSource | null {
+  const folder = def.settings._source?.pdeFolder;
+  const id = def.settings._source?.pdeId;
+  if (!folder || !id) return null;
+  const root = resolve(PROJECT_FILE, "..");
+  const candidates = [
+    resolve(root, folder, `pde-${id}.json`),
+    resolve(folder, `pde-${id}.json`),
+  ];
+  for (const path of candidates) {
+    if (!existsSync(path)) continue;
+    try {
+      const data = JSON.parse(readFileSync(path, "utf8"));
+      return {
+        prompt: data.prompt,
+        primary: data.result?.primary,
+        secondary: data.result?.secondary,
+        directions: data.result?.directions,
+        actionStack: data.result?.actionStack,
+        ambiguities: data.result?.ambiguities,
+      };
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
+function generateRispec(def: Definition, intent?: string): string {
+  const pde = loadPde(def);
+  const name = def.settings.name;
+  const ns = def.settings.namespace;
+  const lines: string[] = [];
+  const states = def.state.states ?? [];
+
+  const tagline =
+    intent ??
+    pde?.primary?.target ??
+    def.settings._source?.originalPrompt ??
+    `${name} state machine`;
+
+  lines.push(`# ${name} — RISE rispec`);
+  lines.push("");
+  lines.push(`> ${tagline}`);
+  lines.push("");
+  lines.push(`**Namespace:** \`${ns}\` · **Async:** ${def.settings.asynchronous}`);
+  if (def.settings._source?.pdeId) {
+    lines.push(`**Source PDE:** \`${def.settings._source.pdeId}\``);
+  }
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+
+  // Reverse Engineering
+  lines.push("## R — Reverse Engineering");
+  lines.push("");
+  lines.push(
+    `${name} is modeled as a state machine with ${collectStateNames(def.state).length - 1} non-root states across ${depth(def.state)} level(s) of composition. ` +
+      `Events: ${collectEventIds(def).length}. Transitions: ${countTransitions(def.state)}.`
+  );
+  lines.push("");
+  if (pde?.prompt) {
+    lines.push(`Originating prompt:`);
+    lines.push("");
+    lines.push(`> ${pde.prompt}`);
+    lines.push("");
+  }
+
+  // Intent
+  lines.push("## I — Intent");
+  lines.push("");
+  lines.push("**Desired Outcome**");
+  lines.push("");
+  lines.push(intent ?? pde?.primary?.target ?? "_(no intent supplied — pass `intent` arg or set _source.originalPrompt)_");
+  lines.push("");
+  if (pde?.directions?.east?.length) {
+    lines.push("**Vision (🌅 East)**");
+    lines.push("");
+    for (const v of pde.directions.east) lines.push(`- ${v.text}`);
+    lines.push("");
+  }
+  lines.push("**Structural Tension**");
+  lines.push("");
+  lines.push(`- *Current:* ${currentReality(def, pde)}`);
+  lines.push(`- *Desired:* ${desiredOutcome(def, pde, intent)}`);
+  lines.push("");
+
+  // Specifications
+  lines.push("## S — Specifications");
+  lines.push("");
+  lines.push("### States");
+  lines.push("");
+  for (const s of states) {
+    renderStateSpec(s, lines, 0);
+  }
+  lines.push("");
+
+  lines.push("### Events");
+  lines.push("");
+  for (const src of def.events) {
+    if (!src.events?.length) continue;
+    lines.push(`**${src.name}**`);
+    for (const e of src.events) {
+      lines.push(`- \`${e.id}\`${e.description ? ` — ${e.description}` : ""}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("### Transitions (flat)");
+  lines.push("");
+  for (const t of collectTransitions(def.state)) {
+    const arrow = t.next ? `→ ${t.next}` : "→ (internal)";
+    lines.push(`- \`${t.from}\` --[${t.event}]-- ${arrow}${t.condition ? ` *(when: ${t.condition})*` : ""}`);
+  }
+  lines.push("");
+
+  // Action Steps (medicine-wheel walk if South/East/North/West present)
+  const mw = states.filter((s) => ["East", "South", "West", "North"].includes(s.name));
+  if (mw.length || pde?.actionStack?.length) {
+    lines.push("### Action Steps");
+    lines.push("");
+    if (mw.length) {
+      const order = ["South", "East", "North", "West"];
+      for (const dirName of order) {
+        const dir = states.find((s) => s.name === dirName);
+        if (!dir) continue;
+        lines.push(`**${glyph(dirName)} ${dirName}** — ${dir.description ?? ""}`);
+        for (const c of dir.states ?? []) {
+          lines.push(`1. ${c.description ?? c.name}`);
+        }
+        lines.push("");
+      }
+    } else if (pde?.actionStack?.length) {
+      for (const a of pde.actionStack) {
+        lines.push(`- *(${a.direction ?? "?"})* ${a.text}`);
+      }
+      lines.push("");
+    }
+  }
+
+  // Ambiguities surfaced from PDE
+  if (pde?.ambiguities?.length) {
+    lines.push("### Open Questions");
+    lines.push("");
+    for (const a of pde.ambiguities) {
+      lines.push(`- ${a.text}${a.suggestion ? `  \n  → *${a.suggestion}*` : ""}`);
+    }
+    lines.push("");
+  }
+
+  // Exportation
+  lines.push("## E — Exportation");
+  lines.push("");
+  lines.push("- Code: `generate_code` (python | typescript) — runtime stubs from this SMDF");
+  lines.push(`- Visual: open this file in the smcraft web designer with \`SMCRAFT_PROJECT_FILE=${PROJECT_FILE}\``);
+  lines.push("- SMDF: `get_definition` returns the canonical JSON");
+  lines.push("");
+
+  return lines.join("\n");
+}
+
+function depth(s: StateDef, d = 0): number {
+  if (!s.states?.length) return d;
+  return Math.max(...s.states.map((c) => depth(c, d + 1)));
+}
+
+function countTransitions(s: StateDef): number {
+  let n = s.transitions?.length ?? 0;
+  for (const c of s.states ?? []) n += countTransitions(c);
+  return n;
+}
+
+function collectTransitions(
+  s: StateDef
+): Array<{ from: string; event: string; next?: string; condition?: string }> {
+  const out: Array<{ from: string; event: string; next?: string; condition?: string }> = [];
+  for (const t of s.transitions ?? []) {
+    out.push({ from: s.name, event: t.event, next: t.nextState, condition: t.condition });
+  }
+  for (const c of s.states ?? []) out.push(...collectTransitions(c));
+  return out;
+}
+
+function renderStateSpec(s: StateDef, lines: string[], depthLevel: number): void {
+  const indent = "  ".repeat(depthLevel);
+  const kind = s.kind && s.kind !== "normal" ? ` *(${s.kind})*` : "";
+  lines.push(`${indent}- **${s.name}**${kind}${s.description ? ` — ${s.description}` : ""}`);
+  for (const t of s.transitions ?? []) {
+    lines.push(`${indent}  - on \`${t.event}\` ${t.nextState ? `→ \`${t.nextState}\`` : "(internal)"}`);
+  }
+  for (const c of s.states ?? []) renderStateSpec(c, lines, depthLevel + 1);
+}
+
+function currentReality(def: Definition, _pde: PdeSource | null): string {
+  const hasFinal = collectAllStates(def.state).some((s) => s.kind === "final");
+  return hasFinal
+    ? `${def.settings.name} is designed but not implemented; entry state defined, terminal state reachable in principle.`
+    : `${def.settings.name} is partially modeled; no terminal state declared yet.`;
+}
+
+function collectAllStates(s: StateDef): StateDef[] {
+  const out = [s];
+  for (const c of s.states ?? []) out.push(...collectAllStates(c));
+  return out;
+}
+
+function desiredOutcome(def: Definition, pde: PdeSource | null, intent?: string): string {
+  if (intent) return intent;
+  if (pde?.primary?.target) return pde.primary.target;
+  return `${def.settings.name} runs the modeled flow end-to-end and reaches its terminal state.`;
+}
+
+function glyph(direction: string): string {
+  return { South: "🔥", East: "🌅", North: "❄️", West: "🌊" }[direction] ?? "•";
+}
+
 // ─── MCP Server ──────────────────────────────────────────────────────
 
 const server = new McpServer({
@@ -300,13 +570,14 @@ server.tool(
   "Create a new state machine definition with namespace and name",
   { namespace: z.string(), name: z.string(), asynchronous: z.boolean().optional() },
   async ({ namespace, name, asynchronous }) => {
-    currentDefinition = createEmpty(namespace, name);
-    if (asynchronous) currentDefinition.settings.asynchronous = true;
+    const def = createEmpty(namespace, name);
+    if (asynchronous) def.settings.asynchronous = true;
+    writeDef(def);
     return {
       content: [
         {
           type: "text",
-          text: `Created state machine '${name}' in namespace '${namespace}'. Add states and events next.`,
+          text: `Created state machine '${name}' in namespace '${namespace}' → ${PROJECT_FILE}. Add states and events next.`,
         },
       ],
     };
@@ -323,13 +594,14 @@ server.tool(
     description: z.string().optional(),
   },
   async ({ name, parent, kind, description }) => {
-    if (!currentDefinition)
+    const def = readDef();
+    if (!def)
       return {
-        content: [{ type: "text", text: "No state machine created yet. Use create_state_machine first." }],
+        content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}. Use create_state_machine first.` }],
         isError: true,
       };
     const parentName = parent ?? "Root";
-    const parentState = findState(currentDefinition.state, parentName);
+    const parentState = findState(def.state, parentName);
     if (!parentState)
       return {
         content: [{ type: "text", text: `Parent state '${parentName}' not found.` }],
@@ -337,6 +609,7 @@ server.tool(
       };
     if (!parentState.states) parentState.states = [];
     parentState.states.push({ name, kind: kind ?? "normal", description });
+    writeDef(def);
     return {
       content: [{ type: "text", text: `Added state '${name}' under '${parentName}' (${kind ?? "normal"}).` }],
     };
@@ -348,13 +621,15 @@ server.tool(
   "Add an event to the state machine",
   { id: z.string(), description: z.string().optional() },
   async ({ id, description }) => {
-    if (!currentDefinition)
+    const def = readDef();
+    if (!def)
       return {
-        content: [{ type: "text", text: "No state machine created yet." }],
+        content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }],
         isError: true,
       };
-    const source = currentDefinition.events[0];
+    const source = def.events[0];
     source.events.push({ id, description });
+    writeDef(def);
     return {
       content: [{ type: "text", text: `Added event '${id}'.` }],
     };
@@ -372,12 +647,13 @@ server.tool(
     description: z.string().optional(),
   },
   async ({ state, event, nextState, condition, description }) => {
-    if (!currentDefinition)
+    const def = readDef();
+    if (!def)
       return {
-        content: [{ type: "text", text: "No state machine created yet." }],
+        content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }],
         isError: true,
       };
-    const target = findState(currentDefinition.state, state);
+    const target = findState(def.state, state);
     if (!target)
       return {
         content: [{ type: "text", text: `State '${state}' not found.` }],
@@ -385,6 +661,7 @@ server.tool(
       };
     if (!target.transitions) target.transitions = [];
     target.transitions.push({ event, nextState, condition, description });
+    writeDef(def);
     const desc = nextState ? `${state} --[${event}]--> ${nextState}` : `${state} --[${event}]--> (internal)`;
     return { content: [{ type: "text", text: `Added transition: ${desc}` }] };
   }
@@ -395,11 +672,13 @@ server.tool(
   "Remove a state from the definition",
   { name: z.string() },
   async ({ name }) => {
-    if (!currentDefinition)
-      return { content: [{ type: "text", text: "No state machine created yet." }], isError: true };
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
     if (name === "Root")
       return { content: [{ type: "text", text: "Cannot remove Root state." }], isError: true };
-    currentDefinition.state = removeState(currentDefinition.state, name);
+    def.state = removeState(def.state, name);
+    writeDef(def);
     return { content: [{ type: "text", text: `Removed state '${name}'.` }] };
   }
 );
@@ -409,9 +688,10 @@ server.tool(
   "Validate the current state machine definition against all rules",
   {},
   async () => {
-    if (!currentDefinition)
-      return { content: [{ type: "text", text: "No state machine created yet." }], isError: true };
-    const errors = validate(currentDefinition);
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+    const errors = validate(def);
     if (errors.length === 0)
       return { content: [{ type: "text", text: "✓ Definition is valid. No errors found." }] };
     const lines = errors.map((e) => `[${e.ruleId}] ${e.message}`).join("\n");
@@ -426,9 +706,10 @@ server.tool(
   "Generate Python or TypeScript code from the current definition",
   { language: z.enum(["python", "typescript"]) },
   async ({ language }) => {
-    if (!currentDefinition)
-      return { content: [{ type: "text", text: "No state machine created yet." }], isError: true };
-    const errors = validate(currentDefinition);
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+    const errors = validate(def);
     if (errors.length > 0) {
       const lines = errors.map((e) => `[${e.ruleId}] ${e.message}`).join("\n");
       return {
@@ -436,7 +717,7 @@ server.tool(
         isError: true,
       };
     }
-    const code = generateViaSmcg(currentDefinition, language);
+    const code = generateViaSmcg(def, language);
     return { content: [{ type: "text", text: code }] };
   }
 );
@@ -446,10 +727,11 @@ server.tool(
   "Get the current state machine definition as JSON",
   {},
   async () => {
-    if (!currentDefinition)
-      return { content: [{ type: "text", text: "No state machine created yet." }], isError: true };
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
     return {
-      content: [{ type: "text", text: JSON.stringify({ stateMachine: currentDefinition }, null, 2) }],
+      content: [{ type: "text", text: JSON.stringify({ stateMachine: def }, null, 2) }],
     };
   }
 );
@@ -461,14 +743,15 @@ server.tool(
   async ({ json }) => {
     try {
       const parsed = JSON.parse(json);
-      currentDefinition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
-      const stateCount = collectStateNames(currentDefinition!.state).length;
-      const eventCount = collectEventIds(currentDefinition!).length;
+      const def: Definition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
+      writeDef(def);
+      const stateCount = collectStateNames(def.state).length;
+      const eventCount = collectEventIds(def).length;
       return {
         content: [
           {
             type: "text",
-            text: `Loaded definition: ${currentDefinition!.settings.name} (${stateCount} states, ${eventCount} events)`,
+            text: `Loaded definition → ${PROJECT_FILE}: ${def.settings.name} (${stateCount} states, ${eventCount} events)`,
           },
         ],
       };
@@ -483,8 +766,9 @@ server.tool(
   "List all states in the current definition with their kind and transitions",
   {},
   async () => {
-    if (!currentDefinition)
-      return { content: [{ type: "text", text: "No state machine created yet." }], isError: true };
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
     const lines: string[] = [];
     const walk = (state: StateDef, depth: number) => {
       const indent = "  ".repeat(depth);
@@ -496,7 +780,7 @@ server.tool(
       }
       (state.states ?? []).forEach((s) => walk(s, depth + 1));
     };
-    walk(currentDefinition.state, 0);
+    walk(def.state, 0);
     return { content: [{ type: "text", text: lines.join("\n") }] };
   }
 );
@@ -506,9 +790,10 @@ server.tool(
   "List all events in the current definition",
   {},
   async () => {
-    if (!currentDefinition)
-      return { content: [{ type: "text", text: "No state machine created yet." }], isError: true };
-    const events = currentDefinition.events.flatMap((src) =>
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+    const events = def.events.flatMap((src) =>
       src.events.map((e) => `${e.id}${e.description ? ` — ${e.description}` : ""}`)
     );
     if (events.length === 0)
@@ -517,17 +802,31 @@ server.tool(
   }
 );
 
+server.tool(
+  "generate_rispec",
+  "Generate a RISE rispec (markdown) from the current state machine. If the SMDF was sourced from a PDE (settings._source.pdeId/pdeFolder), the PDE's intent, directions, and ambiguities are folded in. Pass `intent` to override the desired outcome.",
+  { intent: z.string().optional() },
+  async ({ intent }) => {
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+    const md = generateRispec(def, intent);
+    return { content: [{ type: "text", text: md }] };
+  }
+);
+
 // Resources
 
 server.resource("definition", "smcraft://definition", async () => {
+  const def = readDef();
   return {
     contents: [
       {
         uri: "smcraft://definition",
         mimeType: "application/json",
-        text: currentDefinition
-          ? JSON.stringify({ stateMachine: currentDefinition }, null, 2)
-          : '{"error": "No definition loaded"}',
+        text: def
+          ? JSON.stringify({ stateMachine: def }, null, 2)
+          : `{"error": "No definition at ${PROJECT_FILE}"}`,
       },
     ],
   };
@@ -565,7 +864,7 @@ Start by asking me about the states and events I need.`,
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("SMCraft MCP server running on stdio");
+  console.error(`SMCraft MCP server running on stdio (project file: ${PROJECT_FILE})`);
 }
 
 main().catch(console.error);

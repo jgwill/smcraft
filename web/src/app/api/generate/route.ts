@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { writeFileSync, readFileSync, mkdtempSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -19,12 +19,15 @@ export async function POST(request: NextRequest) {
     const name = def.settings.name;
 
     const tmpDir = mkdtempSync(join(tmpdir(), "smcraft-web-"));
-    const inputFile = join(tmpDir, `${name}.smdf.json`);
+    // Sanitize the input filename — `name` derives from the request body.
+    const safeName = String(name).replace(/[^A-Za-z0-9_.-]/g, "_");
+    const inputFile = join(tmpDir, `${safeName}.smdf.json`);
     const outputDir = join(tmpDir, "output");
 
     try {
       writeFileSync(inputFile, JSON.stringify(def, null, 2));
-      execSync(`smcg "${inputFile}" -l ${lang} -o "${outputDir}"`, {
+      // execFileSync (no shell) — `name` from the request body cannot inject.
+      execFileSync("smcg", [inputFile, "-l", lang, "-o", outputDir], {
         encoding: "utf-8",
         timeout: 30000,
       });
@@ -39,9 +42,10 @@ export async function POST(request: NextRequest) {
     } finally {
       try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
     }
-  } catch (error: any) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Code generation failed";
     return NextResponse.json(
-      { error: error.message ?? "Code generation failed" },
+      { error: message },
       { status: 500 }
     );
   }

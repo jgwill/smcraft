@@ -40,6 +40,11 @@ interface DesignerState {
   fileName: string | null;
   dirty: boolean;
 
+  // Bridge / disk sync
+  remoteMtime: number | null;
+  remoteStatus: "idle" | "synced" | "remote-changed" | "error";
+  remoteMessage: string | null;
+
   // Selection
   selection: Selection;
 
@@ -133,6 +138,11 @@ interface DesignerState {
   // File operations
   loadFromJson: (json: string, fileName?: string) => void;
   exportJson: () => string;
+
+  // Bridge / disk sync
+  applyRemote: (json: string, mtime: number, fileName?: string) => void;
+  setRemoteStatus: (status: DesignerState["remoteStatus"], message?: string | null) => void;
+  setRemoteMtime: (mtime: number) => void;
 
   // Validation
   validate: () => ValidationError[];
@@ -320,6 +330,9 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   layout: autoLayout(createEmptyDefinition(), createDefaultLayout()),
   fileName: null,
   dirty: false,
+  remoteMtime: null,
+  remoteStatus: "idle",
+  remoteMessage: null,
   selection: { kind: null, id: null },
   drawMode: "select",
   drawSource: null,
@@ -629,6 +642,53 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
     const { definition } = get();
     return JSON.stringify({ stateMachine: definition }, null, 2);
   },
+
+  applyRemote: (json, mtime, fileName) => {
+    try {
+      const parsed = JSON.parse(json);
+      const def: StateMachineDefinition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
+      const layout = autoLayout(def, get().layout);
+      const rootName = def.state?.name ?? "Root";
+
+      // Preserve the user's drill-down + selection across live syncs when the
+      // referenced states still exist — so watching an agent build out a
+      // composite doesn't snap the canvas back to Root on every tool call.
+      const prev = get();
+      const names = new Set(collectStateNames(def.state));
+      const keptPath = prev.navigationPath.filter((n) => names.has(n));
+      const navigationPath = keptPath.length ? keptPath : [rootName];
+      const currentParent = navigationPath[navigationPath.length - 1];
+      const sel = prev.selection;
+      const selectionValid =
+        sel.kind === "state"
+          ? !!sel.id && names.has(sel.id)
+          : sel.kind === "transition"
+          ? !!sel.id && names.has(sel.id.split(":")[0])
+          : sel.kind === "event"
+          ? !!sel.id && collectEventIds(def).includes(sel.id)
+          : false;
+      const selection = selectionValid ? sel : { kind: null, id: null };
+
+      set({
+        definition: def,
+        layout,
+        fileName: fileName ?? get().fileName,
+        dirty: false,
+        remoteMtime: mtime,
+        remoteStatus: "synced",
+        remoteMessage: null,
+        errors: validateDefinition(def),
+        selection,
+        navigationPath,
+        currentParent,
+      });
+    } catch (e) {
+      set({ remoteStatus: "error", remoteMessage: String(e) });
+    }
+  },
+
+  setRemoteStatus: (status, message = null) => set({ remoteStatus: status, remoteMessage: message }),
+  setRemoteMtime: (mtime) => set({ remoteMtime: mtime }),
 
   validate: () => {
     const errors = validateDefinition(get().definition);
