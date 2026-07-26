@@ -1,0 +1,370 @@
+# Release — prove everything first, then one human click, then publish.
+#
+# Two jobs, and the split is the whole point:
+#
+#   verify   no environment, no secrets, nothing irreversible. Cold-installs and
+#            builds all seven packages in dependency order, tests them, and
+#            packs every one of them with the `file:` → range rewrite applied,
+#            so the pack proves the exact manifests publish would ship.
+#   release  environment: release (one required reviewer), needs: verify. The
+#            human is asked to approve AFTER the evidence exists, not before.
+#
+# Adapted from jgwill/medicine-wheel's release.yml, which carries five prior
+# release defects in its header. Four of them apply here, and this workflow
+# answers each in the shape smcraft actually has — a FLAT multi-package repo
+# with NO root package.json, NO npm workspaces, seven independent version
+# lines, and intra-repo deps written as `file:../<dir>`:
+#
+#   1. `environment: release` on a single job paused before step 1 — the
+#      reviewer approved a build that had proven nothing.
+#      → Here: everything reversible lives in `verify`, which spends no
+#        approval. `release` is entered only after verify is green.
+#
+#   2. A credential step (docker login) ran AFTER `npm publish`, so a bad token
+#      failed with npm already irreversibly published.
+#      → Here: every fallible reversible step — cold install, build of all
+#        seven, the re-asked registry guard — runs before the first publish,
+#        and publishing itself walks the dependency order fail-fast so a
+#        dependent is never published against a version that failed to land.
+#
+#   3. The tag push was the last mutating step, so a later failure left npm
+#      published with no `v*` tag on origin.
+#      → Here the order is inverted: the tag IS the trigger. `git push origin
+#        vX.Y.Z` starts this run, so the tag exists on origin before anything
+#        is published, and this workflow never writes to the repo at all.
+#        (Corollary from the same header: a tag pushed by GITHUB_TOKEN does not
+#        start a workflow run — which is exactly why the tag must be pushed by
+#        a human, not by a job.)
+#
+#   4. The pack check dry-ran only the root package, so the packages whose
+#      `files` glob pointed at a gitignored dist/ — the actual empty-glob
+#      hazard — were never packed.
+#      → smcraft is ENTIRELY that hazard: six of seven declare
+#        `files: ["dist/**/*.js", "dist/**/*.d.ts"]` over a gitignored dist/,
+#        and `mcp` declares no `files` at all. The pack check packs all seven
+#        and asserts every path `main`, `types`, `bin` and `exports` point at
+#        is really inside the tarball.
+#
+#   (5. `tsc --noEmit` ran before anything was built, and every package's
+#      `types` points into a gitignored dist/.
+#      → Here `npm run build` IS `tsc` with `declaration: true`, so the build
+#        is the typecheck; a separate `--noEmit` pass would add nothing and
+#        collides with `declaration` on older TS. What matters is ORDER:
+#        bridge-client cannot compile until bridge-protocol/dist exists, so
+#        install+build walk the topological list below, never an alphabetical
+#        one.)
+#
+# Cutting a release:
+#   1. bump only the packages you are shipping:
+#        cd <pkg> && npm version patch --no-git-tag-version
+#      Versions are INDEPENDENT here — `smcraft` is on 0.4.x, every
+#      `@smcraft/*` on 0.1.x. There is no lockstep and nothing to sync: the
+#      published dependency ranges are read from the sibling manifests at
+#      publish time, so a bumped bridge-protocol is picked up automatically.
+#   2. commit the bump(s), merge to main
+#   3. git tag vX.Y.Z && git push origin vX.Y.Z   ← starts this workflow
+#   4. verify runs → one approval on the `release` environment → publish
+#
+# `workflow_dispatch` with dry_run=true runs verify only. It burns no approval
+# and publishes nothing.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Validate only — install, build, test, pack, registry dry-run; publish nothing'
+        type: boolean
+        default: false
+      only:
+        description: 'Comma-separated package dirs to publish (blank = all, in dependency order)'
+        type: string
+        default: ''
+      provenance:
+        description: 'Attach npm provenance — REQUIRES a `repository` field in every package.json (none has one today)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # TOPOLOGICAL ORDER — do not alphabetize. Mirrors PACKAGES in
+  # scripts/publish-workspaces.mjs. `web` is absent on purpose: it is
+  # "private": true and must never be published.
+  PKG_ORDER: 'ts bridge-protocol bridge-client bridge bridge-react cli mcp'
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # verify — everything reversible. No environment, so no approval is spent
+  # on a run that might not deserve one. No NPM_TOKEN either: nothing in this
+  # job may write to the registry.
+  # ─────────────────────────────────────────────────────────────────────────
+  verify:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    outputs:
+      to_publish: ${{ steps.scan.outputs.to_publish }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Read before building — the release job's gate depends on this answer,
+      # and asking npm costs nothing. Seven independent version lines means
+      # seven separate questions; there is no single repo version to ask about.
+      - name: Registry state — which versions are already published
+        id: scan
+        run: |
+          TO_PUBLISH=0
+          {
+            echo "| package | version | on npm |"
+            echo "|---|---|---|"
+          } > /tmp/scan-table.md
+          for pkg in $PKG_ORDER; do
+            NAME="$(node -p "require('./$pkg/package.json').name")"
+            VER="$(node -p "require('./$pkg/package.json').version")"
+            if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+              echo "| \`$NAME\` | $VER | already published |" >> /tmp/scan-table.md
+              echo "::notice::$NAME@$VER is already on npm — it will be skipped."
+            else
+              echo "| \`$NAME\` | $VER | **new** |" >> /tmp/scan-table.md
+              TO_PUBLISH=$((TO_PUBLISH + 1))
+            fi
+          done
+          echo "to_publish=$TO_PUBLISH" >> "$GITHUB_OUTPUT"
+          echo "$TO_PUBLISH package(s) would be published."
+          cat /tmp/scan-table.md
+
+      # A tag is a repo-wide marker over seven independent version lines, so it
+      # cannot be checked for equality — only for plausibility. A tag matching
+      # nothing usually means the bump commit never made it in.
+      - name: Tag sanity
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG_VER="${GITHUB_REF_NAME#v}"
+          MATCH=0
+          for pkg in $PKG_ORDER; do
+            if [ "$(node -p "require('./$pkg/package.json').version")" = "$TAG_VER" ]; then
+              MATCH=1
+            fi
+          done
+          if [ "$MATCH" = "0" ]; then
+            echo "::warning::No package is at $TAG_VER — tag $GITHUB_REF_NAME matches no manifest in this tree."
+          fi
+
+      # THE cold build. dist/ is gitignored, so a fresh checkout has none of it
+      # and every package's `types` points at a file that does not exist yet.
+      # Order is load-bearing: `npm ci` in bridge-client symlinks
+      # ../bridge-protocol and immediately typechecks against its dist/, so
+      # bridge-protocol must be built first. Alphabetical order would fail
+      # TS2307 here — and a dev machine with a stale dist/ never sees it.
+      - name: Cold install + build (dependency order)
+        id: build
+        run: |
+          set -euo pipefail
+          for pkg in $PKG_ORDER; do
+            echo "::group::$pkg — npm ci && npm run build"
+            ( cd "$pkg" && npm ci && npm run build )
+            echo "::endgroup::"
+          done
+
+      - name: Test
+        id: test
+        run: |
+          set -euo pipefail
+          for pkg in $PKG_ORDER; do
+            if node -p "!!(require('./$pkg/package.json').scripts||{}).test" | grep -q true; then
+              echo "::group::$pkg — npm test"
+              ( cd "$pkg" && npm test )
+              echo "::endgroup::"
+            else
+              echo "::notice::$pkg declares no test script — skipped."
+            fi
+          done
+
+      # Local only — no registry, no credentials. Applies the same `file:` →
+      # range rewrite that publish applies, packs all seven, and asserts each
+      # tarball really contains what main/types/bin/exports point at, then
+      # restores every manifest. This is the step that would have caught
+      # medicine-wheel's defect 4, in the shape smcraft has it.
+      - name: 'Pack check — rewrite file: deps, pack all seven, assert contents'
+        id: pack
+        run: node scripts/publish-workspaces.mjs --pack-check
+
+      # Registry-side validation: name, scope, access, and that the version is
+      # free. The script skips any package whose version is already published,
+      # because `npm publish --dry-run` errors on an existing version — the
+      # local hazard is already covered by the pack check above.
+      - name: Registry dry-run
+        id: publish_dry
+        if: steps.scan.outputs.to_publish != '0'
+        run: node scripts/publish-workspaces.mjs --dry-run
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Verify — ${{ github.ref_name }} — job: ${{ job.status }}"
+            echo ""
+            echo "| check | outcome |"
+            echo "|---|---|"
+            echo "| registry scan | ${{ steps.scan.outcome || 'did not run' }} |"
+            echo "| cold install + build (dep order) | ${{ steps.build.outcome || 'did not run' }} |"
+            echo "| tests | ${{ steps.test.outcome || 'did not run' }} |"
+            echo "| pack check (all 7, rewritten manifests) | ${{ steps.pack.outcome || 'did not run' }} |"
+            echo "| registry dry-run | ${{ steps.publish_dry.outcome || 'did not run' }} |"
+            echo ""
+            cat /tmp/scan-table.md 2>/dev/null || echo "_registry scan did not complete._"
+            echo ""
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "Dry run — nothing will be published. The \`release\` job does not run."
+            elif [ "${{ steps.scan.outputs.to_publish }}" = "0" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+              echo "Every declared version is **already on npm**. The \`release\` job is skipped — bump a package to release."
+            else
+              echo "Next: the \`release\` job waits for one approval, then publishes ${{ steps.scan.outputs.to_publish }} package(s)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # release — everything irreversible, behind one approval, in an order where
+  # the reversible steps fail first.
+  #
+  # Skipped entirely when this is a dry run, or when every declared version is
+  # already on npm and the run was not dispatched by hand.
+  # ─────────────────────────────────────────────────────────────────────────
+  release:
+    needs: verify
+    # `needs.verify.result == 'success'` is stated rather than relied on. It is
+    # implied, but if it ever were not, an empty `to_publish` output from a
+    # failed verify would not read as '0' and would let this job through.
+    if: >-
+      ${{ needs.verify.result == 'success'
+          && !inputs.dry_run
+          && (github.event_name == 'workflow_dispatch'
+              || needs.verify.outputs.to_publish != '0') }}
+
+    runs-on: ubuntu-latest
+
+    # The one human gate, placed after verify has proven install, build, tests
+    # and pack. An npm version can never be reused, so a person approves once —
+    # with evidence — and everything after is automated.
+    #
+    # Requires a `release` environment with a required reviewer. Until that
+    # exists this job runs unattended — configure it before the first release.
+    environment: release
+
+    permissions:
+      contents: read      # the tag already exists on origin; nothing is written
+      id-token: write     # npm provenance, when the opt-in input is set
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Re-asked here rather than trusted from verify: an approval can sit for
+      # hours, and another run may have published in the meantime.
+      - name: Guard — is there anything left to publish
+        id: guard
+        run: |
+          TO_PUBLISH=0
+          for pkg in $PKG_ORDER; do
+            NAME="$(node -p "require('./$pkg/package.json').name")"
+            VER="$(node -p "require('./$pkg/package.json').version")"
+            npm view "$NAME@$VER" version >/dev/null 2>&1 || TO_PUBLISH=$((TO_PUBLISH + 1))
+          done
+          echo "to_publish=$TO_PUBLISH" >> "$GITHUB_OUTPUT"
+          if [ "$TO_PUBLISH" = "0" ]; then
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "::warning::Every declared version is already on npm. The publish step will skip all seven."
+            else
+              echo "::error::Every declared version is already on npm — another run published during the approval window, or no version was bumped."
+              exit 1
+            fi
+          fi
+
+      # Rebuilt from a cold checkout rather than carried from verify: dist/ is
+      # gitignored, and an artifact handoff would make it possible to publish
+      # bytes nobody re-derived from this commit. This is also the last step
+      # that can fail while everything is still reversible.
+      - name: Cold install + build (dependency order)
+        id: build
+        run: |
+          set -euo pipefail
+          for pkg in $PKG_ORDER; do
+            echo "::group::$pkg — npm ci && npm run build"
+            ( cd "$pkg" && npm ci && npm run build )
+            echo "::endgroup::"
+          done
+
+      # ── from here on, nothing is reversible ──────────────────────────────
+      #
+      # publish-workspaces.mjs walks PKG_ORDER, rewrites each `file:../<dir>`
+      # to the sibling's real version, publishes, restores the manifest in a
+      # `finally`, skips versions already on npm, and stops at the first
+      # failure so a dependent is never published against a version that did
+      # not land.
+      - name: Publish to npm
+        id: npm_publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          ONLY: ${{ inputs.only }}
+          PROVENANCE: ${{ inputs.provenance }}
+        run: |
+          # Provenance needs a `repository` field in the package being
+          # published; no smcraft manifest declares one yet, so it is exported
+          # only when explicitly asked for — an empty NPM_CONFIG_PROVENANCE is
+          # not reliably read as "off".
+          if [ "$PROVENANCE" = "true" ]; then
+            export NPM_CONFIG_PROVENANCE=true
+          fi
+          if [ -n "$ONLY" ]; then
+            node scripts/publish-workspaces.mjs --only "$ONLY"
+          else
+            node scripts/publish-workspaces.mjs
+          fi
+
+      # Reports what happened, not what was intended. A step that did not run
+      # says so, and a partial publish is named as a partial publish.
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Release — ${{ github.ref_name }} — job: ${{ job.status }}"
+            echo ""
+            echo "| step | outcome |"
+            echo "|---|---|"
+            echo "| guard (something left to publish) | ${{ steps.guard.outcome || 'did not run' }} |"
+            echo "| cold install + build (dep order) | ${{ steps.build.outcome || 'did not run' }} |"
+            echo "| **npm publish** | ${{ steps.npm_publish.outcome || 'did not run' }} |"
+            echo ""
+            if [ "${{ steps.npm_publish.outcome }}" = "success" ]; then
+              echo "${{ steps.guard.outputs.to_publish }} package(s) published — see the publish step's result table for the per-package outcome."
+            elif [ "${{ steps.npm_publish.outcome }}" = "failure" ]; then
+              echo "> ⚠ **PARTIAL PUBLISH.** The script stops at the first failure, so packages earlier in the dependency order (\`$PKG_ORDER\`) may already be permanently on npm. Read the result table in the publish step, then re-run with \`only\` set to the remaining dirs — published versions are skipped, not overwritten."
+            else
+              echo "**Nothing published.**"
+            fi
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo ""
+              echo "Dispatched by hand — no \`v*\` tag was created by this run. Tag the released commit so what shipped can be found: \`git tag vX.Y.Z && git push origin vX.Y.Z\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
