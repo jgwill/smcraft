@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { applyPatchOps } from "@smcraft/bridge-protocol";
+import type { PatchOp, Presence } from "@smcraft/bridge-protocol";
 import type {
   StateMachineDefinition,
   StateDef,
@@ -44,6 +46,12 @@ interface DesignerState {
   remoteMtime: number | null;
   remoteStatus: "idle" | "synced" | "remote-changed" | "error";
   remoteMessage: string | null;
+
+  // Real-time bridge (WS7a) — runtime highlight + presence, NOT part of SMDF
+  activeStates: string[];
+  presence: Presence[];
+  // Guard so remote-applied ops are not re-emitted by the outbound subscription
+  _applyingRemote: boolean;
 
   // Selection
   selection: Selection;
@@ -143,6 +151,12 @@ interface DesignerState {
   applyRemote: (json: string, mtime: number, fileName?: string) => void;
   setRemoteStatus: (status: DesignerState["remoteStatus"], message?: string | null) => void;
   setRemoteMtime: (mtime: number) => void;
+
+  // Real-time bridge (WS7a)
+  enterState: (name: string) => void;
+  exitState: (name: string) => void;
+  setPresence: (list: Presence[]) => void;
+  applyRemoteOps: (ops: PatchOp[], mtime: number, seq: number) => void;
 
   // Validation
   validate: () => ValidationError[];
@@ -333,6 +347,9 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   remoteMtime: null,
   remoteStatus: "idle",
   remoteMessage: null,
+  activeStates: [],
+  presence: [],
+  _applyingRemote: false,
   selection: { kind: null, id: null },
   drawMode: "select",
   drawSource: null,
@@ -649,6 +666,26 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
       const def: StateMachineDefinition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
       const layout = autoLayout(def, get().layout);
       const rootName = def.state?.name ?? "Root";
+
+      // Preserve the user's drill-down + selection across live syncs when the
+      // referenced states still exist — so watching an agent build out a
+      // composite doesn't snap the canvas back to Root on every tool call.
+      const prev = get();
+      const names = new Set(collectStateNames(def.state));
+      const keptPath = prev.navigationPath.filter((n) => names.has(n));
+      const navigationPath = keptPath.length ? keptPath : [rootName];
+      const currentParent = navigationPath[navigationPath.length - 1];
+      const sel = prev.selection;
+      const selectionValid =
+        sel.kind === "state"
+          ? !!sel.id && names.has(sel.id)
+          : sel.kind === "transition"
+          ? !!sel.id && names.has(sel.id.split(":")[0])
+          : sel.kind === "event"
+          ? !!sel.id && collectEventIds(def).includes(sel.id)
+          : false;
+      const selection = selectionValid ? sel : { kind: null, id: null };
+
       set({
         definition: def,
         layout,
@@ -658,9 +695,9 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
         remoteStatus: "synced",
         remoteMessage: null,
         errors: validateDefinition(def),
-        selection: { kind: null, id: null },
-        navigationPath: [rootName],
-        currentParent: rootName,
+        selection,
+        navigationPath,
+        currentParent,
       });
     } catch (e) {
       set({ remoteStatus: "error", remoteMessage: String(e) });
@@ -669,6 +706,85 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
 
   setRemoteStatus: (status, message = null) => set({ remoteStatus: status, remoteMessage: message }),
   setRemoteMtime: (mtime) => set({ remoteMtime: mtime }),
+
+  enterState: (name) => {
+    const cur = get().activeStates;
+    if (cur.includes(name)) return;
+    set({ activeStates: [...cur, name] });
+  },
+
+  exitState: (name) => {
+    const cur = get().activeStates;
+    if (!cur.includes(name)) return;
+    set({ activeStates: cur.filter((s) => s !== name) });
+  },
+
+  setPresence: (list) => set({ presence: list }),
+
+  applyRemoteOps: (ops, mtime, _seq) => {
+    // Mark the batch as remote BEFORE the definition-changing set() fires, so the
+    // outbound store subscription skips it (no echo back to the hub).
+    set({ _applyingRemote: true });
+    try {
+      const prev = get();
+
+      // Structural ops rebuild the definition purely; runtime ops only adjust the
+      // presentational activeStates highlight (never the SMDF).
+      const structural = ops.filter(
+        (o) => o.op !== "runtime.enter" && o.op !== "runtime.exit"
+      );
+      const def: StateMachineDefinition = structural.length
+        ? (applyPatchOps(prev.definition, structural) as StateMachineDefinition)
+        : prev.definition;
+
+      let activeStates = prev.activeStates;
+      for (const op of ops) {
+        if (op.op === "runtime.enter") {
+          if (!activeStates.includes(op.state)) activeStates = [...activeStates, op.state];
+        } else if (op.op === "runtime.exit") {
+          if (activeStates.includes(op.state)) activeStates = activeStates.filter((s) => s !== op.state);
+        }
+      }
+
+      const layout = autoLayout(def, prev.layout);
+      const rootName = def.state?.name ?? "Root";
+
+      // Preserve drill-down + selection across live syncs when the referenced
+      // states still exist (mirrors applyRemote) — don't snap back to Root.
+      const names = new Set(collectStateNames(def.state));
+      const keptPath = prev.navigationPath.filter((n) => names.has(n));
+      const navigationPath = keptPath.length ? keptPath : [rootName];
+      const currentParent = navigationPath[navigationPath.length - 1];
+      const sel = prev.selection;
+      const selectionValid =
+        sel.kind === "state"
+          ? !!sel.id && names.has(sel.id)
+          : sel.kind === "transition"
+          ? !!sel.id && names.has(sel.id.split(":")[0])
+          : sel.kind === "event"
+          ? !!sel.id && collectEventIds(def).includes(sel.id)
+          : false;
+      const selection = selectionValid ? sel : { kind: null, id: null };
+
+      set({
+        definition: def,
+        layout,
+        activeStates,
+        dirty: false,
+        remoteMtime: mtime,
+        remoteStatus: "synced",
+        remoteMessage: null,
+        errors: validateDefinition(def),
+        selection,
+        navigationPath,
+        currentParent,
+      });
+    } catch (e) {
+      set({ remoteStatus: "error", remoteMessage: String(e) });
+    } finally {
+      set({ _applyingRemote: false });
+    }
+  },
 
   validate: () => {
     const errors = validateDefinition(get().definition);

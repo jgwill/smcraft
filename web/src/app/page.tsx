@@ -8,7 +8,7 @@ import SettingsPanel from "@/components/SettingsPanel";
 import ValidationPanel from "@/components/ValidationPanel";
 import Toolbar from "@/components/Toolbar";
 import CodePreview from "@/components/CodePreview";
-import BridgeProvider from "@/components/BridgeProvider";
+import DesignBridge from "@/components/DesignBridge";
 import { useDesignerStore } from "@/store/useDesignerStore";
 
 type Tab = "properties" | "events" | "settings" | "validation";
@@ -32,7 +32,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" onClick={() => contextMenu && hideContextMenu()}>
-      <BridgeProvider />
+      <DesignBridge />
       <Toolbar />
       <div className="flex flex-1 overflow-hidden relative">
         {/* Canvas */}

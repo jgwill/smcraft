@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, useState, useEffect } from "react";
+import { useRef, useCallback, useState, useEffect, useMemo } from "react";
 import { useDesignerStore } from "@/store/useDesignerStore";
 import type { StatePosition, StateDef } from "@/types/definition";
 
@@ -25,9 +25,7 @@ export default function Canvas() {
   const setDrawMode = useDesignerStore((s) => s.setDrawMode);
   const addTransition = useDesignerStore((s) => s.addTransition);
   const showContextMenu = useDesignerStore((s) => s.showContextMenu);
-  const addState = useDesignerStore((s) => s.addState);
   const removeState = useDesignerStore((s) => s.removeState);
-  const updateState = useDesignerStore((s) => s.updateState);
   const undo = useDesignerStore((s) => s.undo);
   const redo = useDesignerStore((s) => s.redo);
   const errors = useDesignerStore((s) => s.errors);
@@ -36,10 +34,24 @@ export default function Canvas() {
   const navigateInto = useDesignerStore((s) => s.navigateInto);
   const navigateUp = useDesignerStore((s) => s.navigateUp);
   const getCurrentChildren = useDesignerStore((s) => s.getCurrentChildren);
+  const activeStates = useDesignerStore((s) => s.activeStates);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [eventPicker, setEventPicker] = useState<{ stateName: string; targetName: string; x: number; y: number } | null>(null);
+
+  // WS7b — live-animation tracking. The prev* refs are read/written ONLY inside
+  // the commit effect (never during render). The rendered classes are driven by
+  // state (enteringNames / enteringEdges), so the render stays a pure function
+  // of props+state. `exitingNodes` holds nodes that vanished from the current
+  // drill level so they outlive React's unmount and animate out.
+  const prevNamesRef = useRef<Set<string>>(new Set());
+  const prevNodeDataRef = useRef<Map<string, { state: StateDef; pos: StatePosition }>>(new Map());
+  const prevParentRef = useRef<string>(currentParent);
+  const prevEdgeKeysRef = useRef<Set<string>>(new Set());
+  const [enteringNames, setEnteringNames] = useState<Set<string>>(new Set());
+  const [enteringEdges, setEnteringEdges] = useState<Set<string>>(new Set());
+  const [exitingNodes, setExitingNodes] = useState<Map<string, { state: StateDef; pos: StatePosition }>>(new Map());
 
   // Show only children of current navigation level (not flattened)
   const currentChildren = getCurrentChildren();
@@ -124,16 +136,98 @@ export default function Canvas() {
     setDrawMode("select");
   };
 
-  // Collect transitions for arrows (within current navigation level)
-  const currentChildNames = new Set(currentChildren.map(s => s.name));
-  const arrows: { from: string; to: string; event: string; stateName: string; index: number; condition?: string }[] = [];
-  for (const state of currentChildren) {
-    for (const [i, t] of (state.transitions ?? []).entries()) {
-      if (t.nextState && currentChildNames.has(t.nextState)) {
-        arrows.push({ from: state.name, to: t.nextState, event: t.event, stateName: state.name, index: i, condition: t.condition });
+  // Collect transitions for arrows (within current navigation level). Memoized
+  // so its identity is stable across renders (drag/selection) — the WS7b commit
+  // effect lists it as a dependency.
+  const arrows = useMemo(() => {
+    const childNames = new Set(currentChildren.map((s) => s.name));
+    const result: { from: string; to: string; event: string; stateName: string; index: number; condition?: string }[] = [];
+    for (const state of currentChildren) {
+      for (const [i, t] of (state.transitions ?? []).entries()) {
+        if (t.nextState && childNames.has(t.nextState)) {
+          result.push({ from: state.name, to: t.nextState, event: t.event, stateName: state.name, index: i, condition: t.condition });
+        }
       }
     }
-  }
+    return result;
+  }, [currentChildren]);
+
+  // WS7b — after each commit, diff the freshly-rendered nodes/edges against the
+  // previous render (held in refs, touched only here). Newly-present names/edges
+  // are flagged as "entering" (drives sm-node-enter / sm-edge-enter on the NEXT
+  // render's fresh element); names that vanished from the current drill level are
+  // captured with their last def + position into `exitingNodes` so they animate
+  // out. Drill-level changes are NOT add/remove: the new level just blooms in and
+  // stale exit nodes are cleared.
+  useEffect(() => {
+    const currentNames = new Set(currentChildren.map((s) => s.name));
+    const currentEdgeKeys = new Set(arrows.map((a) => `${a.stateName}:${a.index}`));
+    const sameLevel = prevParentRef.current === currentParent;
+
+    const newNames = [...currentNames].filter((n) => !prevNamesRef.current.has(n));
+    if (newNames.length) {
+      setEnteringNames((prev) => {
+        const next = new Set(prev);
+        newNames.forEach((n) => next.add(n));
+        return next;
+      });
+    }
+
+    const newEdges = [...currentEdgeKeys].filter((k) => !prevEdgeKeysRef.current.has(k));
+    if (newEdges.length) {
+      setEnteringEdges((prev) => {
+        const next = new Set(prev);
+        newEdges.forEach((k) => next.add(k));
+        return next;
+      });
+    }
+
+    // Prune enter markers for nodes/edges that no longer exist (keeps the sets
+    // bounded to what is currently on-canvas).
+    setEnteringNames((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      prev.forEach((n) => {
+        if (!currentNames.has(n)) { next.delete(n); changed = true; }
+      });
+      return changed ? next : prev;
+    });
+    setEnteringEdges((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      prev.forEach((k) => {
+        if (!currentEdgeKeys.has(k)) { next.delete(k); changed = true; }
+      });
+      return changed ? next : prev;
+    });
+
+    if (sameLevel) {
+      setExitingNodes((prev) => {
+        const next = new Map(prev);
+        let changed = false;
+        prevNodeDataRef.current.forEach((data, name) => {
+          if (!currentNames.has(name) && !next.has(name)) {
+            next.set(name, data);
+            changed = true;
+          }
+        });
+        // A node that reappeared must never linger in the exiting layer.
+        currentNames.forEach((name) => {
+          if (next.delete(name)) changed = true;
+        });
+        return changed ? next : prev;
+      });
+    } else {
+      setExitingNodes((prev) => (prev.size ? new Map() : prev));
+    }
+
+    prevNamesRef.current = currentNames;
+    prevNodeDataRef.current = new Map(
+      currentChildren.map((s) => [s.name, { state: s, pos: getPos(s.name) }])
+    );
+    prevEdgeKeysRef.current = currentEdgeKeys;
+    prevParentRef.current = currentParent;
+  }, [currentChildren, currentParent, arrows, getPos]);
 
   return (
     <div className="relative w-full h-full">
@@ -193,15 +287,19 @@ export default function Canvas() {
           const midY = (fy + ty) / 2;
           const isSelected = selection.kind === "transition" && selection.id === `${arrow.stateName}:${arrow.index}`;
 
+          // WS7b — a new edge (flagged in the commit effect) draws itself on.
+          const edgeEntering = enteringEdges.has(`${arrow.stateName}:${arrow.index}`);
+
           return (
             <g key={`arrow-${i}`}>
               <path
                 d={`M ${fx} ${fy} C ${fx} ${midY}, ${tx} ${midY}, ${tx} ${ty}`}
                 fill="none"
+                pathLength={1}
                 stroke={isSelected ? "#3b82f6" : "#94a3b8"}
                 strokeWidth={isSelected ? 2.5 : 1.5}
                 markerEnd={isSelected ? "url(#arrowhead-blue)" : "url(#arrowhead)"}
-                className="cursor-pointer hover:stroke-blue-400"
+                className={`cursor-pointer hover:stroke-blue-400${edgeEntering ? " sm-edge-enter" : ""}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   select("transition", `${arrow.stateName}:${arrow.index}`);
@@ -265,6 +363,11 @@ export default function Canvas() {
           const errored = hasError(state.name);
           const hasEntry = (state.onEntry?.actions?.length ?? 0) > 0;
           const hasExit = (state.onExit?.actions?.length ?? 0) > 0;
+          const isActive = activeStates.includes(state.name);
+          // WS7b — a node first seen this session (flagged in the commit effect)
+          // carries sm-node-enter; the bloom only fires on the freshly-mounted
+          // element, so the marker staying set for existing nodes is inert.
+          const entering = enteringNames.has(state.name);
 
           return (
             <g
@@ -277,6 +380,7 @@ export default function Canvas() {
               onContextMenu={(e) => handleContextMenu(e, state.name)}
               className={drawMode === "transition" ? "cursor-crosshair" : isComposite ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"}
             >
+              <g className={entering ? "sm-node-enter" : undefined}>
               <rect
                 x={pos.x}
                 y={pos.y}
@@ -287,6 +391,7 @@ export default function Canvas() {
                 stroke={errored ? "#ef4444" : isSelected ? "#3b82f6" : isDrawSource ? "#f59e0b" : "#475569"}
                 strokeWidth={isSelected ? 2.5 : errored ? 2 : 1.5}
                 strokeDasharray={isFinal ? "6 3" : isComposite ? "4 2" : undefined}
+                className={isActive ? "sm-node-active" : undefined}
               />
               {/* State name */}
               <text
@@ -336,6 +441,53 @@ export default function Canvas() {
                   ▼ {state.states?.length} children — double-click to enter
                 </text>
               )}
+              </g>
+            </g>
+          );
+        })}
+
+        {/* Exiting nodes — outlive React's unmount to animate out (WS7b). Rendered
+            from captured def + last position; non-interactive; removed on end. */}
+        {Array.from(exitingNodes.entries()).map(([name, { state, pos }]) => {
+          const exFinal = state.kind === "final";
+          const exComposite = (state.states?.length ?? 0) > 0;
+          return (
+            <g
+              key={`exit-${name}`}
+              className="sm-node-exit"
+              style={{ pointerEvents: "none" }}
+              onAnimationEnd={(e) => {
+                if (e.animationName !== "sm-node-out") return;
+                setExitingNodes((prev) => {
+                  if (!prev.has(name)) return prev;
+                  const next = new Map(prev);
+                  next.delete(name);
+                  return next;
+                });
+              }}
+            >
+              <rect
+                x={pos.x}
+                y={pos.y}
+                width={pos.width}
+                height={pos.height}
+                rx={state.kind === "history" ? 30 : exFinal ? 4 : 8}
+                fill={exFinal ? "#1e293b" : exComposite ? "#0c1020" : "#0f172a"}
+                stroke="#475569"
+                strokeWidth={1.5}
+                strokeDasharray={exFinal ? "6 3" : exComposite ? "4 2" : undefined}
+              />
+              <text
+                x={pos.x + pos.width / 2}
+                y={pos.y + pos.height / 2 + 5}
+                fill="#e2e8f0"
+                fontSize={14}
+                fontWeight={600}
+                textAnchor="middle"
+                className="select-none"
+              >
+                {name}
+              </text>
             </g>
           );
         })}

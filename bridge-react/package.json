@@ -1,0 +1,46 @@
+{
+  "name": "@smcraft/bridge-react",
+  "version": "0.1.0",
+  "description": "Reusable React binding for the smcraft real-time design bridge (framework-agnostic session core + useSmcraftBridge hook over useSyncExternalStore)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/tests/*.test.js",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "state-machine",
+    "smdf",
+    "bridge",
+    "react",
+    "hook",
+    "realtime"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@smcraft/bridge-client": "file:../bridge-client",
+    "@smcraft/bridge-protocol": "file:../bridge-protocol"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "react": "^19",
+    "socket.io": "^4.8.1",
+    "typescript": "^5.7"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
+  ]
+}

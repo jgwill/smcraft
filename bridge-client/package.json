@@ -1,0 +1,41 @@
+{
+  "name": "@smcraft/bridge-client",
+  "version": "0.1.0",
+  "description": "Framework-agnostic socket.io-client wrapper for the smcraft real-time design bridge (join/patch/full/presence + auto-resync)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/tests/*.test.js",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "state-machine",
+    "smdf",
+    "bridge",
+    "socket.io",
+    "realtime",
+    "client"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "socket.io-client": "^4.8.1",
+    "@smcraft/bridge-protocol": "file:../bridge-protocol"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.7",
+    "socket.io": "^4.8.1"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
+  ]
+}

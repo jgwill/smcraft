@@ -166,14 +166,21 @@ function generateRispec(def: Definition, pde: PdeSource | null, intent: string |
   lines.push("");
 
   const mw = states.filter((s) => ["East", "South", "West", "North"].includes(s.name));
-  if (mw.length) {
+  if (mw.length || pde?.result?.actionStack?.length) {
     lines.push("### Action Steps");
     lines.push("");
-    for (const dirName of ["South", "East", "North", "West"]) {
-      const dir = states.find((s) => s.name === dirName);
-      if (!dir) continue;
-      lines.push(`**${glyph(dirName)} ${dirName}** — ${dir.description ?? ""}`);
-      for (const c of dir.states ?? []) lines.push(`1. ${c.description ?? c.name}`);
+    if (mw.length) {
+      for (const dirName of ["South", "East", "North", "West"]) {
+        const dir = states.find((s) => s.name === dirName);
+        if (!dir) continue;
+        lines.push(`**${glyph(dirName)} ${dirName}** — ${dir.description ?? ""}`);
+        for (const c of dir.states ?? []) lines.push(`1. ${c.description ?? c.name}`);
+        lines.push("");
+      }
+    } else if (pde?.result?.actionStack?.length) {
+      for (const a of pde.result.actionStack) {
+        lines.push(`- *(${a.direction ?? "?"})* ${a.text}`);
+      }
       lines.push("");
     }
   }

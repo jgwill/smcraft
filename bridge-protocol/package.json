@@ -1,0 +1,36 @@
+{
+  "name": "@smcraft/bridge-protocol",
+  "version": "0.1.0",
+  "description": "Pure, zero-runtime-dependency protocol foundation for the smcraft real-time design bridge (SMDF patch ops, diff/apply, envelopes)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/tests/*.test.js",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "state-machine",
+    "smdf",
+    "bridge",
+    "patch",
+    "diff",
+    "realtime"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.7"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
+  ]
+}

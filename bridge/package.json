@@ -1,0 +1,45 @@
+{
+  "name": "@smcraft/bridge",
+  "version": "0.1.0",
+  "description": "socket.io hub for the smcraft real-time design bridge: in-memory doc + seq per room, presence, chokidar external-edit differ, mtime/hash dedup",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "smcraft-bridge": "dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/tests/*.test.js",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "state-machine",
+    "smdf",
+    "bridge",
+    "socket.io",
+    "realtime",
+    "hub"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "socket.io": "^4.8.1",
+    "chokidar": "^4.0.3",
+    "@smcraft/bridge-protocol": "file:../bridge-protocol"
+  },
+  "devDependencies": {
+    "typescript": "^5.7",
+    "@types/node": "^22",
+    "socket.io-client": "^4.8.1"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
+  ]
+}
