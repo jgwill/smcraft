@@ -5,7 +5,7 @@
  *
  * smcraft is NOT an npm workspace. There is no root package.json; each package
  * is an independent project in a sibling directory with its own lockfile and
- * its own version line (`smcraft` is on 0.4.x while every `@smcraft/*` is on
+ * its own version line (`smcraft` is on 0.4.x while every `@miadi/stateloom-*` is on
  * 0.1.x). Everything npm normally does for a workspace — ordering, dependency
  * resolution, `--workspace` publishing — has to be done here explicitly.
  *
@@ -202,7 +202,7 @@ function restoreAll() {
 }
 
 // An interrupted run must not leave a rewritten manifest behind — the next
-// `npm ci` would try to install `@smcraft/bridge-protocol@^0.1.0` from the
+// `npm ci` would try to install `@miadi/stateloom-protocol@^0.1.0` from the
 // registry instead of linking the sibling directory.
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
 	process.on(signal, () => {

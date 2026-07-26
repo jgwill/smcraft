@@ -1,5 +1,5 @@
 {
-  "name": "@smcraft/bridge",
+  "name": "@miadi/stateloom",
   "version": "0.1.0",
   "description": "socket.io hub for the smcraft real-time design bridge: in-memory doc + seq per room, presence, chokidar external-edit differ, mtime/hash dedup",
   "type": "module",
@@ -31,7 +31,7 @@
   "dependencies": {
     "socket.io": "^4.8.1",
     "chokidar": "^4.0.3",
-    "@smcraft/bridge-protocol": "file:../bridge-protocol"
+    "@miadi/stateloom-protocol": "file:../bridge-protocol"
   },
   "devDependencies": {
     "typescript": "^5.7",

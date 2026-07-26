@@ -13,8 +13,8 @@ import {
   applyPatchOps,
   type PatchOp,
   type StateMachineDefinition,
-} from "@smcraft/bridge-protocol";
-import { createBridgeClient, type BridgeClient } from "@smcraft/bridge-client";
+} from "@miadi/stateloom-protocol";
+import { createBridgeClient, type BridgeClient } from "@miadi/stateloom-client";
 import { readDef, writeDef, mtimeOf } from "./docio.js";
 
 export interface MutateCtx {

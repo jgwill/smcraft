@@ -9,9 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@smcraft/bridge-client": "file:../bridge-client",
-    "@smcraft/bridge-protocol": "file:../bridge-protocol",
-    "@smcraft/bridge-react": "file:../bridge-react",
+    "@miadi/stateloom-client": "file:../bridge-client",
+    "@miadi/stateloom-protocol": "file:../bridge-protocol",
+    "@miadi/stateloom-react": "file:../bridge-react",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",

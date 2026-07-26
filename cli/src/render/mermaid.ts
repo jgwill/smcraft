@@ -5,7 +5,7 @@
  * becomes an `A --> B : event` edge (guards appended as ` [cond]`). Pure — no
  * randomness, no clock, no I/O.
  */
-import type { StateDef, StateMachineDefinition } from "@smcraft/bridge-protocol";
+import type { StateDef, StateMachineDefinition } from "@miadi/stateloom-protocol";
 
 function declareComposites(state: StateDef, depth: number, lines: string[]): void {
   const indent = "  ".repeat(depth + 1);

@@ -22,7 +22,7 @@ import {
   EV,
   collectStateNames,
   type StateMachineDefinition,
-} from "@smcraft/bridge-protocol";
+} from "@miadi/stateloom-protocol";
 
 const minimalDef: StateMachineDefinition = {
   settings: { namespace: "test", asynchronous: false },

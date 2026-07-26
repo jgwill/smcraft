@@ -4,7 +4,7 @@
  * here — not inside commander closures — so it stays directly testable.
  */
 import { resolve } from "node:path";
-import type { PatchOp } from "@smcraft/bridge-protocol";
+import type { PatchOp } from "@miadi/stateloom-protocol";
 import { applyAndEmit, type MutateCtx } from "../mutate.js";
 import { readDef } from "../docio.js";
 

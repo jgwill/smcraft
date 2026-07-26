@@ -11,7 +11,7 @@
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import type { StateMachineDefinition } from "@smcraft/bridge-protocol";
+import type { StateMachineDefinition } from "@miadi/stateloom-protocol";
 
 /** Normalize a docId to an absolute path — the canonical room key. */
 export function normalizeDocId(docId: string): string {

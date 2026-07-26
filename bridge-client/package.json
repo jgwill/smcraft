@@ -1,5 +1,5 @@
 {
-  "name": "@smcraft/bridge-client",
+  "name": "@miadi/stateloom-client",
   "version": "0.1.0",
   "description": "Framework-agnostic socket.io-client wrapper for the smcraft real-time design bridge (join/patch/full/presence + auto-resync)",
   "type": "module",
@@ -27,7 +27,7 @@
   "license": "MIT",
   "dependencies": {
     "socket.io-client": "^4.8.1",
-    "@smcraft/bridge-protocol": "file:../bridge-protocol"
+    "@miadi/stateloom-protocol": "file:../bridge-protocol"
   },
   "devDependencies": {
     "@types/node": "^22",

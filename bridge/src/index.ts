@@ -1,5 +1,5 @@
 /**
- * @smcraft/bridge
+ * @miadi/stateloom
  *
  * socket.io hub for the smcraft real-time design bridge. `startBridge(opts)`
  * boots a sequencer + broadcaster + external-edit differ that never writes disk.

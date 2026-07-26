@@ -1,5 +1,5 @@
 /**
- * Integration tests for the @smcraft/bridge socket.io hub.
+ * Integration tests for the @miadi/stateloom socket.io hub.
  *
  * Boots the hub on an ephemeral port over a temp docId file, connects two
  * socket.io-client peers, and asserts: presence lifecycle, granular def:patch
@@ -21,7 +21,7 @@ import {
   applyPatchOps,
   type StateMachineDefinition,
   type PatchOp,
-} from "@smcraft/bridge-protocol";
+} from "@miadi/stateloom-protocol";
 import { startBridge, type BridgeHandle } from "../index.js";
 
 /** Resolve the next occurrence of `event`, rejecting after `ms` to avoid hangs. */

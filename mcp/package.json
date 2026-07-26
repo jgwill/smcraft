@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "@smcraft/bridge-client": "file:../bridge-client",
-    "@smcraft/bridge-protocol": "file:../bridge-protocol",
+    "@miadi/stateloom-client": "file:../bridge-client",
+    "@miadi/stateloom-protocol": "file:../bridge-protocol",
     "zod": "^4.3.6"
   },
   "devDependencies": {

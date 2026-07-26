@@ -1,5 +1,5 @@
 /**
- * @smcraft/bridge-react
+ * @miadi/stateloom-react
  *
  * Reusable React binding for the smcraft real-time design bridge. Exposes the
  * framework-agnostic `createBridgeSession` core (unit-testable, no React) and

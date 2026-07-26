@@ -22,7 +22,7 @@ import {
   type Presence,
   type PatchEnvelope,
   type FullEnvelope,
-} from "@smcraft/bridge-protocol";
+} from "@miadi/stateloom-protocol";
 import { normalizeDocId, readDefFile, mtimeOf } from "./docio.js";
 import { watchRoom, type RoomWatcher } from "./watcher.js";
 

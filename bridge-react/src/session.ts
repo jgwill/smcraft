@@ -20,7 +20,7 @@ import {
   type BridgeClientOptions,
   type BridgeStatus,
   type JoinResult,
-} from "@smcraft/bridge-client";
+} from "@miadi/stateloom-client";
 import {
   applyPatchOps,
   type StateMachineDefinition,
@@ -28,7 +28,7 @@ import {
   type Presence,
   type PatchEnvelope,
   type FullEnvelope,
-} from "@smcraft/bridge-protocol";
+} from "@miadi/stateloom-protocol";
 
 export interface SessionSnapshot {
   status: BridgeStatus;

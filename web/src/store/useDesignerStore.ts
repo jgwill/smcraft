@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { applyPatchOps } from "@smcraft/bridge-protocol";
-import type { PatchOp, Presence } from "@smcraft/bridge-protocol";
+import { applyPatchOps } from "@miadi/stateloom-protocol";
+import type { PatchOp, Presence } from "@miadi/stateloom-protocol";
 import type {
   StateMachineDefinition,
   StateDef,

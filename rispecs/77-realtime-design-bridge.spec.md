@@ -35,7 +35,7 @@ The CLI and the MCP server are first-class peers, which forces a standalone hub 
 ### 2. Architecture
 
 ```
-   MCP (stdio)                 @smcraft/bridge  (hub)
+   MCP (stdio)                 @miadi/stateloom  (hub)
  ┌──────────────┐        socket.io server · in-memory doc + seq
  │  LLM Agent   │        presence registry · external-edit differ
  │ role:'agent' │        NO disk write — sequencer + broadcaster
@@ -63,11 +63,11 @@ Five new sibling top-level packages (mirroring `ts/`, `mcp/`, `web/`). Boundarie
 
 | Package | Dir | Purpose | Deps |
 |---|---|---|---|
-| `@smcraft/bridge-protocol` | `bridge-protocol/` | Pure contract: SMDF types, `PatchOp`, `diffDefinition`, `applyPatchOps`, event names, `hashDef`. | none |
-| `@smcraft/bridge-client` | `bridge-client/` | Framework-agnostic `createBridgeClient` (socket.io-client). | `socket.io-client`, protocol |
-| `@smcraft/bridge` | `bridge/` | socket.io hub: in-memory doc + seq per room, presence, `chokidar` watch → diff broadcast, mtime dedup. `startBridge(opts)` + bin. | `socket.io`, `chokidar`, protocol |
-| `@smcraft/bridge-react` | `bridge-react/` | `useSmcraftBridge()` + `SocketBridgeProvider` + `mapOpToAction`. | bridge-client, protocol; peer `react` |
-| `@smcraft/cli` | `cli/` | Design-surface CLI, bin `smcx`. | `commander`, bridge, bridge-client, protocol |
+| `@miadi/stateloom-protocol` | `bridge-protocol/` | Pure contract: SMDF types, `PatchOp`, `diffDefinition`, `applyPatchOps`, event names, `hashDef`. | none |
+| `@miadi/stateloom-client` | `bridge-client/` | Framework-agnostic `createBridgeClient` (socket.io-client). | `socket.io-client`, protocol |
+| `@miadi/stateloom` | `bridge/` | socket.io hub: in-memory doc + seq per room, presence, `chokidar` watch → diff broadcast, mtime dedup. `startBridge(opts)` + bin. | `socket.io`, `chokidar`, protocol |
+| `@miadi/stateloom-react` | `bridge-react/` | `useSmcraftBridge()` + `SocketBridgeProvider` + `mapOpToAction`. | bridge-client, protocol; peer `react` |
+| `@miadi/stateloom-cli` | `cli/` | Design-surface CLI, bin `smcx`. | `commander`, bridge, bridge-client, protocol |
 
 ### 4. Event protocol
 
@@ -90,9 +90,9 @@ applyPatchOps(def: StateMachineDefinition, ops: PatchOp[]): StateMachineDefiniti
 ```
 Round-trip invariant (unit-tested): `applyPatchOps(prev, diffDefinition(prev, next))` deep-equals `next`. The `PatchOp` vocabulary mirrors the MCP tools and the store's granular actions (`settings.update`, `state.add/update/remove/nest`, `eventSource.*`, `event.*`, `parameter.*`, `transition.*`, `action.*`, plus presentational `runtime.enter/exit` that never mutate the SMDF and are never produced by `diffDefinition`). Emit order: `state.add` parents-before-children then `transition.add`; removals reversed. forgewright's `sync.ts::extractStatesAsDeltas` is the prior art this generalizes.
 
-### 6. CLI — `@smcraft/cli` (bin `smcx`)
+### 6. CLI — `@miadi/stateloom-cli` (bin `smcx`)
 
-Connects via `@smcraft/bridge-client`. Globals: `--bridge <url>` (`$SMCRAFT_BRIDGE_URL`), `--doc <path>` (`$SMCRAFT_PROJECT_FILE`), `--name <label>`.
+Connects via `@miadi/stateloom-client`. Globals: `--bridge <url>` (`$SMCRAFT_BRIDGE_URL`), `--doc <path>` (`$SMCRAFT_PROJECT_FILE`), `--name <label>`.
 
 `serve` (start hub; `--port` `$SMCRAFT_BRIDGE_PORT` default 4599, `--host` default 127.0.0.1) · `add-state <name>` (`--parent --kind --desc`) · `add-event <id>` (`--source --desc`) · `add-transition <state> <event>` (`--to --when`) · `remove-state <name>` · `load <file>` · `watch` (`--as ascii|mermaid`) · `open` (`--web`) · `presence`.
 
@@ -112,7 +112,7 @@ Gated by `SMCRAFT_BRIDGE_URL`; standalone (Spec 75) unchanged when unset. On `ma
 
 ### 9. forgewright reuse
 
-forgewright imports `@smcraft/bridge-react`, retires its bespoke `setupWsBridge`/raw-`ws` path. `useSmcraftBridge({ url, docId, role:'runtime', onFull?, onPatch?, onPresence? })` returns `{ status, def, seq, presence, activeStates, emitPatch, emitFull, enter, exit, connect, disconnect }`. On each `fireEvent` success forgewright calls `enter(currentState, previousState, eventId)`; every subscriber pulses the live leaf via `activeStates` — runtime state animates on a design-time canvas without mutating the SMDF.
+forgewright imports `@miadi/stateloom-react`, retires its bespoke `setupWsBridge`/raw-`ws` path. `useSmcraftBridge({ url, docId, role:'runtime', onFull?, onPatch?, onPresence? })` returns `{ status, def, seq, presence, activeStates, emitPatch, emitFull, enter, exit, connect, disconnect }`. On each `fireEvent` success forgewright calls `enter(currentState, previousState, eventId)`; every subscriber pulses the live leaf via `activeStates` — runtime state animates on a design-time canvas without mutating the SMDF.
 
 ## Structural Tension Chart
 
@@ -121,9 +121,9 @@ forgewright imports `@smcraft/bridge-react`, retires its bespoke `setupWsBridge`
 | 1 | Whole-file re-fetch repaints the diagram | One added state animates one node in | `diffDefinition` + granular `def:patch` + Canvas keyframes |
 | 2 | Push is unidirectional | Bidirectional granular flow, all peers equal | socket.io hub + `def:patch`/`def:full` both ways |
 | 3 | No identity on the surface | Presence shows who is designing | `presence:*` + `Presence` registry |
-| 4 | No CLI can drive the diagram | `smcx` emits into the live surface | `@smcraft/cli` over `@smcraft/bridge-client` |
+| 4 | No CLI can drive the diagram | `smcx` emits into the live surface | `@miadi/stateloom-cli` over `@miadi/stateloom-client` |
 | 5 | Running machines cannot show live state | forgewright lights up its live leaf | `runtime.enter/exit` + `activeStates` + `useSmcraftBridge` |
-| 6 | forgewright hand-rolls its own ws sync | forgewright consumes one shared protocol | `@smcraft/bridge-protocol` + `@smcraft/bridge-react` |
+| 6 | forgewright hand-rolls its own ws sync | forgewright consumes one shared protocol | `@miadi/stateloom-protocol` + `@miadi/stateloom-react` |
 | 7 | External file edits arrive as opaque swaps | External edits animate granularly | Hub file-watch → `diffDefinition` → `def:patch` |
 | 8 | A client's own write echoes back | Self-writes are ignored | mtime+hash ring dedup at the hub |
 | 9 | Spec 75 must keep working with the bridge off | File + SSE unaffected; bridge additive | Hub never writes disk; env-gated everywhere |
@@ -144,7 +144,7 @@ forgewright imports `@smcraft/bridge-react`, retires its bespoke `setupWsBridge`
 
 ## Implementation Status
 
-1. ✅ `@smcraft/bridge-protocol` (19 tests) 2. ✅ `@smcraft/bridge-client` (1) 3. ✅ `@smcraft/bridge` hub (5) 4. ✅ `@smcraft/bridge-react` (1) 5. ✅ `@smcraft/cli` `smcx` (4) 6. ✅ MCP bridge client (env-gated, smoke-verified) 7. ✅ Web provider + store + Canvas animation (build + lint clean) 8. ✅ forgewright reuse (408 tests still green) 9. ✅ Full-loop integration proven (CLI → hub → web-role client receives live granular patches; hub binary boots + serves socket.io)
+1. ✅ `@miadi/stateloom-protocol` (19 tests) 2. ✅ `@miadi/stateloom-client` (1) 3. ✅ `@miadi/stateloom` hub (5) 4. ✅ `@miadi/stateloom-react` (1) 5. ✅ `@miadi/stateloom-cli` `smcx` (4) 6. ✅ MCP bridge client (env-gated, smoke-verified) 7. ✅ Web provider + store + Canvas animation (build + lint clean) 8. ✅ forgewright reuse (408 tests still green) 9. ✅ Full-loop integration proven (CLI → hub → web-role client receives live granular patches; hub binary boots + serves socket.io)
 
 ## Running it live
 

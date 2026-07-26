@@ -15,9 +15,9 @@ import assert from "node:assert/strict";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startBridge, type BridgeHandle } from "@smcraft/bridge";
-import { createBridgeClient } from "@smcraft/bridge-client";
-import type { StateMachineDefinition, PatchEnvelope } from "@smcraft/bridge-protocol";
+import { startBridge, type BridgeHandle } from "@miadi/stateloom";
+import { createBridgeClient } from "@miadi/stateloom-client";
+import type { StateMachineDefinition, PatchEnvelope } from "@miadi/stateloom-protocol";
 import { addState } from "../commands/mutations.js";
 import { readDef } from "../docio.js";
 

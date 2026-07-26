@@ -12,7 +12,7 @@ import { once } from "node:events";
 import { createServer, type Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
 import { createBridgeClient } from "../client.js";
-import { EV, type StateMachineDefinition, type PatchOp } from "@smcraft/bridge-protocol";
+import { EV, type StateMachineDefinition, type PatchOp } from "@miadi/stateloom-protocol";
 
 const minimalDef: StateMachineDefinition = {
   settings: { namespace: "test", asynchronous: false },

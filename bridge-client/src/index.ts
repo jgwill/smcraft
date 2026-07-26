@@ -1,5 +1,5 @@
 /**
- * @smcraft/bridge-client
+ * @miadi/stateloom-client
  *
  * Framework-agnostic socket.io-client wrapper for the smcraft real-time design
  * bridge. Re-exports the factory and its public types.

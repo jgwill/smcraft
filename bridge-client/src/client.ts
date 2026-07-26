@@ -4,7 +4,7 @@
  * with sequence-gap auto-resync, presence bookkeeping, and status transitions —
  * consumed identically by the CLI, the MCP server, and the React hook.
  *
- * The wire vocabulary lives in `@smcraft/bridge-protocol` (`EV`, envelopes);
+ * The wire vocabulary lives in `@miadi/stateloom-protocol` (`EV`, envelopes);
  * this package owns only the client-side state machine around it.
  */
 import { io, type Socket } from "socket.io-client";
@@ -17,7 +17,7 @@ import {
   type PatchEnvelope,
   type FullEnvelope,
   EV,
-} from "@smcraft/bridge-protocol";
+} from "@miadi/stateloom-protocol";
 
 export type BridgeStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 

@@ -1,7 +1,7 @@
 /**
  * `smcx presence` — join the room, print the live peer roster, disconnect.
  */
-import { createBridgeClient } from "@smcraft/bridge-client";
+import { createBridgeClient } from "@miadi/stateloom-client";
 
 export interface PresenceOpts {
   doc: string;

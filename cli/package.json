@@ -1,5 +1,5 @@
 {
-  "name": "@smcraft/cli",
+  "name": "@miadi/stateloom-cli",
   "version": "0.1.0",
   "description": "smcx — the smcraft design-surface CLI: drive the live real-time bridge (durable-first mutate + emit, watch, presence) from the terminal",
   "type": "module",
@@ -29,9 +29,9 @@
   "license": "MIT",
   "dependencies": {
     "commander": "^13.1.0",
-    "@smcraft/bridge": "file:../bridge",
-    "@smcraft/bridge-client": "file:../bridge-client",
-    "@smcraft/bridge-protocol": "file:../bridge-protocol"
+    "@miadi/stateloom": "file:../bridge",
+    "@miadi/stateloom-client": "file:../bridge-client",
+    "@miadi/stateloom-protocol": "file:../bridge-protocol"
   },
   "devDependencies": {
     "typescript": "^5.7",

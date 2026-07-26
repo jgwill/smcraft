@@ -19,7 +19,7 @@ import {
   hashDef,
   EV,
   type StateMachineDefinition,
-} from "@smcraft/bridge-protocol";
+} from "@miadi/stateloom-protocol";
 import type { Server } from "socket.io";
 import type { Room } from "./hub.js";
 

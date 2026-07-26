@@ -4,12 +4,12 @@ import { useEffect } from "react";
 import {
   createBridgeSession,
   type BridgeSession,
-} from "@smcraft/bridge-react";
+} from "@miadi/stateloom-react";
 import {
   diffDefinition,
   colorFor,
   type StateMachineDefinition,
-} from "@smcraft/bridge-protocol";
+} from "@miadi/stateloom-protocol";
 import { useDesignerStore } from "@/store/useDesignerStore";
 
 const OUTBOUND_DEBOUNCE_MS = 60;

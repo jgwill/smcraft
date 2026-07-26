@@ -14,14 +14,14 @@ import {
 import type {
   BridgeClientOptions,
   BridgeStatus,
-} from "@smcraft/bridge-client";
+} from "@miadi/stateloom-client";
 import type {
   StateMachineDefinition,
   PatchOp,
   Presence,
   PatchEnvelope,
   FullEnvelope,
-} from "@smcraft/bridge-protocol";
+} from "@miadi/stateloom-protocol";
 
 export interface UseSmcraftBridgeOptions extends BridgeClientOptions {
   onFull?: (e: FullEnvelope) => void;

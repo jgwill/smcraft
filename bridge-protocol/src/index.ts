@@ -1,5 +1,5 @@
 /**
- * @smcraft/bridge-protocol
+ * @miadi/stateloom-protocol
  *
  * Pure, zero-runtime-dependency foundation of the smcraft real-time design
  * bridge: SMDF types, the PatchOp vocabulary, a pure diff/apply pair, wire

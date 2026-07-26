@@ -24,8 +24,8 @@ bridge/cli packages.
 2. **Versions:**
    - `smcraft` (ts/): **0.4.0** — the registry holds 0.3.0; the bridge is a
      feature. `main` may never ship lower than the registry.
-   - `@smcraft/bridge-protocol`, `@smcraft/bridge-client`, `@smcraft/bridge`,
-     `@smcraft/bridge-react`, `@smcraft/cli`, `smcraft-mcp`: **0.1.0**, first
+   - `@miadi/stateloom-protocol`, `@miadi/stateloom-client`, `@miadi/stateloom`,
+     `@miadi/stateloom-react`, `@miadi/stateloom-cli`, `smcraft-mcp`: **0.1.0**, first
      publish, pending Guillaume's word.
    - `web`: private, unversioned surface.
 3. **Intra-repo `file:` dependencies** between the packages stay as-is in the
@@ -34,3 +34,15 @@ bridge/cli packages.
 
 Also corrected here: `ts/package-lock.json` still carried 0.1.2 from before
 the 0.3.0 bump; the lock now follows the manifest.
+
+## Addendum — naming (same day, Guillaume's word)
+
+The five bridge-family packages publish under the `@miadi` scope as the
+**stateloom** family: `@miadi/stateloom` (hub), `-protocol`, `-client`,
+`-react`, `-cli`. Chosen to keep smcraft's compound shape (state + craft-tool)
+while standing apart from forgewright's designer surface — a loom beside a
+forge, sibling crafts. `smcraft` (published 0.3.0 lineage) and `smcraft-mcp`
+keep their names; directory names unchanged. Rename surface measured in
+`~/workspace/.mino/handoff/260726-smcraft-rename-surface.md`: 45 files,
+locks regenerated, 69/69 tests green post-rename, local-registry publish +
+615-package consumer install re-proven under the new names.

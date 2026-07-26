@@ -1,7 +1,7 @@
 /**
  * `smcx serve` — boot the smcraft bridge hub and keep it alive until SIGINT.
  */
-import { startBridge } from "@smcraft/bridge";
+import { startBridge } from "@miadi/stateloom";
 
 export interface ServeOpts {
   port?: number;

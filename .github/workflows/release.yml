@@ -58,7 +58,7 @@
 #   1. bump only the packages you are shipping:
 #        cd <pkg> && npm version patch --no-git-tag-version
 #      Versions are INDEPENDENT here — `smcraft` is on 0.4.x, every
-#      `@smcraft/*` on 0.1.x. There is no lockstep and nothing to sync: the
+#      `@miadi/stateloom-*` on 0.1.x. There is no lockstep and nothing to sync: the
 #      published dependency ranges are read from the sibling manifests at
 #      publish time, so a bumped bridge-protocol is picked up automatically.
 #   2. commit the bump(s), merge to main

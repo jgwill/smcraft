@@ -1,5 +1,5 @@
 {
-  "name": "@smcraft/bridge-react",
+  "name": "@miadi/stateloom-react",
   "version": "0.1.0",
   "description": "Reusable React binding for the smcraft real-time design bridge (framework-agnostic session core + useSmcraftBridge hook over useSyncExternalStore)",
   "type": "module",
@@ -26,8 +26,8 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@smcraft/bridge-client": "file:../bridge-client",
-    "@smcraft/bridge-protocol": "file:../bridge-protocol"
+    "@miadi/stateloom-client": "file:../bridge-client",
+    "@miadi/stateloom-protocol": "file:../bridge-protocol"
   },
   "peerDependencies": {
     "react": "^19"

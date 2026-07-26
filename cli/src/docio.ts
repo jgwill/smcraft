@@ -9,7 +9,7 @@
  */
 import { existsSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import type { StateMachineDefinition } from "@smcraft/bridge-protocol";
+import type { StateMachineDefinition } from "@miadi/stateloom-protocol";
 
 /** Read + parse a project file into a definition, or null if absent/unparseable. */
 export function readDef(path: string): StateMachineDefinition | null {

@@ -6,7 +6,7 @@
  * runtime set) are prefixed with `●`. No randomness, no clock, no I/O — the same
  * def always renders the same string.
  */
-import type { StateDef, StateMachineDefinition } from "@smcraft/bridge-protocol";
+import type { StateDef, StateMachineDefinition } from "@miadi/stateloom-protocol";
 
 function renderState(state: StateDef, depth: number, active: Set<string>, lines: string[]): void {
   const indent = "  ".repeat(depth);

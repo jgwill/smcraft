@@ -32,8 +32,8 @@ import { execFileSync } from "child_process";
 import { writeFileSync, readFileSync, mkdtempSync, rmSync, existsSync, statSync } from "fs";
 import { join, resolve } from "path";
 import { tmpdir } from "os";
-import { createBridgeClient, type BridgeClient } from "@smcraft/bridge-client";
-import type { PatchOp, StateMachineDefinition } from "@smcraft/bridge-protocol";
+import { createBridgeClient, type BridgeClient } from "@miadi/stateloom-client";
+import type { PatchOp, StateMachineDefinition } from "@miadi/stateloom-protocol";
 
 // ─── In-memory state machine definition ──────────────────────────────
 

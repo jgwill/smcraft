@@ -8,7 +8,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { StateMachineDefinition } from "@smcraft/bridge-protocol";
+import type { StateMachineDefinition } from "@miadi/stateloom-protocol";
 import { renderAscii } from "../render/ascii.js";
 import { renderMermaid } from "../render/mermaid.js";
 
