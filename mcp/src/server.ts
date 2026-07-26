@@ -109,6 +109,13 @@ function writeDef(def: Definition): void {
 // operation (no SMCRAFT_BRIDGE_URL) is untouched.
 
 let bridge: BridgeClient | undefined;
+if (!process.env.SMCRAFT_BRIDGE_URL) {
+  console.error(
+    "[smcraft-mcp] SMCRAFT_BRIDGE_URL is not set — edits persist to disk but " +
+      "are NOT broadcast; a live canvas will not update. Set SMCRAFT_BRIDGE_URL " +
+      "(e.g. http://127.0.0.1:4599) on this MCP process to go live."
+  );
+}
 if (process.env.SMCRAFT_BRIDGE_URL) {
   try {
     bridge = createBridgeClient({
@@ -148,8 +155,22 @@ if (process.env.SMCRAFT_BRIDGE_URL) {
 // Emit precise granular ops (never diffs) AFTER writeDef. The mtime is
 // stamped from the file we just wrote so the hub can dedup its own
 // file-watch echo of this same change.
+let droppedEmitWarned = false;
+function warnDroppedEmit(kind: string): void {
+  if (droppedEmitWarned) return;
+  droppedEmitWarned = true;
+  console.error(
+    `[smcraft-mcp] dropped ${kind} emit — bridge ` +
+      (bridge ? `status=${bridge.status}` : "not configured (SMCRAFT_BRIDGE_URL unset)") +
+      "; disk write succeeded, live canvas did not update. (warned once)"
+  );
+}
+
 function bridgeEmitPatch(ops: PatchOp[]): void {
-  if (!bridge || bridge.status !== "connected") return;
+  if (!bridge || bridge.status !== "connected") {
+    warnDroppedEmit("patch");
+    return;
+  }
   try {
     const mtime = statSync(PROJECT_FILE).mtimeMs;
     bridge.emitPatch(ops, mtime);
@@ -159,7 +180,10 @@ function bridgeEmitPatch(ops: PatchOp[]): void {
 }
 
 function bridgeEmitFull(def: Definition): void {
-  if (!bridge || bridge.status !== "connected") return;
+  if (!bridge || bridge.status !== "connected") {
+    warnDroppedEmit("full-def");
+    return;
+  }
   try {
     const mtime = statSync(PROJECT_FILE).mtimeMs;
     // Local Definition/StateDef differ slightly from the protocol's
