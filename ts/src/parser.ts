@@ -36,9 +36,13 @@ export function parseJson(content: string): StateMachineDefinition {
 }
 
 export function parseFile(filePath: string): StateMachineDefinition {
-  // For Node.js: import fs and read file
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const fs = require("fs");
+  // Lazy built-in lookup: keeps this module loadable in browsers and ESM
+  // (a top-level `require` crashes under "type": "module").
+  const fs =
+    typeof process !== "undefined" ? process.getBuiltinModule?.("node:fs") : undefined;
+  if (!fs) {
+    throw new Error("parseFile requires a Node.js runtime (>= 22.3); use parseJson instead");
+  }
   const content = fs.readFileSync(filePath, "utf-8");
   return parseJson(content);
 }

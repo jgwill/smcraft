@@ -45,3 +45,7 @@ export type { IObserver, EndHandler } from "./runtime.js";
 
 // Code Generator (Spec 62)
 export { TypeScriptCodeGenerator } from "./codegen.js";
+
+// SMDF Interpreter (Spec 61 extension)
+export { Machine, MachineDefinitionError, listTransitions } from "./machine.js";
+export type { MachineOptions, SendResult, TransitionEdge, GuardFn } from "./machine.js";

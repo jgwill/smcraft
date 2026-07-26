@@ -22,9 +22,16 @@ export default function Toolbar() {
   const undoStack = useDesignerStore((s) => s.undoStack);
   const redoStack = useDesignerStore((s) => s.redoStack);
 
+  const remoteStatus = useDesignerStore((s) => s.remoteStatus);
+  const remoteMessage = useDesignerStore((s) => s.remoteMessage);
+  const setRemoteStatus = useDesignerStore((s) => s.setRemoteStatus);
+  const setRemoteMtime = useDesignerStore((s) => s.setRemoteMtime);
+  const applyRemote = useDesignerStore((s) => s.applyRemote);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [addingState, setAddingState] = useState(false);
   const [newStateName, setNewStateName] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const handleOpen = () => fileInputRef.current?.click();
 
@@ -40,7 +47,32 @@ export default function Toolbar() {
     e.target.value = "";
   };
 
-  const handleSave = () => {
+  const handleSaveDisk = async () => {
+    const json = exportJson();
+    setSaving(true);
+    try {
+      const r = await fetch("/api/file", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: json }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ error: "unknown" }));
+        setRemoteStatus("error", `Save failed: ${err.error ?? r.statusText}`);
+      } else {
+        const data = await r.json();
+        setRemoteMtime(data.mtime);
+        useDesignerStore.setState({ dirty: false });
+        setRemoteStatus("synced", null);
+      }
+    } catch (e) {
+      setRemoteStatus("error", `Save failed: ${e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDownload = () => {
     const json = exportJson();
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -51,6 +83,24 @@ export default function Toolbar() {
     URL.revokeObjectURL(url);
   };
 
+  const handleReloadFromDisk = async () => {
+    try {
+      const r = await fetch("/api/file", { cache: "no-store" });
+      if (!r.ok) {
+        setRemoteStatus("error", "Reload failed");
+        return;
+      }
+      const data = await r.json();
+      if (data.exists && data.content) {
+        applyRemote(data.content, data.mtime, data.path.split("/").pop());
+      } else {
+        setRemoteStatus("idle", `No file at ${data.path}`);
+      }
+    } catch (e) {
+      setRemoteStatus("error", `Reload failed: ${e}`);
+    }
+  };
+
   const handleAddState = () => {
     if (!newStateName.trim()) return;
     addState(null, { name: newStateName.trim(), kind: "normal" });
@@ -59,6 +109,26 @@ export default function Toolbar() {
   };
 
   const [generateLang, setGenerateLang] = useState<"python" | "typescript">("python");
+
+  const handleGenerateRispec = async () => {
+    try {
+      const r = await fetch("/api/rispec", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        setGeneratedCode(data.rispec);
+      } else {
+        const err = await r.json().catch(() => ({ error: "Unknown" }));
+        setGeneratedCode(`# RISE rispec generation failed\n${err.error}`);
+      }
+    } catch (e) {
+      setGeneratedCode(`# RISE rispec generation failed\n${e}`);
+    }
+    setShowCodePreview(true);
+  };
 
   const handleGenerate = async () => {
     const json = exportJson();
@@ -91,11 +161,23 @@ export default function Toolbar() {
         className="hidden"
       />
 
-      {/* File name */}
+      {/* File name + bridge status */}
       <span className="text-xs text-gray-400 mr-1">
         {fileName ?? "untitled.smdf.json"}
         {dirty && <span className="text-yellow-500 ml-0.5">●</span>}
       </span>
+      {remoteStatus === "synced" && (
+        <span className="text-[10px] text-emerald-500" title="In sync with disk">⌁ synced</span>
+      )}
+      {remoteStatus === "remote-changed" && (
+        <span className="text-[10px] text-amber-400" title={remoteMessage ?? ""}>↻ remote changed</span>
+      )}
+      {remoteStatus === "error" && (
+        <span className="text-[10px] text-red-400" title={remoteMessage ?? ""}>⚠ disk error</span>
+      )}
+      {remoteStatus === "idle" && (
+        <span className="text-[10px] text-gray-600" title={remoteMessage ?? "No file bound"}>○ no disk</span>
+      )}
 
       <div className="flex-1" />
 
@@ -131,11 +213,26 @@ export default function Toolbar() {
       <div className="w-px h-4 bg-gray-700" />
 
       {/* File ops */}
-      <button onClick={handleOpen} className="toolbar-btn" title="Open .smdf.json">
+      <button onClick={handleOpen} className="toolbar-btn" title="Open local .smdf.json (browser)">
         📂
       </button>
-      <button onClick={handleSave} className="toolbar-btn" title="Save">
-        💾
+      <button
+        onClick={handleSaveDisk}
+        disabled={saving}
+        className="toolbar-btn disabled:opacity-40"
+        title="Save to disk (SMCRAFT_PROJECT_FILE)"
+      >
+        💾 Disk
+      </button>
+      <button
+        onClick={handleReloadFromDisk}
+        className="toolbar-btn"
+        title="Reload from disk"
+      >
+        🔄
+      </button>
+      <button onClick={handleDownload} className="toolbar-btn" title="Download as file">
+        📥
       </button>
 
       <div className="w-px h-4 bg-gray-700" />
@@ -179,6 +276,9 @@ export default function Toolbar() {
       </select>
       <button onClick={handleGenerate} className="toolbar-btn">
         ⚡ Generate
+      </button>
+      <button onClick={handleGenerateRispec} className="toolbar-btn" title="Generate RISE rispec markdown">
+        📜 RISE
       </button>
       <button
         onClick={() => setShowCodePreview(!showCodePreview)}
