@@ -62,7 +62,9 @@ Test-first, exactly this order:
 
 ## Phase 2 — the chronicle weave (do, scoped)
 
-William's own words (captured verbatim from his unsent draft, 2026-07-26):
+William's own words — **partial capture** (corrected 2026-07-27): only the final
+paragraph of his unsent draft was visible in the composer when it was read; five
+instructions above it were lost and are restored, itemized, below the quote.
 
 > statemachine.smdf.json that would be linked to a miadi-chronicle
 > `/srv/miadi/episodes/miadi-chronicle/` thru whatever ways to relate them with packages we
@@ -82,6 +84,23 @@ William's own words (captured verbatim from his unsent draft, 2026-07-26):
 > start whatever how the stack of servers of the smcraft (now 'miadi-stateloom'), we have
 > options to choose which diagrams (or the agents have that power thru the miadi-stateloom
 > MCP (to choose which path 'statemachine.smdf.json' we will edit !!)
+
+**The five instructions that were lost from the capture** (restored 2026-07-27
+from William's review; itemized, not verbatim):
+
+1. **Port** — move the web canvas off 3000 to `4598`, paired beside the hub's
+   `4599` as the loom's two ports (`next start -p ${PORT:-4598}`,
+   `STATELOOM_WEB_PORT=4598` in `scripts/live-loop.sh`).
+2. **`/b/trading`** — that path was noise from an earlier demo; it consumes
+   stateloom, nobody works there. Strip it from the docs.
+3. **`/a/ws` worktree rule** — worktrees live in
+   `/a/ws/<owner>/<repo>/<branch|issue|PR>` — never `/tmp` (wiped on reboot),
+   never `.worktrees/` inside the repo.
+4. **Measure of success** — the draft defined one; its exact wording was not
+   recovered. Ask William before assuming what "done" means here.
+5. **Session `0db9a62c`** — the draft referenced the implementer session
+   `0db9a62c` (bridge/live-loop lineage); its exact instruction was not
+   recovered.
 
 Distilled into three deliverables, in order:
 
@@ -111,6 +130,8 @@ Distilled into three deliverables, in order:
 - Never restart the hub (4599) or touch panes/agents that are not yours.
 - No default-branch flips, no force pushes.
 - `git add` only files you edited — never add-all.
+- Worktrees go in `/a/ws/<owner>/<repo>/<branch|issue|PR>` — never `/tmp`
+  (wiped on reboot), never `.worktrees/` inside the repo.
 - When Phase 2 deliverable 2 is proven, **stop**. Append your report below and go idle;
   the witness lane collects you.
 
