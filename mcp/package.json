@@ -1,10 +1,11 @@
 {
-  "name": "smcraft-mcp",
-  "version": "0.1.0",
-  "description": "MCP server for SMCraft — lets LLM agents design state machines through conversation",
+  "name": "@miadi/stateloom-mcp",
+  "version": "0.1.1",
+  "description": "MCP server for miadi-stateloom (formerly smcraft-mcp) — lets LLM agents design state machines through conversation",
   "type": "module",
   "main": "dist/server.js",
   "bin": {
+    "stateloom-mcp": "dist/server.js",
     "smcraft-mcp": "dist/server.js"
   },
   "scripts": {

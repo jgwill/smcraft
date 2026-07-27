@@ -17,6 +17,7 @@ import {
   applyPatchOps,
   hashDef,
   colorFor,
+  envAlias,
   EV,
   type StateMachineDefinition,
   type Presence,
@@ -87,7 +88,7 @@ export function startBridge(opts: StartBridgeOpts = {}): Promise<BridgeHandle> {
   const host = opts.host ?? "127.0.0.1";
   const port = opts.port ?? 0;
   const defaultDocId = normalizeDocId(
-    opts.docId ?? opts.file ?? process.env.SMCRAFT_PROJECT_FILE ?? "./statemachine.smdf.json",
+    opts.docId ?? opts.file ?? envAlias("PROJECT_FILE") ?? "./statemachine.smdf.json",
   );
   const token = opts.token;
 

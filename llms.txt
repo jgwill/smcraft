@@ -4,7 +4,7 @@
 
 **Python Version:** 0.1.5 (PyPI: `smcraft`)
 **TypeScript Version:** 0.1.2 (NPM: `smcraft`)
-**MCP Server Version:** 0.1.0 (NPM: `smcraft-mcp`)
+**MCP Server Version:** 0.1.1 (NPM: `@miadi/stateloom-mcp`; formerly `smcraft-mcp` ≤0.1.0)
 **Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
 **Published at:** https://docs.smcraft.jgwill.com
 

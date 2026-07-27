@@ -11,7 +11,7 @@ export interface PresenceOpts {
 
 export async function presenceCommand(opts: PresenceOpts): Promise<void> {
   if (!opts.bridgeUrl) {
-    console.error("presence: no bridge URL — set --bridge or SMCRAFT_BRIDGE_URL");
+    console.error("presence: no bridge URL — set --bridge or STATELOOM_BRIDGE_URL (legacy: SMCRAFT_BRIDGE_URL)");
     process.exitCode = 1;
     return;
   }

@@ -1,11 +1,11 @@
 {
-  "name": "web",
+  "name": "stateloom-web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p ${PORT:-4598}",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p ${PORT:-4598}",
     "lint": "eslint"
   },
   "dependencies": {

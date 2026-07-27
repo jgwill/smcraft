@@ -220,7 +220,7 @@ export default function Toolbar() {
         onClick={handleSaveDisk}
         disabled={saving}
         className="toolbar-btn disabled:opacity-40"
-        title="Save to disk (SMCRAFT_PROJECT_FILE)"
+        title="Save to disk (STATELOOM_PROJECT_FILE)"
       >
         💾 Disk
       </button>

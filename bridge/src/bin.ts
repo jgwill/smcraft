@@ -2,19 +2,20 @@
 /**
  * `smcraft-bridge` — boot the socket.io hub as a standalone process.
  *
- * Env:
- *   SMCRAFT_BRIDGE_PORT   (default 4599)
- *   SMCRAFT_BRIDGE_HOST   (default 127.0.0.1)
- *   SMCRAFT_PROJECT_FILE  (default docId; durable truth + docId source)
- *   SMCRAFT_BRIDGE_TOKEN  (optional handshake auth token)
+ * Env (STATELOOM_* read first, SMCRAFT_* legacy twin honored):
+ *   STATELOOM_BRIDGE_PORT   / SMCRAFT_BRIDGE_PORT   (default 4599)
+ *   STATELOOM_BRIDGE_HOST   / SMCRAFT_BRIDGE_HOST   (default 127.0.0.1)
+ *   STATELOOM_PROJECT_FILE  / SMCRAFT_PROJECT_FILE  (default docId; durable truth + docId source)
+ *   STATELOOM_BRIDGE_TOKEN  / SMCRAFT_BRIDGE_TOKEN  (optional handshake auth token)
  */
+import { envAlias } from "@miadi/stateloom-protocol";
 import { startBridge } from "./hub.js";
 
 async function main(): Promise<void> {
-  const port = Number(process.env.SMCRAFT_BRIDGE_PORT ?? 4599);
-  const host = process.env.SMCRAFT_BRIDGE_HOST ?? "127.0.0.1";
-  const file = process.env.SMCRAFT_PROJECT_FILE;
-  const token = process.env.SMCRAFT_BRIDGE_TOKEN;
+  const port = Number(envAlias("BRIDGE_PORT") ?? 4599);
+  const host = envAlias("BRIDGE_HOST") ?? "127.0.0.1";
+  const file = envAlias("PROJECT_FILE");
+  const token = envAlias("BRIDGE_TOKEN");
 
   const handle = await startBridge({ port, host, file, token, cors: true });
   process.stderr.write(`[smcraft-bridge] listening on ${handle.url}\n`);

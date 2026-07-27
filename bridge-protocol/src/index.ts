@@ -11,6 +11,7 @@ export * from "./apply.js";
 export * from "./diff.js";
 export * from "./seq.js";
 export * from "./events.js";
+export * from "./env.js";
 export {
   collectAllStates,
   collectStateNames,

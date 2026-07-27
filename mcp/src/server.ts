@@ -35,8 +35,15 @@ import { writeFileSync, readFileSync, mkdtempSync, rmSync, existsSync, statSync 
 import { join, resolve } from "path";
 import { tmpdir } from "os";
 import { createBridgeClient, type BridgeClient } from "@miadi/stateloom-client";
-import type { PatchOp, StateMachineDefinition } from "@miadi/stateloom-protocol";
+import { envAlias, type PatchOp, type StateMachineDefinition } from "@miadi/stateloom-protocol";
 import { resolveProjectSwitch } from "./projectSwitch.js";
+
+// STATELOOM_* read first, SMCRAFT_* legacy twin honored — the live MCP
+// registration bakes SMCRAFT_PROJECT_FILE and must keep working (2026-07-27
+// rename brief). Resolved once at boot, like the direct reads they replace.
+const BRIDGE_URL = envAlias("BRIDGE_URL");
+const AGENT_NAME = envAlias("AGENT_NAME");
+const BRIDGE_TOKEN = envAlias("BRIDGE_TOKEN");
 
 // ─── In-memory state machine definition ──────────────────────────────
 
@@ -80,14 +87,15 @@ interface Definition {
 }
 
 // ─── File-backed shared store ────────────────────────────────────────
-// Both web/ and mcp/ resolve the same path from SMCRAFT_PROJECT_FILE.
+// Both web/ and mcp/ resolve the same path from STATELOOM_PROJECT_FILE
+// (legacy twin SMCRAFT_PROJECT_FILE still honored).
 // Web reads/writes via /api/file; mcp reads/writes here. fs.watch on
 // the web side broadcasts disk changes back to the canvas.
 
 // Mutable: `set_project_file` lets the agent re-point the loom at another
 // .smdf.json document mid-session (the hub keys live rooms by this path).
 let PROJECT_FILE = resolve(
-  process.env.SMCRAFT_PROJECT_FILE ?? "./statemachine.smdf.json"
+  envAlias("PROJECT_FILE") ?? "./statemachine.smdf.json"
 );
 
 function readDef(): Definition | null {
@@ -107,24 +115,26 @@ function writeDef(def: Definition): void {
 }
 
 // ─── Optional real-time design bridge (env-gated, best-effort) ───────
-// When SMCRAFT_BRIDGE_URL is set, each mutation is mirrored to the bridge
+// When STATELOOM_BRIDGE_URL (or legacy SMCRAFT_BRIDGE_URL) is set, each
+// mutation is mirrored to the bridge
 // hub so a live web canvas updates as the agent edits. Fully backward-
 // compatible: the file on disk remains the durable truth, every bridge
 // call is wrapped so any failure degrades to a no-op, and standalone
-// operation (no SMCRAFT_BRIDGE_URL) is untouched.
+// operation (no bridge URL) is untouched.
 
 let bridge: BridgeClient | undefined;
-if (!process.env.SMCRAFT_BRIDGE_URL) {
+if (!BRIDGE_URL) {
   console.error(
-    "[smcraft-mcp] SMCRAFT_BRIDGE_URL is not set — edits persist to disk but " +
-      "are NOT broadcast; a live canvas will not update. Set SMCRAFT_BRIDGE_URL " +
-      "(e.g. http://127.0.0.1:4599) on this MCP process to go live."
+    "[smcraft-mcp] STATELOOM_BRIDGE_URL is not set — edits persist to disk but " +
+      "are NOT broadcast; a live canvas will not update. Set STATELOOM_BRIDGE_URL " +
+      "(legacy twin: SMCRAFT_BRIDGE_URL; e.g. http://127.0.0.1:4599) on this MCP " +
+      "process to go live."
   );
 }
 
 /** (Re)create the bridge client bound to `docId`, dropping any previous one. */
 function bindBridge(docId: string): void {
-  if (!process.env.SMCRAFT_BRIDGE_URL) return;
+  if (!BRIDGE_URL) return;
   try {
     bridge?.disconnect();
   } catch {
@@ -132,11 +142,11 @@ function bindBridge(docId: string): void {
   }
   try {
     bridge = createBridgeClient({
-      url: process.env.SMCRAFT_BRIDGE_URL,
+      url: BRIDGE_URL,
       role: "agent",
       docId,
-      name: process.env.SMCRAFT_AGENT_NAME ?? "mcp-agent",
-      token: process.env.SMCRAFT_BRIDGE_TOKEN,
+      name: AGENT_NAME ?? "mcp-agent",
+      token: BRIDGE_TOKEN,
     });
   } catch (e) {
     console.error("[smcraft-mcp] bridge init failed (continuing standalone):", e);
@@ -151,7 +161,7 @@ function joinBridge(): void {
     .join()
     .then(() => {
       console.error(
-        `[smcraft-mcp] bridge connected (${process.env.SMCRAFT_BRIDGE_URL}) docId=${PROJECT_FILE}`
+        `[smcraft-mcp] bridge connected (${BRIDGE_URL}) docId=${PROJECT_FILE}`
       );
     })
     .catch((e) => {
@@ -161,7 +171,7 @@ function joinBridge(): void {
 
 bindBridge(PROJECT_FILE);
 
-if (process.env.SMCRAFT_BRIDGE_URL) {
+if (BRIDGE_URL) {
   // Best-effort teardown on process exit.
   let bridgeClosed = false;
   const closeBridge = (): void => {
@@ -193,7 +203,7 @@ function warnDroppedEmit(kind: string): void {
   droppedEmitWarned = true;
   console.error(
     `[smcraft-mcp] dropped ${kind} emit — bridge ` +
-      (bridge ? `status=${bridge.status}` : "not configured (SMCRAFT_BRIDGE_URL unset)") +
+      (bridge ? `status=${bridge.status}` : "not configured (STATELOOM_BRIDGE_URL unset)") +
       "; disk write succeeded, live canvas did not update. (warned once)"
   );
 }
@@ -621,7 +631,7 @@ function generateRispec(def: Definition, intent?: string): string {
   lines.push("## E — Exportation");
   lines.push("");
   lines.push("- Code: `generate_code` (python | typescript) — runtime stubs from this SMDF");
-  lines.push(`- Visual: open this file in the smcraft web designer with \`SMCRAFT_PROJECT_FILE=${PROJECT_FILE}\``);
+  lines.push(`- Visual: open this file in the stateloom web designer with \`STATELOOM_PROJECT_FILE=${PROJECT_FILE}\``);
   lines.push("- SMDF: `get_definition` returns the canonical JSON");
   lines.push("");
 
@@ -957,11 +967,11 @@ server.tool(
         : r.exists
           ? "file exists but is not a readable definition"
           : "no file yet — create_state_machine or load_definition will write it";
-      const bridgeNote = process.env.SMCRAFT_BRIDGE_URL
+      const bridgeNote = BRIDGE_URL
         ? r.unchanged
           ? `bridge unchanged (${bridge?.status ?? "not configured"})`
           : `bridge re-joining room '${r.path}'`
-        : "bridge not configured (SMCRAFT_BRIDGE_URL unset)";
+        : "bridge not configured (STATELOOM_BRIDGE_URL unset)";
       return {
         content: [
           {
@@ -990,9 +1000,9 @@ server.tool(
       : existsSync(PROJECT_FILE)
         ? "file exists but is not a readable definition"
         : "file does not exist yet";
-    const bridgeNote = process.env.SMCRAFT_BRIDGE_URL
-      ? `bridge: ${bridge?.status ?? "not initialized"} → ${process.env.SMCRAFT_BRIDGE_URL}`
-      : "bridge not configured (SMCRAFT_BRIDGE_URL unset)";
+    const bridgeNote = BRIDGE_URL
+      ? `bridge: ${bridge?.status ?? "not initialized"} → ${BRIDGE_URL}`
+      : "bridge not configured (STATELOOM_BRIDGE_URL unset)";
     return {
       content: [
         { type: "text", text: `Active document: ${PROJECT_FILE}\n${summary}\n${bridgeNote}` },

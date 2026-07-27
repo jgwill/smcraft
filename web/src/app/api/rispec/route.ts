@@ -195,7 +195,7 @@ function generateRispec(def: Definition, pde: PdeSource | null, intent: string |
   lines.push("## E — Exportation");
   lines.push("");
   lines.push("- Code: smcg / `generate_code` mcp tool (python | typescript)");
-  lines.push(`- Visual: this file is bound to \`${projectFile}\` via SMCRAFT_PROJECT_FILE`);
+  lines.push(`- Visual: this file is bound to \`${projectFile}\` via STATELOOM_PROJECT_FILE`);
   lines.push("- SMDF: the canonical JSON is the file above");
   lines.push("");
 

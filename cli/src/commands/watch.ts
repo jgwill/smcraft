@@ -21,7 +21,7 @@ export interface WatchOpts {
 
 export async function watchCommand(opts: WatchOpts): Promise<void> {
   if (!opts.bridgeUrl) {
-    console.error("watch: no bridge URL — set --bridge or SMCRAFT_BRIDGE_URL");
+    console.error("watch: no bridge URL — set --bridge or STATELOOM_BRIDGE_URL (legacy: SMCRAFT_BRIDGE_URL)");
     process.exitCode = 1;
     return;
   }

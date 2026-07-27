@@ -28,7 +28,7 @@ cd ts && npm install && npm run build && npm test
 ### Web Designer
 ```bash
 cd web && npm install && npm run dev
-# Opens at http://localhost:3000
+# Opens at http://localhost:4598 — 4598 (canvas) and 4599 (hub) are the loom's pair
 ```
 
 ### MCP Server (for LLM agents)
@@ -82,7 +82,8 @@ forgewright plan).
 
 ## MCP Document Tools & Episode Diagrams
 
-The MCP server (`mcp/`, published as `smcraft-mcp`) exposes `set_project_file` /
+The MCP server (`mcp/`, published as `@miadi/stateloom-mcp`; the former
+`smcraft-mcp` name remains as its 0.1.0 lineage) exposes `set_project_file` /
 `get_project_file`: an agent chooses which `.smdf.json` is the active document
 mid-session — disk target and live bridge room both re-point (rooms are keyed by
 absolute path). Full contract in `rispecs/73-mcp-server.spec.md` ("Path Power").

@@ -9,7 +9,7 @@
  */
 import { existsSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import type { StateMachineDefinition } from "@miadi/stateloom-protocol";
+import { envAlias, type StateMachineDefinition } from "@miadi/stateloom-protocol";
 
 /** Read + parse a project file into a definition, or null if absent/unparseable. */
 export function readDef(path: string): StateMachineDefinition | null {
@@ -40,9 +40,9 @@ export function mtimeOf(path: string): number {
 
 /**
  * Resolve the effective docId to an absolute path:
- *   explicit option ?? $SMCRAFT_PROJECT_FILE ?? ./statemachine.smdf.json.
+ *   explicit option ?? $STATELOOM_PROJECT_FILE ?? $SMCRAFT_PROJECT_FILE ?? ./statemachine.smdf.json.
  */
 export function resolveDocId(opt?: string): string {
-  const raw = opt ?? process.env.SMCRAFT_PROJECT_FILE ?? "./statemachine.smdf.json";
+  const raw = opt ?? envAlias("PROJECT_FILE") ?? "./statemachine.smdf.json";
   return resolve(raw);
 }

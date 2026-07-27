@@ -1,7 +1,6 @@
 import { resolve } from "path";
+import { envAlias } from "@miadi/stateloom-protocol";
 
 export function getProjectFilePath(): string {
-  return resolve(
-    process.env.SMCRAFT_PROJECT_FILE ?? "./statemachine.smdf.json"
-  );
+  return resolve(envAlias("PROJECT_FILE") ?? "./statemachine.smdf.json");
 }

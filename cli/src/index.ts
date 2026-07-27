@@ -8,6 +8,7 @@
  * boot the hub, or inspect presence.
  */
 import { Command } from "commander";
+import { envAlias } from "@miadi/stateloom-protocol";
 import { resolveDocId } from "./docio.js";
 import type { MutateCtx } from "./mutate.js";
 import {
@@ -28,8 +29,8 @@ program
   .name("smcx")
   .description("smcraft design-surface CLI — drive the live smcraft bridge from the terminal")
   .version("0.1.0")
-  .option("--bridge <url>", "bridge socket.io URL", process.env.SMCRAFT_BRIDGE_URL)
-  .option("--doc <path>", "SMDF project file (docId)", process.env.SMCRAFT_PROJECT_FILE)
+  .option("--bridge <url>", "bridge socket.io URL", envAlias("BRIDGE_URL"))
+  .option("--doc <path>", "SMDF project file (docId)", envAlias("PROJECT_FILE"))
   .option("--name <label>", "presence label for this CLI client");
 
 /** Build the durable-first mutate context from the resolved global options. */
