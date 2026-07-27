@@ -1,6 +1,6 @@
 {
   "name": "@miadi/stateloom-react",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Reusable React binding for the smcraft real-time design bridge (framework-agnostic session core + useSmcraftBridge hook over useSyncExternalStore)",
   "type": "module",
   "main": "dist/index.js",

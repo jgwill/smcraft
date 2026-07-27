@@ -17,6 +17,7 @@ export default function Toolbar() {
   const setGeneratedCode = useDesignerStore((s) => s.setGeneratedCode);
   const drawMode = useDesignerStore((s) => s.drawMode);
   const setDrawMode = useDesignerStore((s) => s.setDrawMode);
+  const arrangeLayout = useDesignerStore((s) => s.arrangeLayout);
   const undo = useDesignerStore((s) => s.undo);
   const redo = useDesignerStore((s) => s.redo);
   const undoStack = useDesignerStore((s) => s.undoStack);
@@ -197,6 +198,17 @@ export default function Toolbar() {
         title="Redo (Ctrl+Y)"
       >
         ↪
+      </button>
+
+      <div className="w-px h-4 bg-gray-700" />
+
+      {/* Auto-arrange — re-derive the layered layout over hand-placed boxes */}
+      <button
+        onClick={arrangeLayout}
+        className="toolbar-btn"
+        title="Arrange states into layers (auto-layout)"
+      >
+        ⤢ Arrange
       </button>
 
       <div className="w-px h-4 bg-gray-700" />

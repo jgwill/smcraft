@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { applyPatchOps } from "@miadi/stateloom-protocol";
 import type { PatchOp, Presence } from "@miadi/stateloom-protocol";
+import { autoLayout as deriveLayout } from "@miadi/stateloom-react";
 import type {
   StateMachineDefinition,
   StateDef,
@@ -121,6 +122,8 @@ interface DesignerState {
 
   // Layout
   setStatePosition: (name: string, pos: StatePosition) => void;
+  /** Re-derive the whole arrangement, overwriting hand-placed boxes. */
+  arrangeLayout: () => void;
 
   // Selection
   select: (kind: SelectionKind, id: string | null) => void;
@@ -302,39 +305,22 @@ function validateDefinition(def: StateMachineDefinition): ValidationError[] {
   return errors;
 }
 
+/**
+ * Full layered arrangement of every state — the layout an agent-authored machine
+ * gets when nothing has been placed by hand. Derived by `@miadi/stateloom-react`
+ * so the same pure function serves any other renderer of these definitions.
+ */
+function derivedLayout(def: StateMachineDefinition): DesignerLayout {
+  return { positions: deriveLayout(def) };
+}
+
+/**
+ * Layout for a definition that may already carry hand-placed boxes: derive
+ * readable positions for the whole tree, then let every stored position win.
+ * Auto-layout fills the blanks; a state the user dragged never jumps.
+ */
 function autoLayout(def: StateMachineDefinition, existing: DesignerLayout): DesignerLayout {
-  const positions = { ...existing.positions };
-
-  function layoutChildren(parent: StateDef, offsetX: number, offsetY: number) {
-    const children = parent.states ?? [];
-    children.forEach((s, i) => {
-      if (!positions[s.name]) {
-        const hasChildren = (s.states?.length ?? 0) > 0;
-        positions[s.name] = {
-          x: offsetX + i * 220,
-          y: offsetY,
-          width: hasChildren ? 300 : 160,
-          height: hasChildren ? 200 : 60,
-        };
-      }
-      if (s.states && s.states.length > 0) {
-        const p = positions[s.name];
-        layoutChildren(s, p.x + 20, p.y + 40);
-      }
-    });
-  }
-
-  layoutChildren(def.state, 100, 120);
-
-  if (!positions[def.state.name]) {
-    const children = def.state.states ?? [];
-    positions[def.state.name] = {
-      x: 20, y: 20,
-      width: Math.max(children.length * 220 + 80, 400),
-      height: 350,
-    };
-  }
-  return { positions };
+  return { positions: { ...deriveLayout(def), ...existing.positions } };
 }
 
 const MAX_UNDO = 50;
@@ -580,6 +566,13 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
 
   setStatePosition: (name, pos) => {
     set({ layout: { positions: { ...get().layout.positions, [name]: pos } } });
+  },
+
+  arrangeLayout: () => {
+    // Positions are view state, not SMDF — arranging never dirties the document,
+    // but it is undoable, so a hand-tuned board can always be recovered.
+    get()._pushHistory();
+    set({ layout: derivedLayout(get().definition) });
   },
 
   select: (kind, id) => set({ selection: { kind, id } }),

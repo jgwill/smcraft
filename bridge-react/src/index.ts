@@ -17,3 +17,6 @@ export type {
   UseSmcraftBridge,
   UseSmcraftBridgeOptions,
 } from "./useSmcraftBridge.js";
+
+export { autoLayout, AUTO_LAYOUT_DEFAULTS } from "./autoLayout.js";
+export type { AutoLayoutOptions, LayoutBox } from "./autoLayout.js";
