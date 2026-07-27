@@ -153,6 +153,20 @@ export function createBridgeSession(opts: BridgeSessionOptions): BridgeSession {
         def = result.snapshot.def;
         seq = result.snapshot.seq;
         presence = result.presence;
+        // A def-carrying snapshot must reach callback-only consumers through
+        // the same channel as a live `def:full` — otherwise a tab joining an
+        // already-designed room hydrates its store from nothing (cold-load
+        // empty canvas). `def === null` (fresh project) is deliberately NOT
+        // fanned out, preserving the consumer's own first-send seeding path.
+        if (def !== null) {
+          onFull?.({
+            docId: result.snapshot.docId,
+            def,
+            seq,
+            mtime: result.snapshot.mtime,
+            origin: 'join',
+          });
+        }
         commit();
       })
       .catch(() => {
