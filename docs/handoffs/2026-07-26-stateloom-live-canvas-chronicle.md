@@ -224,8 +224,10 @@ Hub 4599 never restarted — pid `1865924` unchanged again, before and after.
 - **Publish** via `scripts/publish-workspaces.mjs`: `--pack-check` clean (file: →
   `^0.1.1`/`^0.1.0` rewrites verified), then real publish as `jgi` —
   `@miadi/stateloom-protocol@0.1.1` and `@miadi/stateloom-mcp@0.1.1` accepted
-  (shasums printed); protocol already publicly visible. The brand-new mcp name was
-  still propagating on the public read path at report time (watcher armed).
+  (shasums printed); protocol already publicly visible. The brand-new mcp name
+  surfaced on the public read path ~10 min after publish — confirmed
+  `@miadi/stateloom-mcp@0.1.1` with deps `protocol ^0.1.1` / `client ^0.1.0`
+  (no `file:` survivors) and both bin names (`stateloom-mcp`, `smcraft-mcp`).
   `npm deprecate smcraft-mcp@<=0.1.0` notice is live, pointing to the new name.
 - All six package suites green before commit: 43 tests, 0 failures
   (protocol 24, client 2, bridge 6, react 3, cli 4, mcp 4).
