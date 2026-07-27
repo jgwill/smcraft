@@ -22,3 +22,5 @@ RESUME--*.sh
 
 # the live demo document at repo root — mutable session state; durable machines live in episodes
 /statemachine.smdf.json
+LAUNCH-DESIGNER.sh
+mcp-config-stateloom.json
