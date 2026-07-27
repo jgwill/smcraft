@@ -190,3 +190,49 @@ tools until their processes restart.
 
 🌸: The canvas no longer wakes up empty, and the loom now walks to whichever episode
 calls it — the film's own story was the first thread it chose to weave.
+
+---
+
+### 2026-07-27 — port pair + rename finished (same lane, `w1Y:pB`)
+
+Per `docs/handoffs/2026-07-27-port-and-rename-brief.md`. Commit `1f4ecea`, pushed `main`.
+Hub 4599 never restarted — pid `1865924` unchanged again, before and after.
+
+**A — canvas on 4598 ✅**
+- `web/package.json` `start`/`dev` default `-p ${PORT:-4598}`; `live-loop.sh` gains
+  `STATELOOM_WEB_PORT=4598` and the `web` target passes it. Live docs updated
+  (`README.md`, `web/README.md`); dated handoff records keep their historical `:3000`.
+- Web rebuilt and restarted **in its home pane `w1Y:p5`** — now `next-server` on 4598,
+  nothing listens on 3000. Cold proof: fresh isolated Chrome context →
+  `http://localhost:4598` → Green/Yellow/Red rendered (screenshot delivered in-session).
+  4598/4599 sit together as the loom's pair.
+
+**B — rename finished, alias working ✅**
+- `envAlias` lives once, in `@miadi/stateloom-protocol` (`src/env.ts`) — STATELOOM_*
+  read first, SMCRAFT_* honored. Test-first: 5 tests in
+  `bridge-protocol/src/tests/env.test.ts` watched fail, then pass. Wired through every
+  read site: hub bin+defaults, MCP server (URL/name/token/project-file), CLI
+  (docio, global options, error texts), web server lib; NEXT_PUBLIC_* client reads are
+  explicit twin chains (build-inline constraint). Zero direct `process.env.SMCRAFT_*`
+  reads remain outside the helper.
+- **`SMCRAFT_PROJECT_FILE` proven still working**: the 4598 restart was launched with
+  legacy-only env and `/api/file` resolved correctly.
+- `mcp` → `@miadi/stateloom-mcp@0.1.1` (bin ships `stateloom-mcp` + `smcraft-mcp`
+  alias); `web` → `stateloom-web` (private); protocol → `0.1.1` (carries `envAlias`).
+  Lockfiles synced. `live-loop.sh` exports both twin sets; `mcp-line` now registers
+  with STATELOOM_* names.
+- **Publish** via `scripts/publish-workspaces.mjs`: `--pack-check` clean (file: →
+  `^0.1.1`/`^0.1.0` rewrites verified), then real publish as `jgi` —
+  `@miadi/stateloom-protocol@0.1.1` and `@miadi/stateloom-mcp@0.1.1` accepted
+  (shasums printed); protocol already publicly visible. The brand-new mcp name was
+  still propagating on the public read path at report time (watcher armed).
+  `npm deprecate smcraft-mcp@<=0.1.0` notice is live, pointing to the new name.
+- All six package suites green before commit: 43 tests, 0 failures
+  (protocol 24, client 2, bridge 6, react 3, cli 4, mcp 4).
+
+**For the witness:** running MCP registrations still speak the old name/env — they keep
+working through the alias; re-register with `scripts/live-loop.sh mcp-line` when their
+processes next restart.
+
+🌸: The loom's two ports now stand side by side like warp and weft, and the old name
+doesn't break — it just answers to the new one.
