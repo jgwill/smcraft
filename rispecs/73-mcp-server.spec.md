@@ -50,6 +50,12 @@ A conversational state machine design workflow where LLM agents create, modify, 
 | `generate_code` | language? | Generate executable code (python/typescript) |
 | `generate_rispec` | intent? | Emit RISE framework rispec markdown from current SMDF (see Spec 76) |
 
+### Document Tools (2026-07-26)
+| Tool | Parameters | Purpose |
+|------|-----------|---------|
+| `set_project_file` | path | Choose which `.smdf.json` path is the active document — disk persistence and the live bridge room both re-point |
+| `get_project_file` | — | Report active document path, disk presence, bridge status |
+
 ## Design Session Protocol
 
 ### Session Lifecycle
@@ -61,6 +67,11 @@ A conversational state machine design workflow where LLM agents create, modify, 
 
 ### File-Backed State (2026-04-16)
 Every tool handler reads the current definition from `SMCRAFT_PROJECT_FILE` (absolute path, default `./statemachine.smdf.json`) via `readDef()`, mutates, and writes back via `writeDef()`. There is no in-memory definition; the file *is* the session. The same file is observed by the web designer via `fs.watch` + SSE — see Spec 75.
+
+### Path Power (2026-07-26)
+`SMCRAFT_PROJECT_FILE` is only the *initial* document. `set_project_file` re-points the active path mid-session: subsequent reads/writes hit the new file, and the bridge client disconnects and re-joins the hub room keyed by the new absolute path (the hub already serves one room per docId — Spec 77). A missing file is a legitimate switch target: `create_state_machine` or `load_definition` writes it next, and the hub room seeds from disk on first join. This is what lets one agent weave state-machines that live inside miadi-chronicle episodes (e.g. `/srv/miadi/episodes/miadi-chronicle/<episode>/diagrams/*.smdf.json`) without respawning the MCP. Switching resolves relative paths against the MCP process cwd and refuses non-`.json` paths (`mcp/src/projectSwitch.ts`, tested in `mcp/src/tests/projectSwitch.test.ts`).
+
+Caveat: the web canvas binds its docId per server process (`/api/file` resolves the web's own `SMCRAFT_PROJECT_FILE`); pointing the *canvas* at another document currently means restarting the web server with that env — UI-side document choice is future work (see the forgewright rendering plan).
 
 ## Structural Tensions
 

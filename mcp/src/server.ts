@@ -17,6 +17,8 @@
  *   - load_definition: Load a definition from JSON
  *   - list_states: List all states in the current definition
  *   - list_events: List all events in the current definition
+ *   - set_project_file: Choose which .smdf.json path is the active document
+ *   - get_project_file: Report the active document path and bridge status
  *
  * Resources:
  *   - smcraft://definition — Current state machine definition
@@ -34,6 +36,7 @@ import { join, resolve } from "path";
 import { tmpdir } from "os";
 import { createBridgeClient, type BridgeClient } from "@miadi/stateloom-client";
 import type { PatchOp, StateMachineDefinition } from "@miadi/stateloom-protocol";
+import { resolveProjectSwitch } from "./projectSwitch.js";
 
 // ─── In-memory state machine definition ──────────────────────────────
 
@@ -81,7 +84,9 @@ interface Definition {
 // Web reads/writes via /api/file; mcp reads/writes here. fs.watch on
 // the web side broadcasts disk changes back to the canvas.
 
-const PROJECT_FILE = resolve(
+// Mutable: `set_project_file` lets the agent re-point the loom at another
+// .smdf.json document mid-session (the hub keys live rooms by this path).
+let PROJECT_FILE = resolve(
   process.env.SMCRAFT_PROJECT_FILE ?? "./statemachine.smdf.json"
 );
 
@@ -116,12 +121,20 @@ if (!process.env.SMCRAFT_BRIDGE_URL) {
       "(e.g. http://127.0.0.1:4599) on this MCP process to go live."
   );
 }
-if (process.env.SMCRAFT_BRIDGE_URL) {
+
+/** (Re)create the bridge client bound to `docId`, dropping any previous one. */
+function bindBridge(docId: string): void {
+  if (!process.env.SMCRAFT_BRIDGE_URL) return;
+  try {
+    bridge?.disconnect();
+  } catch {
+    /* best-effort */
+  }
   try {
     bridge = createBridgeClient({
       url: process.env.SMCRAFT_BRIDGE_URL,
       role: "agent",
-      docId: PROJECT_FILE,
+      docId,
       name: process.env.SMCRAFT_AGENT_NAME ?? "mcp-agent",
       token: process.env.SMCRAFT_BRIDGE_TOKEN,
     });
@@ -129,7 +142,26 @@ if (process.env.SMCRAFT_BRIDGE_URL) {
     console.error("[smcraft-mcp] bridge init failed (continuing standalone):", e);
     bridge = undefined;
   }
+}
 
+/** Best-effort, non-blocking join. Failure never blocks tool handling. */
+function joinBridge(): void {
+  if (!bridge) return;
+  bridge
+    .join()
+    .then(() => {
+      console.error(
+        `[smcraft-mcp] bridge connected (${process.env.SMCRAFT_BRIDGE_URL}) docId=${PROJECT_FILE}`
+      );
+    })
+    .catch((e) => {
+      console.error("[smcraft-mcp] bridge join failed (continuing standalone):", e?.message ?? e);
+    });
+}
+
+bindBridge(PROJECT_FILE);
+
+if (process.env.SMCRAFT_BRIDGE_URL) {
   // Best-effort teardown on process exit.
   let bridgeClosed = false;
   const closeBridge = (): void => {
@@ -908,6 +940,68 @@ server.tool(
 );
 
 server.tool(
+  "set_project_file",
+  "Choose which .smdf.json path is the active document the loom weaves. Disk persistence AND the live bridge room (the hub keys rooms by this path) both re-point to it. A missing file is legitimate — create_state_machine or load_definition writes it next. Path must end in .json; convention is *.smdf.json.",
+  { path: z.string() },
+  async ({ path }) => {
+    try {
+      const r = resolveProjectSwitch(path, PROJECT_FILE);
+      PROJECT_FILE = r.path;
+      if (!r.unchanged) {
+        bindBridge(PROJECT_FILE);
+        joinBridge();
+      }
+      const def = r.exists ? readDef() : null;
+      const summary = def
+        ? `existing machine '${def.settings.name}' (${collectStateNames(def.state).length} states, ${collectEventIds(def).length} events)`
+        : r.exists
+          ? "file exists but is not a readable definition"
+          : "no file yet — create_state_machine or load_definition will write it";
+      const bridgeNote = process.env.SMCRAFT_BRIDGE_URL
+        ? r.unchanged
+          ? `bridge unchanged (${bridge?.status ?? "not configured"})`
+          : `bridge re-joining room '${r.path}'`
+        : "bridge not configured (SMCRAFT_BRIDGE_URL unset)";
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Active document: ${r.path}\nPrevious: ${r.previous}\n${summary}\n${bridgeNote}`,
+          },
+        ],
+      };
+    } catch (e) {
+      return {
+        content: [{ type: "text", text: e instanceof Error ? e.message : String(e) }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "get_project_file",
+  "Report the active .smdf.json document path, whether it exists on disk, and live-bridge status",
+  {},
+  async () => {
+    const def = readDef();
+    const summary = def
+      ? `machine '${def.settings.name}' (${collectStateNames(def.state).length} states, ${collectEventIds(def).length} events)`
+      : existsSync(PROJECT_FILE)
+        ? "file exists but is not a readable definition"
+        : "file does not exist yet";
+    const bridgeNote = process.env.SMCRAFT_BRIDGE_URL
+      ? `bridge: ${bridge?.status ?? "not initialized"} → ${process.env.SMCRAFT_BRIDGE_URL}`
+      : "bridge not configured (SMCRAFT_BRIDGE_URL unset)";
+    return {
+      content: [
+        { type: "text", text: `Active document: ${PROJECT_FILE}\n${summary}\n${bridgeNote}` },
+      ],
+    };
+  }
+);
+
+server.tool(
   "generate_rispec",
   "Generate a RISE rispec (markdown) from the current state machine. If the SMDF was sourced from a PDE (settings._source.pdeId/pdeFolder), the PDE's intent, directions, and ambiguities are folded in. Pass `intent` to override the desired outcome.",
   { intent: z.string().optional() },
@@ -970,18 +1064,7 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error(`SMCraft MCP server running on stdio (project file: ${PROJECT_FILE})`);
-
-  // Best-effort, non-blocking bridge join. Failure never blocks tool handling.
-  if (bridge) {
-    bridge
-      .join()
-      .then(() => {
-        console.error(`[smcraft-mcp] bridge connected (${process.env.SMCRAFT_BRIDGE_URL})`);
-      })
-      .catch((e) => {
-        console.error("[smcraft-mcp] bridge join failed (continuing standalone):", e?.message ?? e);
-      });
-  }
+  joinBridge();
 }
 
 main().catch(console.error);

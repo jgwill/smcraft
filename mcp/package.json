@@ -9,12 +9,13 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test": "node --test dist/tests/*.test.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1",
     "@miadi/stateloom-client": "file:../bridge-client",
     "@miadi/stateloom-protocol": "file:../bridge-protocol",
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
