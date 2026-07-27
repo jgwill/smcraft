@@ -1,7 +1,17 @@
 "use client";
 
 import { useRef, useCallback, useState, useEffect, useMemo } from "react";
+import {
+  IDENTITY_VIEWPORT,
+  VIEWPORT_LIMITS,
+  fitToBoxes,
+  panBy,
+  viewportTransform,
+  zoomAt,
+  zoomTo,
+} from "@miadi/stateloom-react";
 import { useDesignerStore } from "@/store/useDesignerStore";
+import { useLayoutMemory } from "@/lib/layoutMemory";
 import type { StatePosition, StateDef } from "@/types/definition";
 
 interface DragState {
@@ -10,6 +20,37 @@ interface DragState {
   startY: number;
   origX: number;
   origY: number;
+}
+
+/** A pan in progress: where the pointer went down and where the view was then. */
+interface PanState {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  origX: number;
+  origY: number;
+}
+
+/** Wheel notches arrive in three units; normalise them to pixels. */
+const WHEEL_LINE_HEIGHT = 16;
+const WHEEL_PAGE_HEIGHT = 400;
+
+function wheelPixels(delta: number, mode: number): number {
+  if (mode === 1) return delta * WHEEL_LINE_HEIGHT;
+  if (mode === 2) return delta * WHEEL_PAGE_HEIGHT;
+  return delta;
+}
+
+/**
+ * Space is a pan modifier on the canvas and a plain space bar everywhere else —
+ * a name being typed in a panel, or a focused button waiting to be pressed,
+ * must never make the board slide.
+ */
+function isTypingTarget(node: EventTarget | null): boolean {
+  const el = node as HTMLElement | null;
+  if (!el || typeof el.tagName !== "string") return false;
+  if (el.isContentEditable) return true;
+  return ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "OPTION"].includes(el.tagName);
 }
 
 export default function Canvas() {
@@ -35,10 +76,33 @@ export default function Canvas() {
   const navigateUp = useDesignerStore((s) => s.navigateUp);
   const getCurrentChildren = useDesignerStore((s) => s.getCurrentChildren);
   const activeStates = useDesignerStore((s) => s.activeStates);
+  const viewport = useDesignerStore((s) => s.viewport);
+  const setViewport = useDesignerStore((s) => s.setViewport);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [eventPicker, setEventPicker] = useState<{ stateName: string; targetName: string; x: number; y: number } | null>(null);
+
+  // Navigation. `spaceHeld` / `panning` drive the cursor (they must re-render);
+  // the refs carry the same truth into native listeners and pointer handlers
+  // that would otherwise close over a stale value.
+  const spaceRef = useRef(false);
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const panRef = useRef<PanState | null>(null);
+  const [panning, setPanning] = useState(false);
+  // A pan that actually moved must not end as a click that clears the selection.
+  const panMovedRef = useRef(false);
+  // Whoever holds the pointer for the gesture in flight, so it can be released.
+  const captureRef = useRef<Element | null>(null);
+
+  // Remembered board: restore this browser's drags, then keep writing them back.
+  useLayoutMemory();
+
+  /** Pointer position relative to the canvas element — the space zoom anchors in. */
+  const toCanvasPoint = useCallback((clientX: number, clientY: number) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    return { x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) };
+  }, []);
 
   // WS7b — live-animation tracking. The prev* refs are read/written ONLY inside
   // the commit effect (never during render). The rendered classes are driven by
@@ -83,8 +147,11 @@ export default function Canvas() {
     [errors]
   );
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent, name: string) => {
+  const handleNodePointerDown = useCallback(
+    (e: React.PointerEvent, name: string) => {
+      // Middle button, or space held: this gesture belongs to the surface. Let
+      // it bubble un-stopped so the pan handler below picks it up.
+      if (e.button !== 0 || spaceRef.current) return;
       e.stopPropagation();
       if (drawMode === "transition") {
         if (!drawSource) {
@@ -98,15 +165,61 @@ export default function Canvas() {
       select("state", name);
       const pos = getPos(name);
       setDrag({ name, startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y });
+      // Capture on the node's own group, so the gesture survives the pointer
+      // outrunning the box or leaving the canvas. It must be *this* element and
+      // not the surface: a capture retargets the click and dblclick that follow,
+      // and retargeting them to the <svg> would read as a click on empty space —
+      // clearing the selection the press just made, and stealing the
+      // double-click that drills into a composite.
+      const node = e.currentTarget as Element;
+      captureRef.current = node;
+      node.setPointerCapture?.(e.pointerId);
     },
     [select, getPos, drawMode, drawSource, setDrawSource]
   );
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
+  const handleSurfacePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      const wantsPan = e.button === 1 || (e.button === 0 && spaceRef.current);
+      if (!wantsPan) return;
+      // Suppresses the compatibility mouse events, and with them Chrome's
+      // middle-click autoscroll.
+      e.preventDefault();
+      const vp = useDesignerStore.getState().viewport;
+      panRef.current = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: vp.x,
+        origY: vp.y,
+      };
+      panMovedRef.current = false;
+      setPanning(true);
+      captureRef.current = svgRef.current;
+      svgRef.current?.setPointerCapture(e.pointerId);
+    },
+    []
+  );
+
+  const handleSurfacePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      const pan = panRef.current;
+      if (pan) {
+        const dx = e.clientX - pan.startX;
+        const dy = e.clientY - pan.startY;
+        if (dx !== 0 || dy !== 0) panMovedRef.current = true;
+        const scale = useDesignerStore.getState().viewport.scale;
+        setViewport({ x: pan.origX + dx, y: pan.origY + dy, scale });
+        return;
+      }
       if (!drag) return;
-      const dx = e.clientX - drag.startX;
-      const dy = e.clientY - drag.startY;
+      // The pointer moves in screen pixels; the box lives in world units. At
+      // scale k a screen pixel is 1/k world units, which is what keeps a
+      // dragged state pinned under the cursor at any zoom. Pan cancels out of a
+      // delta, so only the scale appears here.
+      const scale = useDesignerStore.getState().viewport.scale;
+      const dx = (e.clientX - drag.startX) / scale;
+      const dy = (e.clientY - drag.startY) / scale;
       const pos = getPos(drag.name);
       setStatePosition(drag.name, {
         ...pos,
@@ -114,10 +227,109 @@ export default function Canvas() {
         y: Math.max(0, drag.origY + dy),
       });
     },
-    [drag, getPos, setStatePosition]
+    [drag, getPos, setStatePosition, setViewport]
   );
 
-  const handleMouseUp = useCallback(() => setDrag(null), []);
+  const handleSurfacePointerUp = useCallback((e: React.PointerEvent) => {
+    const held = captureRef.current as (Element & {
+      hasPointerCapture?: (id: number) => boolean;
+      releasePointerCapture?: (id: number) => void;
+    }) | null;
+    if (held?.hasPointerCapture?.(e.pointerId)) held.releasePointerCapture?.(e.pointerId);
+    captureRef.current = null;
+    if (panRef.current?.pointerId === e.pointerId) {
+      panRef.current = null;
+      setPanning(false);
+    }
+    setDrag(null);
+  }, []);
+
+  // Wheel: pan by default, zoom under Ctrl/⌘ (which is also how a browser
+  // delivers a trackpad pinch). Registered natively with `passive: false` —
+  // React's own wheel listener is passive, so `preventDefault` there cannot stop
+  // the page from zooming out from under the canvas.
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const vp = useDesignerStore.getState().viewport;
+      const dx = wheelPixels(e.deltaX, e.deltaMode);
+      const dy = wheelPixels(e.deltaY, e.deltaMode);
+
+      if (e.ctrlKey || e.metaKey) {
+        const anchor = toCanvasPoint(e.clientX, e.clientY);
+        const next = zoomAt(vp, Math.exp(-dy * 0.0025), anchor);
+        if (next !== vp) setViewport(next);
+        return;
+      }
+      // Shift turns the wheel sideways; a trackpad already reports deltaX.
+      const moveX = e.shiftKey ? -(dx || dy) : -dx;
+      const moveY = e.shiftKey ? 0 : -dy;
+      if (moveX === 0 && moveY === 0) return;
+      setViewport(panBy(vp, moveX, moveY));
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, [setViewport, toCanvasPoint]);
+
+  // Space arms the pan grip. Held down it must not scroll the page, and it must
+  // stay inert while the user is typing into a panel.
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat) return;
+      if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
+      e.preventDefault();
+      spaceRef.current = true;
+      setSpaceHeld(true);
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      spaceRef.current = false;
+      setSpaceHeld(false);
+    };
+    // Losing the window mid-hold would otherwise leave the grip stuck on.
+    const release = () => {
+      spaceRef.current = false;
+      setSpaceHeld(false);
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", release);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", release);
+    };
+  }, []);
+
+  /** Zoom from the buttons: anchored at the middle of the canvas. */
+  const zoomFromCentre = useCallback(
+    (factor: number) => {
+      const rect = svgRef.current?.getBoundingClientRect();
+      const anchor = { x: (rect?.width ?? 0) / 2, y: (rect?.height ?? 0) / 2 };
+      const vp = useDesignerStore.getState().viewport;
+      const next = zoomAt(vp, factor, anchor);
+      if (next !== vp) setViewport(next);
+    },
+    [setViewport]
+  );
+
+  const resetZoom = useCallback(() => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    const anchor = { x: (rect?.width ?? 0) / 2, y: (rect?.height ?? 0) / 2 };
+    setViewport(zoomTo(useDesignerStore.getState().viewport, 1, anchor));
+  }, [setViewport]);
+
+  /** Frame every box of the current drill level — the answer to "where did it go". */
+  const fitToView = useCallback(() => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const boxes = currentChildren.map((s) => getPos(s.name));
+    setViewport(
+      boxes.length ? fitToBoxes(boxes, rect.width, rect.height) : { ...IDENTITY_VIEWPORT }
+    );
+  }, [currentChildren, getPos, setViewport]);
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, stateName?: string) => {
@@ -250,9 +462,22 @@ export default function Canvas() {
       <svg
         ref={svgRef}
         className="w-full h-full bg-gray-950"
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
+        style={{
+          cursor: panning ? "grabbing" : spaceHeld ? "grab" : undefined,
+          touchAction: "none",
+        }}
+        onPointerDown={handleSurfacePointerDown}
+        onPointerMove={handleSurfacePointerMove}
+        onPointerUp={handleSurfacePointerUp}
+        onPointerCancel={handleSurfacePointerUp}
+        // Middle-click on Linux/Windows would otherwise paste or autoscroll.
+        onAuxClick={(e) => e.preventDefault()}
         onClick={(e) => {
+          // A pan that travelled is not a click on empty space.
+          if (panMovedRef.current) {
+            panMovedRef.current = false;
+            return;
+          }
           if ((e.target as SVGElement)?.tagName === 'svg') {
             clearSelection();
             setEventPicker(null);
@@ -275,6 +500,15 @@ export default function Canvas() {
             Click target state to create transition from &quot;{drawSource}&quot;
           </text>
         )}
+
+        {/* The navigated world. One transform on one group: every arrow, box and
+            label below inherits the pan and the zoom without knowing they exist.
+            While a pan is in flight the content stops answering the pointer, so
+            the grabbing cursor is not fought over by the boxes underneath. */}
+        <g
+          transform={viewportTransform(viewport)}
+          style={panning ? { pointerEvents: "none" } : undefined}
+        >
 
         {/* Transition arrows */}
         {arrows.map((arrow, i) => {
@@ -372,13 +606,21 @@ export default function Canvas() {
           return (
             <g
               key={state.name}
-              onMouseDown={(e) => handleMouseDown(e, state.name)}
+              onPointerDown={(e) => handleNodePointerDown(e, state.name)}
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 if (isComposite) navigateInto(state.name);
               }}
               onContextMenu={(e) => handleContextMenu(e, state.name)}
-              className={drawMode === "transition" ? "cursor-crosshair" : isComposite ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"}
+              className={
+                spaceHeld
+                  ? undefined // the surface owns the cursor while the pan grip is armed
+                  : drawMode === "transition"
+                  ? "cursor-crosshair"
+                  : isComposite
+                  ? "cursor-pointer"
+                  : "cursor-grab active:cursor-grabbing"
+              }
             >
               <g className={entering ? "sm-node-enter" : undefined}>
               <rect
@@ -491,6 +733,8 @@ export default function Canvas() {
             </g>
           );
         })}
+        </g>
+        {/* — end of the navigated world; everything below is screen space — */}
 
         {/* Empty state message */}
         {currentChildren.length === 0 && (
@@ -499,6 +743,48 @@ export default function Canvas() {
           </text>
         )}
       </svg>
+
+      {/* Navigation HUD — screen space, never transformed. */}
+      <div className="absolute bottom-3 left-3 z-10 flex items-center gap-0.5 bg-gray-900/90 border border-gray-700 rounded-lg px-1.5 py-1 text-xs text-gray-400 select-none">
+        <button
+          className="px-1.5 py-0.5 rounded hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40 disabled:hover:bg-transparent"
+          title="Zoom out (Ctrl + wheel down)"
+          disabled={viewport.scale <= VIEWPORT_LIMITS.min}
+          onClick={() => zoomFromCentre(1 / 1.25)}
+        >
+          −
+        </button>
+        <button
+          className="px-1.5 py-0.5 rounded hover:bg-gray-800 hover:text-gray-200 tabular-nums min-w-[3.25rem]"
+          title="Reset zoom to 100%"
+          onClick={resetZoom}
+        >
+          {Math.round(viewport.scale * 100)}%
+        </button>
+        <button
+          className="px-1.5 py-0.5 rounded hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40 disabled:hover:bg-transparent"
+          title="Zoom in (Ctrl + wheel up)"
+          disabled={viewport.scale >= VIEWPORT_LIMITS.max}
+          onClick={() => zoomFromCentre(1.25)}
+        >
+          ＋
+        </button>
+        <span className="text-gray-700 px-0.5">|</span>
+        <button
+          className="px-1.5 py-0.5 rounded hover:bg-gray-800 hover:text-gray-200"
+          title="Fit the whole machine in view"
+          onClick={fitToView}
+        >
+          ⤢ Fit
+        </button>
+        <span className="text-gray-700 px-0.5">|</span>
+        <span
+          className="px-1 text-[10px] text-gray-600"
+          title="Wheel scrolls · Shift+wheel scrolls sideways · Ctrl+wheel zooms at the cursor · middle-drag or Space+drag pans"
+        >
+          {panning ? "panning" : spaceHeld ? "space to pan" : "wheel · ⌃wheel · space"}
+        </span>
+      </div>
 
       {/* Event picker popup */}
       {eventPicker && (

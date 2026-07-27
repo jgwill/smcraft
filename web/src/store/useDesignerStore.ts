@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { applyPatchOps } from "@miadi/stateloom-protocol";
 import type { PatchOp, Presence } from "@miadi/stateloom-protocol";
-import { autoLayout as deriveLayout } from "@miadi/stateloom-react";
+import { autoLayout as deriveLayout, IDENTITY_VIEWPORT } from "@miadi/stateloom-react";
+import type { Viewport } from "@miadi/stateloom-react";
 import type {
   StateMachineDefinition,
   StateDef,
@@ -40,6 +41,12 @@ interface DesignerState {
   // Definition
   definition: StateMachineDefinition;
   layout: DesignerLayout;
+  /**
+   * Where the canvas is looking: `translate(x, y) scale(scale)` over the world
+   * coordinates in `layout.positions`. View state — never part of the SMDF,
+   * never undoable, never dirties the document.
+   */
+  viewport: Viewport;
   fileName: string | null;
   dirty: boolean;
 
@@ -124,6 +131,15 @@ interface DesignerState {
   setStatePosition: (name: string, pos: StatePosition) => void;
   /** Re-derive the whole arrangement, overwriting hand-placed boxes. */
   arrangeLayout: () => void;
+  /**
+   * Apply positions this browser remembers for the open document. Remembered
+   * boxes win over whatever auto-layout derived; names that no longer exist are
+   * carried harmlessly and pruned on the next write.
+   */
+  hydrateLayout: (positions: Record<string, StatePosition>, viewport?: Viewport) => void;
+
+  // Viewport (pan / zoom)
+  setViewport: (viewport: Viewport) => void;
 
   // Selection
   select: (kind: SelectionKind, id: string | null) => void;
@@ -328,6 +344,7 @@ const MAX_UNDO = 50;
 export const useDesignerStore = create<DesignerState>((set, get) => ({
   definition: createEmptyDefinition(),
   layout: autoLayout(createEmptyDefinition(), createDefaultLayout()),
+  viewport: { ...IDENTITY_VIEWPORT },
   fileName: null,
   dirty: false,
   remoteMtime: null,
@@ -574,6 +591,18 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
     get()._pushHistory();
     set({ layout: derivedLayout(get().definition) });
   },
+
+  hydrateLayout: (positions, viewport) => {
+    // Remembered last, so a box this browser was told to keep wins over the
+    // derivation. Never touches `dirty` or the undo stack: restoring a view is
+    // not an edit of the machine.
+    set({
+      layout: { positions: { ...get().layout.positions, ...positions } },
+      ...(viewport ? { viewport } : {}),
+    });
+  },
+
+  setViewport: (viewport) => set({ viewport }),
 
   select: (kind, id) => set({ selection: { kind, id } }),
   clearSelection: () => set({ selection: { kind: null, id: null } }),

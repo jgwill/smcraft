@@ -31,7 +31,7 @@ export default function Home() {
   ];
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden" onClick={() => contextMenu && hideContextMenu()}>
+    <div className="flex flex-col h-screen overflow-hidden" onClick={() => contextMenu.visible && hideContextMenu()}>
       <DesignBridge />
       <Toolbar />
       <div className="flex flex-1 overflow-hidden relative">
@@ -76,8 +76,10 @@ export default function Home() {
         <CodePreview />
       </div>
 
-      {/* Context menu */}
-      {contextMenu && (
+      {/* Context menu. `contextMenu` is always an object — the `visible` flag is
+          what says whether it was opened, so gating on the object alone left the
+          menu parked over the top-left of the canvas from first paint. */}
+      {contextMenu.visible && (
         <div
           className="fixed z-50 bg-gray-900 border border-gray-700 rounded-lg shadow-xl py-1 min-w-[140px]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
