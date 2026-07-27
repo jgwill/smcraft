@@ -76,7 +76,22 @@ The **runtime library** (`Context`, `State`, `TransitionHelper`, `Observer`) shi
 - **Spec 62** — Code Generator (SMCG pipeline)
 - **Spec 63** — Visual Designer (web-based)
 
-See `caishen/rispecs/StateMachineries/` for full specs.
+See `rispecs/` for full specs (70–78 cover the live bridge, MCP server, and
+episode rendering; `rispecs/78-forgewright-episode-rendering.plan.md` is the
+forgewright plan).
+
+## MCP Document Tools & Episode Diagrams
+
+The MCP server (`mcp/`, published as `smcraft-mcp`) exposes `set_project_file` /
+`get_project_file`: an agent chooses which `.smdf.json` is the active document
+mid-session — disk target and live bridge room both re-point (rooms are keyed by
+absolute path). Full contract in `rispecs/73-mcp-server.spec.md` ("Path Power").
+
+miadi-chronicle episodes host their machines at
+`<episode>/diagrams/<name>.smdf.json` (first proven inhabitant: ep103's
+`film-preprod`; ep090 predates the convention with six machines under
+`state-machines/*.smcraft.json` — see `docs/reviews/` for the reconciliation
+recommendation). Handoff history lives in `docs/handoffs/`.
 
 ## Definition Format (`.smdf.json`)
 
