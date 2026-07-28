@@ -140,7 +140,11 @@ the durable truth. Two candidate resolutions, not chosen:
 | `after-3.smdf.json` | `miadi.chronicle::InteractiveProduction`, 14 states / 21 events — iteration 3, current |
 | `agent-report.md` | The sub-agent's verbatim advisory (agent `a0f0e9ee8811b00a2`, resumable) |
 | `iteration-2.md` | **The chronicle becomes the source** — `Composition`→`Gathering`, `Chronicle` + `Manuscript` added, land rewired |
+| `after-4.smdf.json` | 14 leaf states / 23 events — iteration 4, the `Artifact` abstract-type pass (recorded in commit `3719cd1`, no iteration doc) |
+| `after-5.smdf.json` | 18 leaf states / 31 events — iteration 5, current |
 | `iteration-3.md` | **The word gets its place back** — `MusicalComposition` added at the songwriting bench; package rename proposed, not done |
+| `iteration-5.md` | **Consent becomes a place in the machine** — `Artefact` spelling corrected, `ConsentGate` / `Held` / `Withheld` / `PublicationGate` added from gmtermux#46; includes the adversarial pass that caught a trapdoor |
+| `mobile.md` | The phone work — responsive shell, touch gestures, and the two-tier pinch model |
 | `README.md` | This — the ask, the consensus ledger, the diff, the open questions |
 
 > **Iteration 2 supersedes parts of this document.** `Composition` was rejected by
