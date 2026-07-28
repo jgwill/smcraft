@@ -9,6 +9,7 @@ import ValidationPanel from "@/components/ValidationPanel";
 import Toolbar from "@/components/Toolbar";
 import CodePreview from "@/components/CodePreview";
 import DesignBridge from "@/components/DesignBridge";
+import UiScale from "@/components/UiScale";
 import { useDesignerStore } from "@/store/useDesignerStore";
 
 type Tab = "properties" | "events" | "settings" | "validation";
@@ -78,6 +79,9 @@ export default function Home() {
       onClick={() => contextMenu.visible && hideContextMenu()}
     >
       <DesignBridge />
+      {/* The chrome's own pinch, and the pill that undoes it. Renders nothing at
+          100%, so it costs an empty component until someone reaches for it. */}
+      <UiScale />
       <Toolbar />
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* Canvas */}

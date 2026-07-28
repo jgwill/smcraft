@@ -13,6 +13,7 @@ import {
 import type { Viewport } from "@miadi/stateloom-react";
 import { useDesignerStore } from "@/store/useDesignerStore";
 import type { ContextMenuState } from "@/store/useDesignerStore";
+import { CANVAS_PINCH_OWNER } from "@/lib/gestureOwner";
 import { useLayoutMemory } from "@/lib/layoutMemory";
 import type { StatePosition, StateDef } from "@/types/definition";
 
@@ -770,7 +771,23 @@ export default function Canvas() {
   }, [currentChildren, currentParent, arrows, getPos]);
 
   return (
-    <div className="relative w-full h-full">
+    // The canvas *pane*, not just the SVG. Two things hang off this element.
+    //
+    // `data-pinch-owner` is what the chrome pinch reads to disqualify itself
+    // (see lib/gestureOwner.ts): a finger anywhere in here — the board, the
+    // breadcrumb, the zoom HUD — means this gesture is about the machine, never
+    // about the size of the menus.
+    //
+    // `touch-action: none` extends the SVG's own refusal to the overlays sitting
+    // on top of it. The SVG had it; the HUD and the breadcrumb did not, so a
+    // pinch that happened to open with a finger on the zoom bar was still a
+    // browser page zoom. Nothing in this pane scrolls, so denying everything
+    // costs nothing.
+    <div
+      className="relative w-full h-full"
+      style={{ touchAction: "none" }}
+      data-pinch-owner={CANVAS_PINCH_OWNER}
+    >
       {/* Breadcrumb navigation */}
       {navigationPath.length > 1 && (
         <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-gray-900/90 border border-gray-700 rounded-lg px-3 py-1.5 text-sm">

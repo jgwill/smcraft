@@ -63,4 +63,32 @@ Neither agent nor the orchestrator had a device. Untested on hardware:
 - `navigator.vibrate` is absent on Safari (guarded, silently skipped)
 - the ≤8px of pan a tap produces before slop clears
 
-🌸: The app was never too big for the phone. It simply had never been told the phone was there — and once it knew, the harder question was whether a finger passing through is the same as a finger asking to stay. It waits half a second now before deciding.
+---
+
+## Round two — two sets of control
+
+Guillaume, after touching it: *"pinching with two fingers is actually resizing the whole application with the menus and everything around… if we pinch on the design surface it should zoom in, zoom out. And if we pinch on the menus, it should increase size of the menus. So you probably have two sets of control."*
+
+**Root cause, verified:** `grep -rn "touch-action|touchAction"` over `web/src` returned **exactly one hit** — the inline `touchAction: "none"` on the canvas `<svg>`. Everything else — toolbar, sheet, panels, dock, scrim, and the HUD overlays sitting *on top of* the canvas — was at the initial `auto`, which permits browser pinch-zoom. The only thing opposing page zoom was `userScalable: false` in the viewport meta, and that is advice a browser may decline. Any pinch not landing squarely on the SVG zoomed the whole page.
+
+That is the lesson: **the viewport meta is a request; `touch-action` is the contract.** `user-scalable=no` is ignored outright by iOS Safari and bypassed by Android Chrome's "Force enable zoom" accessibility toggle.
+
+**The model now:**
+
+| Pinch lands on | Result |
+|---|---|
+| The SVG design surface | canvas `viewport.scale` — the board zooms, chrome holds still |
+| The chrome | **UI scale** — menus, labels and buttons grow; the board holds still |
+| Browser page zoom | never |
+
+**Arbitration, decided once at touch-down and never revisited:** the canvas pinches only when *both* fingers are in `pointersRef`, which only accepts pointers whose `pointerdown` hit the canvas pane. The chrome pinch starts only when *neither* touch's target is inside `[data-pinch-owner="canvas"]`. Mutually exclusive by construction — a hand straddling the boundary starts nothing, which is the honest answer to an ambiguous gesture.
+
+**UI scale rides Tailwind v4's rem-based scales:** `document.documentElement.style.fontSize = 16 * uiScale`, clamped, persisted to `localStorage`, restored pre-paint so there is no flash. A reset pill appears only when scale ≠ 1 — a user who fat-fingers to 1.75 must be able to get back without clearing site data.
+
+**`touch-action: pan-x pan-y`, not `pan-y`,** on `html, body, .app-shell`. Effective touch-action is the *intersection* down the tree, so the SVG's `none` still wins on the canvas; but plain `pan-y` would have intersected away `.toolbar-strip`'s horizontal swipe. The wider whitelist denies `pinch-zoom` while keeping every scroll the layout depends on.
+
+New files: `lib/uiScale.ts`, `lib/gestureOwner.ts`, `components/UiScale.tsx`.
+
+**Still needs his device:** whether page zoom is actually gone — if it survives, it is the "Force enable zoom" accessibility setting and no page can defeat it; whether the 12px slop makes chrome pinch feel intentional; and whether a pinch that begins as a one-finger scroll scrolls a little first, since that first scroll is uncancelable once committed.
+
+🌸: The app was never too big for the phone. It simply had never been told the phone was there — and once it knew, the harder question was whether a finger passing through is the same as a finger asking to stay. Now the same squeeze asks a different question depending on where it lands, and the app finally knows which one it was asked.

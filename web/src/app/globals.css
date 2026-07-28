@@ -40,6 +40,30 @@ body {
   height: 100%;
 }
 
+/* Browser page zoom is refused here, document-wide, and this — not the viewport
+   meta tag — is what actually does it. `user-scalable=no` is advice a browser may
+   decline: Android Chrome overrides it whenever "Force enable zoom" is on in
+   accessibility settings, and iOS Safari has ignored it outright for years.
+   `touch-action` is a compositor-level contract and is honoured.
+
+   Why `pan-x pan-y` and not `none`: the value is a whitelist, and pinch-zoom is
+   absent from it, so the browser may still pan in either direction but may never
+   scale the page. That distinction is the whole difference between a fix and a
+   regression — `none` here would kill one-finger scrolling in all four panels
+   and the horizontal swipe along the toolbar strip.
+
+   Why not `pan-y` (which would be enough for the panels): the effective touch
+   action for a touch is the *intersection* of this value with every element's
+   down to the one under the finger. `pan-y` here would intersect the toolbar
+   strip's horizontal scroll away to nothing. For the same reason the canvas keeps
+   full control: its `touch-action: none` intersects to `none` regardless of what
+   is declared up here. */
+html,
+body,
+.app-shell {
+  touch-action: pan-x pan-y;
+}
+
 body {
   /* This is a fixed full-screen editor — nothing is supposed to scroll at the
      document level. Pinning it here also stops iOS rubber-banding and keeps the
@@ -92,6 +116,51 @@ body {
   top: calc(env(safe-area-inset-top) + 0.5rem);
   right: calc(env(safe-area-inset-right) + 1rem);
   z-index: 50;
+}
+
+/* The way back. A pinch on the chrome moves the root font size, and every length
+   in this stylesheet is a multiple of it — so at 175% the app is legible but the
+   control that undoes it must not have grown along with everything else. Every
+   number below is in px for exactly that reason: this pill is the same physical
+   size at 75% and at 175%, and stays a reachable target either way.
+
+   It sits above the phone dock (`--sm-dock-h` is itself rem, so it tracks the
+   dock's real height at any scale) and above the bottom sheet's z-30, because an
+   escape hatch you have to close a panel to reach is not an escape hatch. */
+.ui-scale-pill {
+  position: fixed;
+  z-index: 45;
+  right: calc(env(safe-area-inset-right) + 12px);
+  bottom: calc(var(--sm-dock-h) + env(safe-area-inset-bottom) + 8px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid #374151;
+  border-radius: 9999px;
+  background: rgb(17 24 39 / 0.92);
+  backdrop-filter: blur(6px);
+  font-size: 12px;
+  line-height: 1;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.ui-scale-pill button {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  background: #1f2937;
+  font-size: 12px;
+  line-height: 1;
+  color: #93c5fd;
+}
+
+@media (min-width: 768px) {
+  /* No dock at this width — the pill drops to the bottom edge it was riding. */
+  .ui-scale-pill {
+    bottom: calc(env(safe-area-inset-bottom) + 12px);
+  }
 }
 
 /* The toolbar is ~15 controls wide — far past a phone. On a phone it becomes a
