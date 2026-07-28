@@ -114,7 +114,11 @@ export default function SocketBridgeProvider() {
   if (presence.length === 0) return null;
 
   return (
-    <div className="fixed top-2 right-4 z-50 flex gap-1 pointer-events-none">
+    // `presence-dock` replaces the raw `top-2 right-4`: with viewport-fit=cover
+    // that corner can sit under a notch or the status bar, so the offset is
+    // measured from the safe-area inset instead. Still pointer-events-none, so
+    // it never competes with the toolbar it floats over.
+    <div className="presence-dock flex gap-1 pointer-events-none">
       {presence.map((p) => (
         <span
           key={p.clientId}

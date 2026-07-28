@@ -31,7 +31,10 @@ export default function ValidationPanel() {
           {errors.map((err, i) => (
             <div
               key={i}
-              className={`flex items-start gap-1.5 text-xs py-1 border-b border-gray-800/50 ${
+              // Error rows are tap targets — clicking one selects the offending
+              // element — so they get a thumb-sized row on touch and keep the
+              // dense desktop row from `md` up.
+              className={`flex items-start gap-1.5 text-[13px] py-2.5 border-b border-gray-800/50 md:text-xs md:py-1 ${
                 err.element ? "cursor-pointer hover:bg-gray-800/30" : ""
               }`}
               onClick={() => {

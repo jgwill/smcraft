@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useDesignerStore } from "@/store/useDesignerStore";
 import type { EventDef } from "@/types/definition";
 
@@ -53,7 +53,9 @@ export default function EventsPanel() {
             )}
           </div>
 
-          {/* Events table */}
+          {/* Events table. The wrapper scrolls sideways rather than letting a
+              long param list widen the whole panel past the screen. */}
+          <div className="-mx-1 overflow-x-auto px-1">
           <table className="w-full text-xs">
             <thead>
               <tr className="text-gray-600 border-b border-gray-800">
@@ -64,10 +66,13 @@ export default function EventsPanel() {
               </tr>
             </thead>
             <tbody>
+              {/* Keyed on the Fragment, not the inner <tr>: a row and its
+                  expanded detail row are two siblings of one event, and putting
+                  the key one level too deep left the list without a stable
+                  identity across renders. */}
               {(source.events ?? []).map((evt) => (
-                <>
+                <Fragment key={evt.id}>
                   <tr
-                    key={evt.id}
                     className={`border-b border-gray-800/50 hover:bg-gray-800/30 cursor-pointer ${
                       selection.kind === "event" && selection.id === evt.id ? "bg-blue-900/30" : ""
                     }`}
@@ -118,7 +123,7 @@ export default function EventsPanel() {
                   </tr>
                   {/* Expanded row for editing */}
                   {expandedEvent === evt.id && (
-                    <tr key={`${evt.id}-details`}>
+                    <tr>
                       <td colSpan={4} className="py-2 px-1 bg-gray-900/50">
                         <div className="space-y-2">
                           <label className="block">
@@ -177,10 +182,11 @@ export default function EventsPanel() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       ))}
 

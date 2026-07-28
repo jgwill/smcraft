@@ -153,35 +153,44 @@ export default function Toolbar() {
   };
 
   return (
-    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 border-b border-gray-800 flex-wrap">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".json,.smdf.json"
-        onChange={handleFileChange}
-        className="hidden"
-      />
+    // Two shapes from one tree. On a phone the toolbar stacks: an identity line
+    // over a horizontally-scrollable strip of controls, because fifteen buttons
+    // will not fit 390px and wrapping them costs four rows of screen. From `md`
+    // up both wrappers dissolve (`display: contents`, see globals.css) and the
+    // buttons become direct children of this flex row again — same order, same
+    // spacer, same wrap behaviour as before.
+    <div className="flex flex-col gap-1.5 px-2 py-1.5 bg-gray-900 border-b border-gray-800 md:flex-row md:flex-wrap md:items-center md:px-3">
+      <div className="toolbar-ident">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json,.smdf.json"
+          onChange={handleFileChange}
+          className="hidden"
+        />
 
-      {/* File name + bridge status */}
-      <span className="text-xs text-gray-400 mr-1">
-        {fileName ?? "untitled.smdf.json"}
-        {dirty && <span className="text-yellow-500 ml-0.5">●</span>}
-      </span>
-      {remoteStatus === "synced" && (
-        <span className="text-[10px] text-emerald-500" title="In sync with disk">⌁ synced</span>
-      )}
-      {remoteStatus === "remote-changed" && (
-        <span className="text-[10px] text-amber-400" title={remoteMessage ?? ""}>↻ remote changed</span>
-      )}
-      {remoteStatus === "error" && (
-        <span className="text-[10px] text-red-400" title={remoteMessage ?? ""}>⚠ disk error</span>
-      )}
-      {remoteStatus === "idle" && (
-        <span className="text-[10px] text-gray-600" title={remoteMessage ?? "No file bound"}>○ no disk</span>
-      )}
+        {/* File name + bridge status */}
+        <span className="text-xs text-gray-400 mr-1 truncate max-w-[50vw] md:max-w-none">
+          {fileName ?? "untitled.smdf.json"}
+          {dirty && <span className="text-yellow-500 ml-0.5">●</span>}
+        </span>
+        {remoteStatus === "synced" && (
+          <span className="text-[10px] text-emerald-500" title="In sync with disk">⌁ synced</span>
+        )}
+        {remoteStatus === "remote-changed" && (
+          <span className="text-[10px] text-amber-400" title={remoteMessage ?? ""}>↻ remote changed</span>
+        )}
+        {remoteStatus === "error" && (
+          <span className="text-[10px] text-red-400" title={remoteMessage ?? ""}>⚠ disk error</span>
+        )}
+        {remoteStatus === "idle" && (
+          <span className="text-[10px] text-gray-600" title={remoteMessage ?? "No file bound"}>○ no disk</span>
+        )}
 
-      <div className="flex-1" />
+        <div className="flex-1" />
+      </div>
 
+      <div className="toolbar-strip">
       {/* Undo/Redo */}
       <button
         onClick={undo}
@@ -254,7 +263,7 @@ export default function Toolbar() {
         <div className="flex items-center gap-1">
           <input
             autoFocus
-            className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-gray-200 w-24"
+            className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-xs text-gray-200 w-32 md:w-24"
             placeholder="State name..."
             value={newStateName}
             onChange={(e) => setNewStateName(e.target.value)}
@@ -298,6 +307,7 @@ export default function Toolbar() {
       >
         {"</>"} Code
       </button>
+      </div>
     </div>
   );
 }

@@ -26,6 +26,162 @@ body {
   @apply text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-1.5 py-0.5 rounded;
 }
 
+/* --- Mobile shell: phone-first responsive layout -------------------------- */
+
+:root {
+  /* Height of the phone-only tab dock. Declared once because two things depend
+     on agreeing about it: the dock's own height, and the padding that keeps the
+     rest of the app from hiding underneath it. */
+  --sm-dock-h: 3.5rem;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  /* This is a fixed full-screen editor — nothing is supposed to scroll at the
+     document level. Pinning it here also stops iOS rubber-banding and keeps the
+     closed bottom sheet (which parks itself one screen below the fold) from
+     growing the scrollable area. */
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Root shell. `dvh` tracks the *dynamic* viewport, so the bottom of the app no
+   longer disappears behind iOS Safari's retracting URL bar the way `100vh`
+   caused; the `vh` line above it is the fallback for engines without `dvh`. */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Phone only: hold content clear of the fixed tab dock. Zeroed at the `md`
+   breakpoint because the dock is gone there and the sidebar is a real column. */
+.dock-offset {
+  padding-bottom: calc(var(--sm-dock-h) + env(safe-area-inset-bottom));
+}
+
+.dock-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Anything pinned with `inset-x-0` is viewport-relative and so escapes the
+   shell's own horizontal safe-area padding — in landscape that means running
+   under the notch. These elements pad themselves back. */
+.safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+@media (min-width: 768px) {
+  .dock-offset {
+    padding-bottom: 0;
+  }
+}
+
+/* Presence chips ride the top-right corner. Under `viewport-fit=cover` that
+   corner can be beneath a notch or the status bar, so the offset is measured
+   from the safe area rather than the raw viewport edge. */
+.presence-dock {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 0.5rem);
+  right: calc(env(safe-area-inset-right) + 1rem);
+  z-index: 50;
+}
+
+/* The toolbar is ~15 controls wide — far past a phone. On a phone it becomes a
+   single horizontally-scrollable strip, so every control stays reachable by
+   swiping instead of overflowing off-screen or wrapping into four tall rows.
+   At `md` and up the wrapper dissolves via `display: contents`, which hands the
+   buttons back to the toolbar as direct flex children — the desktop row is
+   therefore byte-for-byte the layout it was before. The identity block plays
+   the same trick so the `flex-1` spacer keeps working in both shapes. */
+.toolbar-ident,
+.toolbar-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.toolbar-strip {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Controls in the strip keep their natural size instead of being squeezed to
+   nothing by the horizontal overflow. */
+.toolbar-strip > * {
+  flex: 0 0 auto;
+}
+
+@media (min-width: 768px) {
+  .toolbar-ident,
+  .toolbar-strip {
+    display: contents;
+  }
+}
+
+/* Touch sizing. The discriminator is `pointer: coarse`, not a width breakpoint:
+   a touch laptop gets the roomy targets it needs, and a narrow desktop window
+   keeps the dense mouse-precision layout it has today. */
+@media (pointer: coarse) {
+  .toolbar-btn,
+  .toolbar-btn-sm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    padding-inline: 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .toolbar-strip select,
+  .toolbar-strip input {
+    min-height: 2.75rem;
+  }
+
+  /* iOS zooms the entire page when a focused field is under 16px, and every
+     field in the panels is text-xs/text-sm — so each tap into one used to yank
+     the layout sideways. 16px removes the trap without touching desktop. */
+  input:not([type="checkbox"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  input[type="checkbox"] {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+
+  /* The panels are built from dense link-like controls (✕, "+ action"). This
+     gives them a real 44px target without changing their layout role — no
+     display change, so `block w-full text-left` rows stay left-aligned. */
+  .touch-targets button {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+
+  .touch-targets select,
+  .touch-targets input:not([type="checkbox"]) {
+    min-height: 2.75rem;
+  }
+
+  .touch-targets textarea {
+    min-height: 3.5rem;
+  }
+}
+
 /* --- WS7b: live Canvas animations (SVG/CSS only, no libraries) --- */
 
 /* Node bloom-in: fade + scale from ~0.92 to 1 around the node's own center. */

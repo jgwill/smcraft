@@ -10,12 +10,16 @@ import {
   zoomAt,
   zoomTo,
 } from "@miadi/stateloom-react";
+import type { Viewport } from "@miadi/stateloom-react";
 import { useDesignerStore } from "@/store/useDesignerStore";
+import type { ContextMenuState } from "@/store/useDesignerStore";
 import { useLayoutMemory } from "@/lib/layoutMemory";
 import type { StatePosition, StateDef } from "@/types/definition";
 
 interface DragState {
   name: string;
+  /** Which pointer owns this drag — a second finger must not end it. */
+  pointerId: number;
   startX: number;
   startY: number;
   origX: number;
@@ -31,9 +35,48 @@ interface PanState {
   origY: number;
 }
 
+/**
+ * Two fingers steering the view at once. Everything is measured against the
+ * frame the gesture *started* in — the distance, the midpoint, the viewport —
+ * so the transform is recomputed from scratch on every move instead of
+ * accumulating, and a pinch can never drift away from the fingers holding it.
+ */
+interface PinchState {
+  a: number;
+  b: number;
+  /** Screen distance between the fingers when the pinch began. Never zero. */
+  startDist: number;
+  /** Canvas-relative midpoint when it began — the point the zoom is anchored to. */
+  startMidX: number;
+  startMidY: number;
+  start: Viewport;
+}
+
+/** A finger resting still, on its way to becoming the context menu. */
+interface LongPressState {
+  pointerId: number;
+  x: number;
+  y: number;
+  target: ContextMenuState["target"];
+  timer: ReturnType<typeof setTimeout>;
+}
+
 /** Wheel notches arrive in three units; normalise them to pixels. */
 const WHEEL_LINE_HEIGHT = 16;
 const WHEEL_PAGE_HEIGHT = 400;
+
+/** How long a finger must rest in place before the press becomes a menu. */
+const LONG_PRESS_MS = 500;
+/**
+ * How far a finger may wander and still count as resting. It doubles as the
+ * line between a pan and a tap: a fingertip never lands perfectly still, and a
+ * one-pixel tremor must not swallow the tap that clears the selection.
+ */
+const TOUCH_SLOP_PX = 8;
+/** Screen-space cuff added around a box so a fingertip (~9mm) can find it. */
+const TOUCH_TARGET_PAD_PX = 10;
+/** Screen-space width of the invisible ribbon that catches a tap on an edge. */
+const TOUCH_EDGE_STROKE_PX = 28;
 
 function wheelPixels(delta: number, mode: number): number {
   if (mode === 1) return delta * WHEEL_LINE_HEIGHT;
@@ -81,6 +124,14 @@ export default function Canvas() {
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+  // The same truth as `drag`, readable by a handler that may run before the
+  // render carrying it — a second finger, or a lift, can arrive inside the frame
+  // the press started in, and must still know which pointer owns the box.
+  const dragRef = useRef<DragState | null>(null);
+  const applyDrag = useCallback((next: DragState | null) => {
+    dragRef.current = next;
+    setDrag(next);
+  }, []);
   const [eventPicker, setEventPicker] = useState<{ stateName: string; targetName: string; x: number; y: number } | null>(null);
 
   // Navigation. `spaceHeld` / `panning` drive the cursor (they must re-render);
@@ -92,8 +143,31 @@ export default function Canvas() {
   const [panning, setPanning] = useState(false);
   // A pan that actually moved must not end as a click that clears the selection.
   const panMovedRef = useRef(false);
-  // Whoever holds the pointer for the gesture in flight, so it can be released.
-  const captureRef = useRef<Element | null>(null);
+  // Who holds each live pointer, keyed by id, so it can be released again. A map
+  // rather than a single slot: with two fingers down, one box can be holding the
+  // first while the surface holds the second, and releasing the wrong one strands
+  // the gesture.
+  const capturesRef = useRef<Map<number, Element>>(new Map());
+
+  // Touch. Every finger currently on the canvas, in the order it landed — the
+  // map is what makes a *second* finger legible as a pinch rather than as a
+  // second, competing drag.
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<PinchState | null>(null);
+  const [pinching, setPinching] = useState(false);
+  const longPressRef = useRef<LongPressState | null>(null);
+  // A press that became a menu must not also read as a click: the shell hides
+  // the menu on any click that reaches it, closing it on the way back up.
+  const suppressClickRef = useRef(false);
+  // Coarse pointer: hit areas grow for a fingertip, and only then, so a mouse
+  // keeps the precision the visual design was drawn for. Resolved in an effect
+  // (never during render) so the server's HTML and the first client paint agree.
+  const [coarsePointer, setCoarsePointer] = useState(false);
+
+  // While the view is being steered — dragged by a finger, pinched, or panned
+  // with the middle button — the board underneath stops answering the pointer,
+  // so a box never fights the gesture that is moving the whole world.
+  const navigating = panning || pinching;
 
   // Remembered board: restore this browser's drags, then keep writing them back.
   useLayoutMemory();
@@ -103,6 +177,84 @@ export default function Canvas() {
     const rect = svgRef.current?.getBoundingClientRect();
     return { x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) };
   }, []);
+
+  /** Hand the pointer back to whoever was holding it, and forget the holder. */
+  const releaseCapture = useCallback((pointerId: number) => {
+    const held = capturesRef.current.get(pointerId) as (Element & {
+      hasPointerCapture?: (id: number) => boolean;
+      releasePointerCapture?: (id: number) => void;
+    }) | undefined;
+    capturesRef.current.delete(pointerId);
+    if (held?.hasPointerCapture?.(pointerId)) held.releasePointerCapture?.(pointerId);
+  }, []);
+
+  /** Disarm the pending menu — for one pointer, or for whichever is armed. */
+  const cancelLongPress = useCallback((pointerId?: number) => {
+    const held = longPressRef.current;
+    if (!held) return;
+    if (pointerId !== undefined && held.pointerId !== pointerId) return;
+    clearTimeout(held.timer);
+    longPressRef.current = null;
+  }, []);
+
+  /**
+   * Arm the hold that stands in for a right-click. The finger keeps whatever it
+   * already started — a drag, a pan — until the timer fires; only then does the
+   * gesture let go, so the board cannot slide out from under the menu.
+   */
+  const armLongPress = useCallback(
+    (e: React.PointerEvent, target: ContextMenuState["target"]) => {
+      if (e.pointerType !== "touch") return;
+      cancelLongPress();
+      const { pointerId, clientX: x, clientY: y } = e;
+      const timer = setTimeout(() => {
+        longPressRef.current = null;
+        applyDrag(null);
+        panRef.current = null;
+        setPanning(false);
+        // The capture stays where it is: the finger now steers nothing, but the
+        // element holding it is still guaranteed to receive the eventual lift.
+        suppressClickRef.current = true;
+        navigator.vibrate?.(10);
+        showContextMenu(x, y, target);
+      }, LONG_PRESS_MS);
+      longPressRef.current = { pointerId, x, y, target, timer };
+    },
+    [cancelLongPress, showContextMenu, applyDrag]
+  );
+
+  // A fingertip asks for room a cursor does not. Detected once, watched for
+  // change (a tablet docking to a mouse flips this), and never read in render
+  // before the effect has run — so hydration matches the server's `false`.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(pointer: coarse)");
+    const apply = () => setCoarsePointer(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // Safety net. Pointer capture makes the canvas's own `pointerup` reliable, but
+  // a gesture torn away by the OS — a call arriving, the app backgrounded — can
+  // still leave a finger recorded that is no longer on the glass. A stale entry
+  // would make the *next* single touch look like the second half of a pinch, so
+  // every pointer that ends anywhere is forgotten here too.
+  useEffect(() => {
+    const forget = (e: PointerEvent) => {
+      pointersRef.current.delete(e.pointerId);
+    };
+    window.addEventListener("pointerup", forget);
+    window.addEventListener("pointercancel", forget);
+    return () => {
+      window.removeEventListener("pointerup", forget);
+      window.removeEventListener("pointercancel", forget);
+    };
+  }, []);
+
+  // Unmounting mid-hold must not leave a timer alive to open a menu over a
+  // canvas that no longer exists.
+  useEffect(() => () => cancelLongPress(), [cancelLongPress]);
 
   // WS7b — live-animation tracking. The prev* refs are read/written ONLY inside
   // the commit effect (never during render). The rendered classes are driven by
@@ -120,6 +272,17 @@ export default function Canvas() {
   // Show only children of current navigation level (not flattened)
   const currentChildren = getCurrentChildren();
   const allEvents = definition.events.flatMap((src) => src.events ?? []);
+
+  // Touch hit areas. Both live in world units — everything inside the navigated
+  // group does — so each is a screen-pixel budget divided by the scale: the cuff
+  // around a box and the ribbon along an edge stay the same size *in the hand*
+  // whether the board is zoomed in or pushed away. Zero for a mouse, which means
+  // the extra geometry is never rendered at all and the cursor keeps hitting
+  // exactly what it is pointed at.
+  const touchPad = coarsePointer ? TOUCH_TARGET_PAD_PX / viewport.scale : 0;
+  const touchEdgeStroke = coarsePointer ? TOUCH_EDGE_STROKE_PX / viewport.scale : 0;
+  /** HUD buttons in screen space: a thumb needs the padding a cursor does not. */
+  const hudButton = coarsePointer ? "px-3 py-2" : "px-1.5 py-0.5";
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -147,12 +310,105 @@ export default function Canvas() {
     [errors]
   );
 
+  /** Begin sliding the whole board with one pointer. Shared by mouse and finger. */
+  const beginPan = useCallback((e: React.PointerEvent) => {
+    const vp = useDesignerStore.getState().viewport;
+    panRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: vp.x,
+      origY: vp.y,
+    };
+    panMovedRef.current = false;
+    setPanning(true);
+    const svg = svgRef.current;
+    if (!svg) return;
+    capturesRef.current.set(e.pointerId, svg);
+    svg.setPointerCapture(e.pointerId);
+  }, []);
+
+  /**
+   * Promote whatever is happening to a two-finger gesture. Everything the single
+   * pointer had claimed — a box mid-drag, a pan mid-slide, a hold on its way to
+   * a menu — is given up here: with both fingers on the glass the user is
+   * steering the view, not editing the machine.
+   */
+  const beginPinch = useCallback(() => {
+    const live = [...pointersRef.current.entries()];
+    if (live.length < 2) return;
+    const [[idA, a], [idB, b]] = live;
+
+    cancelLongPress();
+    applyDrag(null);
+    panRef.current = null;
+
+    // Fingers landing on the same pixel would divide by zero; a floor of one
+    // pixel makes the first frame a no-op instead of an infinity.
+    const startDist = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
+    const mid = toCanvasPoint((a.x + b.x) / 2, (a.y + b.y) / 2);
+    pinchRef.current = {
+      a: idA,
+      b: idB,
+      startDist,
+      startMidX: mid.x,
+      startMidY: mid.y,
+      start: useDesignerStore.getState().viewport,
+    };
+    // A pinch has plainly travelled; its lift is never a tap on empty space.
+    panMovedRef.current = true;
+    setPinching(true);
+
+    // A finger that arrived while the capture phase was swallowing the event was
+    // never captured by anyone. Take it on the surface so the gesture survives it
+    // sliding off the canvas; fingers already held by a box keep that holder,
+    // since their moves bubble here regardless.
+    const svg = svgRef.current;
+    if (!svg) return;
+    for (const id of [idA, idB]) {
+      if (capturesRef.current.has(id)) continue;
+      try {
+        svg.setPointerCapture(id);
+        capturesRef.current.set(id, svg);
+      } catch {
+        // The pointer ended between the event and this line. Nothing to hold.
+      }
+    }
+  }, [cancelLongPress, toCanvasPoint, applyDrag]);
+
+  /**
+   * Runs before any box or the surface sees the press, so it can count fingers
+   * that a node's `stopPropagation` would otherwise hide. Bookkeeping only —
+   * except for the one decision that has to be made this early: a second finger
+   * turns the gesture into a pinch, and nothing below may start a rival one.
+   */
+  const handlePointerDownCapture = useCallback(
+    (e: React.PointerEvent) => {
+      // The click that closes out the previous gesture has been and gone (or was
+      // never sent, as on iOS after a hold). Either way, stop swallowing.
+      suppressClickRef.current = false;
+      if (e.pointerType !== "touch") return;
+      setCoarsePointer(true);
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const count = pointersRef.current.size;
+      if (count < 2) return;
+      e.stopPropagation();
+      if (count === 2) beginPinch();
+      // A third finger is noise: recorded so its lift is accounted for, but the
+      // pinch keeps the two fingers it started with.
+    },
+    [beginPinch]
+  );
+
   const handleNodePointerDown = useCallback(
     (e: React.PointerEvent, name: string) => {
       // Middle button, or space held: this gesture belongs to the surface. Let
       // it bubble un-stopped so the pan handler below picks it up.
       if (e.button !== 0 || spaceRef.current) return;
       e.stopPropagation();
+      // A finger on a box may still be asking for the menu rather than a drag.
+      // Arm the hold either way; travel past the slop disarms it.
+      armLongPress(e, { kind: "state", id: name });
       if (drawMode === "transition") {
         if (!drawSource) {
           setDrawSource(name);
@@ -164,7 +420,7 @@ export default function Canvas() {
       }
       select("state", name);
       const pos = getPos(name);
-      setDrag({ name, startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y });
+      applyDrag({ name, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y });
       // Capture on the node's own group, so the gesture survives the pointer
       // outrunning the box or leaving the canvas. It must be *this* element and
       // not the surface: a capture retargets the click and dblclick that follow,
@@ -172,47 +428,89 @@ export default function Canvas() {
       // clearing the selection the press just made, and stealing the
       // double-click that drills into a composite.
       const node = e.currentTarget as Element;
-      captureRef.current = node;
+      capturesRef.current.set(e.pointerId, node);
       node.setPointerCapture?.(e.pointerId);
     },
-    [select, getPos, drawMode, drawSource, setDrawSource]
+    [select, getPos, drawMode, drawSource, setDrawSource, armLongPress, applyDrag]
   );
 
   const handleSurfacePointerDown = useCallback(
     (e: React.PointerEvent) => {
+      if (e.pointerType === "touch") {
+        // A phone has no middle button and no space bar, so the plainest gesture
+        // has to be the one that moves the board: one finger on bare canvas pans.
+        // No `preventDefault` — the click and double-click synthesised from this
+        // touch are what still clear the selection and drill into a composite.
+        armLongPress(e, { kind: "canvas" });
+        beginPan(e);
+        return;
+      }
       const wantsPan = e.button === 1 || (e.button === 0 && spaceRef.current);
       if (!wantsPan) return;
       // Suppresses the compatibility mouse events, and with them Chrome's
       // middle-click autoscroll.
       e.preventDefault();
-      const vp = useDesignerStore.getState().viewport;
-      panRef.current = {
-        pointerId: e.pointerId,
-        startX: e.clientX,
-        startY: e.clientY,
-        origX: vp.x,
-        origY: vp.y,
-      };
-      panMovedRef.current = false;
-      setPanning(true);
-      captureRef.current = svgRef.current;
-      svgRef.current?.setPointerCapture(e.pointerId);
+      beginPan(e);
     },
-    []
+    [armLongPress, beginPan]
   );
 
   const handleSurfacePointerMove = useCallback(
     (e: React.PointerEvent) => {
+      if (pointersRef.current.has(e.pointerId)) {
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+
+      // A hold that wanders is a drag changing its mind.
+      const hold = longPressRef.current;
+      if (hold && hold.pointerId === e.pointerId) {
+        if (Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > TOUCH_SLOP_PX) {
+          cancelLongPress(e.pointerId);
+        }
+      }
+
+      const pinch = pinchRef.current;
+      if (pinch) {
+        if (e.pointerId !== pinch.a && e.pointerId !== pinch.b) return;
+        const a = pointersRef.current.get(pinch.a);
+        const b = pointersRef.current.get(pinch.b);
+        if (!a || !b) return;
+        // Two fingers say two things at once, and the viewport has room for
+        // both. The spread says how much to magnify: scale is the starting
+        // scale times how much further apart the fingers are now. The midpoint
+        // says where: `zoomTo` re-anchors the board so the world point that sat
+        // under the *starting* midpoint is still under it after the rescale —
+        // the same invariant Ctrl+wheel uses, with the midpoint standing in for
+        // the cursor. Whatever the midpoint itself has travelled since is then
+        // a plain screen-space slide, which is exactly a pan. Both are measured
+        // from the gesture's opening frame, never from the previous move, so
+        // rounding cannot accumulate under a long pinch.
+        const dist = Math.hypot(b.x - a.x, b.y - a.y);
+        const mid = toCanvasPoint((a.x + b.x) / 2, (a.y + b.y) / 2);
+        const zoomed = zoomTo(
+          pinch.start,
+          pinch.start.scale * (dist / pinch.startDist),
+          { x: pinch.startMidX, y: pinch.startMidY }
+        );
+        setViewport(panBy(zoomed, mid.x - pinch.startMidX, mid.y - pinch.startMidY));
+        return;
+      }
+
       const pan = panRef.current;
       if (pan) {
+        if (pan.pointerId !== e.pointerId) return;
         const dx = e.clientX - pan.startX;
         const dy = e.clientY - pan.startY;
-        if (dx !== 0 || dy !== 0) panMovedRef.current = true;
+        // A mouse that moved at all was dragged. A fingertip is never that
+        // still, so a touch has to clear the slop before its lift stops
+        // counting as a tap.
+        const slop = e.pointerType === "touch" ? TOUCH_SLOP_PX : 0;
+        if (Math.abs(dx) > slop || Math.abs(dy) > slop) panMovedRef.current = true;
         const scale = useDesignerStore.getState().viewport.scale;
         setViewport({ x: pan.origX + dx, y: pan.origY + dy, scale });
         return;
       }
-      if (!drag) return;
+      if (!drag || drag.pointerId !== e.pointerId) return;
       // The pointer moves in screen pixels; the box lives in world units. At
       // scale k a screen pixel is 1/k world units, which is what keeps a
       // dragged state pinned under the cursor at any zoom. Pan cancels out of a
@@ -227,22 +525,52 @@ export default function Canvas() {
         y: Math.max(0, drag.origY + dy),
       });
     },
-    [drag, getPos, setStatePosition, setViewport]
+    [drag, getPos, setStatePosition, setViewport, cancelLongPress, toCanvasPoint]
   );
 
-  const handleSurfacePointerUp = useCallback((e: React.PointerEvent) => {
-    const held = captureRef.current as (Element & {
-      hasPointerCapture?: (id: number) => boolean;
-      releasePointerCapture?: (id: number) => void;
-    }) | null;
-    if (held?.hasPointerCapture?.(e.pointerId)) held.releasePointerCapture?.(e.pointerId);
-    captureRef.current = null;
-    if (panRef.current?.pointerId === e.pointerId) {
-      panRef.current = null;
-      setPanning(false);
-    }
-    setDrag(null);
-  }, []);
+  const handleSurfacePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      pointersRef.current.delete(e.pointerId);
+      cancelLongPress(e.pointerId);
+      releaseCapture(e.pointerId);
+
+      const pinch = pinchRef.current;
+      if (pinch && (pinch.a === e.pointerId || pinch.b === e.pointerId)) {
+        pinchRef.current = null;
+        setPinching(false);
+        // One finger lifting out of a pinch leaves the other still on the glass,
+        // and a hand that is still touching the board expects it to keep
+        // following. Re-open a pan from where that finger is *now*, against the
+        // viewport the pinch just left behind — measuring from where it first
+        // landed would snap the board across the screen.
+        const survivorId = pinch.a === e.pointerId ? pinch.b : pinch.a;
+        const survivor = pointersRef.current.get(survivorId);
+        if (survivor) {
+          const vp = useDesignerStore.getState().viewport;
+          panRef.current = {
+            pointerId: survivorId,
+            startX: survivor.x,
+            startY: survivor.y,
+            origX: vp.x,
+            origY: vp.y,
+          };
+          panMovedRef.current = true;
+          setPanning(true);
+        }
+      }
+
+      if (panRef.current?.pointerId === e.pointerId) panRef.current = null;
+      if (dragRef.current?.pointerId === e.pointerId) applyDrag(null);
+
+      // Sweep. Whether the view is being steered is asked of the refs, not of
+      // which pointer just ended — a finger the OS reclaimed, or one whose lift
+      // never reached us, would otherwise leave the board inert for good, every
+      // box deaf to the pointer with nothing left to explain why.
+      if (!panRef.current) setPanning(false);
+      if (!pinchRef.current) setPinching(false);
+    },
+    [cancelLongPress, releaseCapture, applyDrag]
+  );
 
   // Wheel: pan by default, zoom under Ctrl/⌘ (which is also how a browser
   // delivers a trackpad pinch). Registered natively with `passive: false` —
@@ -464,8 +792,21 @@ export default function Canvas() {
         className="w-full h-full bg-gray-950"
         style={{
           cursor: panning ? "grabbing" : spaceHeld ? "grab" : undefined,
+          // The browser's own gestures are all suppressed here, so every one of
+          // them has to be answered below: one finger pans, two pinch, and a
+          // held finger opens the menu.
           touchAction: "none",
+          // On a touch device a resting finger would otherwise raise the system
+          // selection callout on top of our own held-press menu.
+          ...(coarsePointer
+            ? {
+                WebkitUserSelect: "none" as const,
+                userSelect: "none" as const,
+                WebkitTouchCallout: "none" as const,
+              }
+            : {}),
         }}
+        onPointerDownCapture={handlePointerDownCapture}
         onPointerDown={handleSurfacePointerDown}
         onPointerMove={handleSurfacePointerMove}
         onPointerUp={handleSurfacePointerUp}
@@ -473,6 +814,14 @@ export default function Canvas() {
         // Middle-click on Linux/Windows would otherwise paste or autoscroll.
         onAuxClick={(e) => e.preventDefault()}
         onClick={(e) => {
+          // A hold that opened the menu still ends in a click on most touch
+          // browsers. It must not reach the shell, which closes the menu on any
+          // click that arrives — the menu would flash and vanish on the lift.
+          if (suppressClickRef.current) {
+            suppressClickRef.current = false;
+            e.stopPropagation();
+            return;
+          }
           // A pan that travelled is not a click on empty space.
           if (panMovedRef.current) {
             panMovedRef.current = false;
@@ -503,11 +852,13 @@ export default function Canvas() {
 
         {/* The navigated world. One transform on one group: every arrow, box and
             label below inherits the pan and the zoom without knowing they exist.
-            While a pan is in flight the content stops answering the pointer, so
-            the grabbing cursor is not fought over by the boxes underneath. */}
+            While the view is being steered — panned or pinched — the content
+            stops answering the pointer, so the grabbing cursor is not fought
+            over by the boxes underneath, and a finger that drifts onto a box
+            mid-pinch does not start dragging it. */}
         <g
           transform={viewportTransform(viewport)}
-          style={panning ? { pointerEvents: "none" } : undefined}
+          style={navigating ? { pointerEvents: "none" } : undefined}
         >
 
         {/* Transition arrows */}
@@ -523,11 +874,33 @@ export default function Canvas() {
 
           // WS7b — a new edge (flagged in the commit effect) draws itself on.
           const edgeEntering = enteringEdges.has(`${arrow.stateName}:${arrow.index}`);
+          const edgeId = `${arrow.stateName}:${arrow.index}`;
+          const curve = `M ${fx} ${fy} C ${fx} ${midY}, ${tx} ${midY}, ${tx} ${ty}`;
+          const labelH = arrow.condition ? 28 : 18;
 
           return (
             <g key={`arrow-${i}`}>
+              {/* A 1.5px thread is a fair target for a cursor and none at all for
+                  a fingertip. This traces the same curve with a wide invisible
+                  stroke underneath it — same selection, same path, just a band
+                  a finger can actually land on. `pointerEvents="stroke"` hits
+                  the perimeter geometry regardless of what the paint does. */}
+              {coarsePointer && (
+                <path
+                  d={curve}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth={touchEdgeStroke}
+                  strokeLinecap="round"
+                  pointerEvents="stroke"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    select("transition", edgeId);
+                  }}
+                />
+              )}
               <path
-                d={`M ${fx} ${fy} C ${fx} ${midY}, ${tx} ${midY}, ${tx} ${ty}`}
+                d={curve}
                 fill="none"
                 pathLength={1}
                 stroke={isSelected ? "#3b82f6" : "#94a3b8"}
@@ -547,11 +920,23 @@ export default function Canvas() {
                   select("transition", `${arrow.stateName}:${arrow.index}`);
                 }}
               >
+                {/* The same cuff the boxes get, so the event chip is reachable
+                    without the label itself being redrawn any larger. */}
+                {coarsePointer && (
+                  <rect
+                    x={(fx + tx) / 2 - 40 - touchPad}
+                    y={midY - 18 - touchPad}
+                    width={80 + touchPad * 2}
+                    height={labelH + touchPad * 2}
+                    fill="transparent"
+                    pointerEvents="all"
+                  />
+                )}
                 <rect
                   x={(fx + tx) / 2 - 40}
                   y={midY - 18}
                   width={80}
-                  height={arrow.condition ? 28 : 18}
+                  height={labelH}
                   rx={4}
                   fill={isSelected ? "#1e3a5f" : "#1e293b"}
                   stroke={isSelected ? "#3b82f6" : "#334155"}
@@ -622,6 +1007,22 @@ export default function Canvas() {
                   : "cursor-grab active:cursor-grabbing"
               }
             >
+              {/* An invisible cuff, drawn first so it sits behind everything and
+                  changes nothing you can see. It widens the box's answer to a
+                  fingertip without widening the box. Outside the entering group
+                  on purpose: the bloom animation is a visual, and the target
+                  must be live from the first frame. */}
+              {coarsePointer && (
+                <rect
+                  x={pos.x - touchPad}
+                  y={pos.y - touchPad}
+                  width={pos.width + touchPad * 2}
+                  height={pos.height + touchPad * 2}
+                  rx={12}
+                  fill="transparent"
+                  pointerEvents="all"
+                />
+              )}
               <g className={entering ? "sm-node-enter" : undefined}>
               <rect
                 x={pos.x}
@@ -739,31 +1140,34 @@ export default function Canvas() {
         {/* Empty state message */}
         {currentChildren.length === 0 && (
           <text x="50%" y="50%" fill="#475569" fontSize={16} textAnchor="middle">
-            Right-click to add a state, or load a .smdf.json file
+            {coarsePointer
+              ? "Press and hold to add a state, or load a .smdf.json file"
+              : "Right-click to add a state, or load a .smdf.json file"}
           </text>
         )}
       </svg>
 
-      {/* Navigation HUD — screen space, never transformed. */}
+      {/* Navigation HUD — screen space, never transformed. The buttons grow for
+          a fingertip and only then; a cursor keeps the compact bar. */}
       <div className="absolute bottom-3 left-3 z-10 flex items-center gap-0.5 bg-gray-900/90 border border-gray-700 rounded-lg px-1.5 py-1 text-xs text-gray-400 select-none">
         <button
-          className="px-1.5 py-0.5 rounded hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40 disabled:hover:bg-transparent"
-          title="Zoom out (Ctrl + wheel down)"
+          className={`${hudButton} rounded hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40 disabled:hover:bg-transparent`}
+          title="Zoom out (Ctrl + wheel down, or pinch in)"
           disabled={viewport.scale <= VIEWPORT_LIMITS.min}
           onClick={() => zoomFromCentre(1 / 1.25)}
         >
           −
         </button>
         <button
-          className="px-1.5 py-0.5 rounded hover:bg-gray-800 hover:text-gray-200 tabular-nums min-w-[3.25rem]"
+          className={`${hudButton} rounded hover:bg-gray-800 hover:text-gray-200 tabular-nums min-w-[3.25rem]`}
           title="Reset zoom to 100%"
           onClick={resetZoom}
         >
           {Math.round(viewport.scale * 100)}%
         </button>
         <button
-          className="px-1.5 py-0.5 rounded hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40 disabled:hover:bg-transparent"
-          title="Zoom in (Ctrl + wheel up)"
+          className={`${hudButton} rounded hover:bg-gray-800 hover:text-gray-200 disabled:opacity-40 disabled:hover:bg-transparent`}
+          title="Zoom in (Ctrl + wheel up, or pinch out)"
           disabled={viewport.scale >= VIEWPORT_LIMITS.max}
           onClick={() => zoomFromCentre(1.25)}
         >
@@ -771,7 +1175,7 @@ export default function Canvas() {
         </button>
         <span className="text-gray-700 px-0.5">|</span>
         <button
-          className="px-1.5 py-0.5 rounded hover:bg-gray-800 hover:text-gray-200"
+          className={`${hudButton} rounded hover:bg-gray-800 hover:text-gray-200`}
           title="Fit the whole machine in view"
           onClick={fitToView}
         >
@@ -780,9 +1184,21 @@ export default function Canvas() {
         <span className="text-gray-700 px-0.5">|</span>
         <span
           className="px-1 text-[10px] text-gray-600"
-          title="Wheel scrolls · Shift+wheel scrolls sideways · Ctrl+wheel zooms at the cursor · middle-drag or Space+drag pans"
+          title={
+            coarsePointer
+              ? "Drag to pan · pinch with two fingers to zoom · press and hold for the menu · double-tap a composite to enter it"
+              : "Wheel scrolls · Shift+wheel scrolls sideways · Ctrl+wheel zooms at the cursor · middle-drag or Space+drag pans"
+          }
         >
-          {panning ? "panning" : spaceHeld ? "space to pan" : "wheel · ⌃wheel · space"}
+          {pinching
+            ? "pinching"
+            : panning
+            ? "panning"
+            : coarsePointer
+            ? "drag · pinch · hold"
+            : spaceHeld
+            ? "space to pan"
+            : "wheel · ⌃wheel · space"}
         </span>
       </div>
 

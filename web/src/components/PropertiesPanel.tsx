@@ -83,7 +83,10 @@ export default function PropertiesPanel() {
     const exitActions = state.onExit?.actions ?? [];
 
     return (
-      <div className="p-3 space-y-3 text-sm overflow-y-auto max-h-[calc(100vh-160px)]">
+      // The inner scroller is desktop-only now. Inside the phone sheet its
+      // `100vh - 160px` cap is a lie about the available height, and nesting a
+      // second scroll region inside the sheet's own made the panel feel stuck.
+      <div className="p-3 space-y-3 text-sm md:overflow-y-auto md:max-h-[calc(100vh-160px)]">
         <h3 className="text-xs font-semibold text-gray-400">State: {state.name}</h3>
         <label className="block">
           <span className="text-xs text-gray-500">Name</span>
