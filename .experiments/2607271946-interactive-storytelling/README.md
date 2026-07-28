@@ -136,9 +136,11 @@ the durable truth. Two candidate resolutions, not chosen:
 |---|---|
 | `before.smdf.json` | `Film::PostProduction`, 9 states / 12 events — pre-upgrade |
 | `after.smdf.json` | `Film::InteractiveProduction`, 11 states / 15 events — iteration 1 |
-| `after-2.smdf.json` | `miadi.chronicle::InteractiveProduction`, 13 states / 19 events — iteration 2, current |
+| `after-2.smdf.json` | `miadi.chronicle::InteractiveProduction`, 13 states / 19 events — iteration 2 |
+| `after-3.smdf.json` | `miadi.chronicle::InteractiveProduction`, 14 states / 21 events — iteration 3, current |
 | `agent-report.md` | The sub-agent's verbatim advisory (agent `a0f0e9ee8811b00a2`, resumable) |
 | `iteration-2.md` | **The chronicle becomes the source** — `Composition`→`Gathering`, `Chronicle` + `Manuscript` added, land rewired |
+| `iteration-3.md` | **The word gets its place back** — `MusicalComposition` added at the songwriting bench; package rename proposed, not done |
 | `README.md` | This — the ask, the consensus ledger, the diff, the open questions |
 
 > **Iteration 2 supersedes parts of this document.** `Composition` was rejected by
