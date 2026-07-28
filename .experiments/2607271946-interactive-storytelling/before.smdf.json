@@ -1,8 +1,8 @@
 {
   "stateMachine": {
     "settings": {
-      "namespace": "miadi.chronicle",
-      "name": "InteractiveProduction",
+      "namespace": "Film",
+      "name": "PostProduction",
       "asynchronous": false
     },
     "events": [
@@ -10,28 +10,12 @@
         "name": "Internal",
         "events": [
           {
-            "id": "TRANSCRIBED",
-            "description": "Voice becomes text — the gathering is legible and can take a number"
-          },
-          {
-            "id": "EPISODE_NUMBERED",
-            "description": "Another episode takes its number — the memory lengthens"
-          },
-          {
-            "id": "MANUSCRIPT_CALLS",
-            "description": "The episodes have enough weight to hold covers — the chronicle turns toward a book"
-          },
-          {
-            "id": "SCREEN_CALLS",
-            "description": "The episodes ask to be seen, not only read — the chronicle turns toward a film"
-          },
-          {
-            "id": "BOOK_BOUND",
-            "description": "Chapters set and bound — the manuscript becomes a delivered book"
+            "id": "MEDIA_VERIFIED",
+            "description": "Footage and audio checksummed, proxies generated — editorial can begin"
           },
           {
             "id": "SCENES_ASSEMBLED",
-            "description": "Scenes hang on the spine in story order"
+            "description": "All scenes laid in script order from selects"
           },
           {
             "id": "CUT_READY",
@@ -71,19 +55,7 @@
           },
           {
             "id": "KNOWLEDGE_RECEIVED",
-            "description": "What presence on the land taught returns as a new gathering, not as a note"
-          },
-          {
-            "id": "LISTENER_ARRIVES",
-            "description": "Someone presses play — the work finds an audience"
-          },
-          {
-            "id": "PASSAGE_TURNS",
-            "description": "The listener moves on — the work advances, the story holds"
-          },
-          {
-            "id": "AUDIENCE_FORKS",
-            "description": "A listener leaves the master line to author their own narrative"
+            "description": "What presence on the land taught returns as feedback into the cut"
           }
         ]
       }
@@ -92,59 +64,26 @@
       "name": "Root",
       "states": [
         {
-          "name": "Gathering",
+          "name": "Ingest",
           "kind": "normal",
-          "description": "On the land — voice recorded and transcribed where the knowledge lives; the raw material of an episode",
+          "description": "Dailies arrive — media managed, checksummed, proxies cut",
           "transitions": [
             {
-              "event": "TRANSCRIBED",
-              "nextState": "Chronicle",
-              "description": "Voice legible as text — it can now take a number"
+              "event": "MEDIA_VERIFIED",
+              "nextState": "Assembly",
+              "description": "Media safe on the shelf — editorial begins"
             }
           ]
         },
         {
-          "name": "Chronicle",
+          "name": "Assembly",
           "kind": "normal",
-          "description": "Episodic memory — each gathering takes its number and its place in the sequence; the chronicle lengthens and ripens",
-          "transitions": [
-            {
-              "event": "EPISODE_NUMBERED",
-              "description": "INTERNAL — the chronicle grows by one episode and stays itself"
-            },
-            {
-              "event": "MANUSCRIPT_CALLS",
-              "nextState": "Manuscript",
-              "description": "BRANCH — the episodes ripen toward a book"
-            },
-            {
-              "event": "SCREEN_CALLS",
-              "nextState": "StorySpine",
-              "description": "BRANCH — the episodes ripen toward a film"
-            }
-          ]
-        },
-        {
-          "name": "Manuscript",
-          "kind": "normal",
-          "description": "Episodes gathered into chapters — the chronicle takes the shape of a book",
-          "transitions": [
-            {
-              "event": "BOOK_BOUND",
-              "nextState": "Released",
-              "description": "Chapters set and bound — the book is delivered"
-            }
-          ]
-        },
-        {
-          "name": "StorySpine",
-          "kind": "normal",
-          "description": "The thematic spine every rib attaches to and every fork branches from — scenes laid in story order",
+          "description": "Editor lays scenes in script order from selects",
           "transitions": [
             {
               "event": "SCENES_ASSEMBLED",
               "nextState": "RoughCut",
-              "description": "Spine holds — refine into a full cut"
+              "description": "Scene order holds — refine into a full cut"
             }
           ]
         },
@@ -167,8 +106,8 @@
           "transitions": [
             {
               "event": "CHANGES_REQUESTED",
-              "nextState": "StorySpine",
-              "description": "LOOP — notes go back to the spine"
+              "nextState": "Assembly",
+              "description": "LOOP — notes go back to the editing bench"
             },
             {
               "event": "CUT_APPROVED",
@@ -197,7 +136,7 @@
         {
           "name": "SoundMix",
           "kind": "normal",
-          "description": "Dialogue, music and effects mixed against the graded picture — where musical composition meets the film",
+          "description": "Dialogue, music and effects mixed against the graded picture",
           "transitions": [
             {
               "event": "MIX_LOCKED",
@@ -230,31 +169,8 @@
         },
         {
           "name": "Released",
-          "kind": "normal",
-          "description": "Delivered, as book or as film — no longer an ending, but the door an audience walks in through",
-          "transitions": [
-            {
-              "event": "LISTENER_ARRIVES",
-              "nextState": "Playback",
-              "description": "ENTRY — someone presses play and the traversal begins"
-            }
-          ]
-        },
-        {
-          "name": "Playback",
-          "kind": "normal",
-          "description": "The audience is inside the work — listening, reading, moving through it in time",
-          "transitions": [
-            {
-              "event": "PASSAGE_TURNS",
-              "description": "INTERNAL — the work advances, the story holds its shape"
-            },
-            {
-              "event": "AUDIENCE_FORKS",
-              "nextState": "StorySpine",
-              "description": "FORK — the listener becomes an author and comes home to the spine"
-            }
-          ]
+          "kind": "final",
+          "description": "Master delivered — the film is out in the world"
         },
         {
           "name": "OnTheLand",
@@ -263,8 +179,8 @@
           "transitions": [
             {
               "event": "KNOWLEDGE_RECEIVED",
-              "nextState": "Gathering",
-              "description": "LOOP — the land's teaching re-enters as a new gathering and earns its own episode number"
+              "nextState": "Assembly",
+              "description": "LOOP — land-given knowledge feeds back into editorial as lived feedback"
             }
           ]
         }
