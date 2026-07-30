@@ -64,19 +64,43 @@ quests in EAST (`'Vision quests'`, opening ceremonies). Both fit.
 Left honestly unsettled rather than forced. Someone who knows should decide —
 this is not a question a code reading can answer.
 
-## 5. `JGWILL.md` and `ontology-core` disagree about the wheel
+## 5. ~~`JGWILL.md` and `ontology-core` disagree about the wheel~~ — RESOLVED 2026-07-30
 
-- `JGWILL.md`: SOUTH = specification/growth, WEST = implementation/reflection.
-- `ontology-core`: SOUTH = embodied making and land-based learning, WEST =
-  *Epangishmok*, truth and planning, talking circles.
+**I was wrong about this, and the correction is worth keeping visible.**
 
-Guillaume's spoken order (*intentions → planning → implementation → north
-practices*) matches `JGWILL.md`. The diagram follows `ontology-core`, on the
-grounds that it is the executable source of truth and that grading and mixing are
-physical making, not reflection.
+I claimed the workspace taught two incompatible wheels and that one document
+needed correcting. A research pass found that `ontology-core` carries **both
+altitudes in one file** (`src/ontology-core/src/constants.ts`):
 
-**One of these two documents should be corrected.** Right now the workspace
-teaches two incompatible wheels.
+- `DIRECTIONS[]` — Ojibwe names, seasons, medicines, `lifeStage`, `ages`,
+  `teachings`, `practices`. `west` = *Epangishmok*, `lifeStage: 'Truth & Planning'`.
+- `DIRECTION_INFO` — `focus` + `guidance` per direction. `west:
+  'Implementation, creation, manifestation'`, `north: 'Reflection, integration,
+  wisdom'`.
+
+**`DIRECTION_INFO` already agrees with `JGWILL.md` verbatim on west.** My original
+claim rested on a partial read that saw only `DIRECTIONS[]`. There was no
+contradiction between the two documents — there were two vocabularies at two
+altitudes, and the actual defect was that **neither named the other.**
+
+Fixed by adding a routing section to `JGWILL.md` (*"🧭 Which Wheel Governs Which
+Artefact"*) and a pointer in `medicine-wheel/rispecs/ontology-core.spec.md`. The
+rule: naming a teaching, a medicine, or a life stage → `DIRECTIONS[]`; orienting
+a development session → `DIRECTION_INFO`.
+
+**The diagram's direction annotations are unaffected** — they name teachings and
+practices, which is `DIRECTIONS[]`' altitude, which is what they cite.
+
+*What is genuinely open, and is not an engineer's to settle:*
+`narrative-engine/src/cadence.ts` places phase `integrating` on **west** while
+`DIRECTION_INFO.north` names integration. Tracked upstream as
+`jgwill/medicine-wheel#113`, held for a knowledge holder. Note also that
+`narrative-engine` ships `enforceDirectionOrder: false` — the sequence advises,
+it does not police.
+
+Also unreconciled by design: `/home/mia/workspace/MIA.md` puts implementation at
+**North**, a fourth mapping. Sovereign territory under `JGWILL.md`'s Import
+Protocol — left alone deliberately.
 
 ## 6. A community *requirement* is not a community *question*
 
