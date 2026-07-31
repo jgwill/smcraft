@@ -14,6 +14,7 @@ import type { Viewport } from "@miadi/stateloom-react";
 import { useDesignerStore } from "@/store/useDesignerStore";
 import type { ContextMenuState } from "@/store/useDesignerStore";
 import { CANVAS_PINCH_OWNER } from "@/lib/gestureOwner";
+import { CANVAS_SVG_ID } from "@/lib/exportImage";
 import { useLayoutMemory } from "@/lib/layoutMemory";
 import type { StatePosition, StateDef } from "@/types/definition";
 
@@ -806,6 +807,9 @@ export default function Canvas() {
       )}
       <svg
         ref={svgRef}
+        // Named so the export can find the board without a ref threaded through
+        // the toolbar — the picture it writes is this element, serialized.
+        id={CANVAS_SVG_ID}
         className="w-full h-full bg-gray-950"
         style={{
           cursor: panning ? "grabbing" : spaceHeld ? "grab" : undefined,

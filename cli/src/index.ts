@@ -21,6 +21,7 @@ import {
 import { watchCommand } from "./commands/watch.js";
 import { serveCommand } from "./commands/serve.js";
 import { openCommand } from "./commands/open.js";
+import { renderCommand } from "./commands/render.js";
 import { presenceCommand } from "./commands/presence.js";
 
 const program = new Command();
@@ -105,6 +106,30 @@ program
     const c = ctx();
     await watchCommand({ doc: c.doc, bridgeUrl: c.bridgeUrl, as: opts.as });
   });
+
+program
+  .command("render")
+  .description("draw the project file as an image and print where it landed")
+  .option("--as <format>", "svg | png | mermaid | ascii", "svg")
+  .option("--out <path>", "output file, or '-' for stdout (text formats only)")
+  .option("--scale <n>", "pixel multiplier for png (default 2)", parseFloat)
+  .option("--theme <theme>", "dark | light", "dark")
+  .option("--title <text>", "caption above the board; empty string draws none")
+  .option("--stamp", "name the file [ep252--]<Machine>--<yyMMddHHmmss>.<ext> instead of overwriting")
+  .option("--open", "open the rendered file in the platform viewer")
+  .action(
+    async (opts: {
+      as?: string;
+      out?: string;
+      scale?: number;
+      theme?: string;
+      title?: string;
+      open?: boolean;
+      stamp?: boolean;
+    }) => {
+      await renderCommand({ ...opts, doc: resolveDocId(program.opts().doc) });
+    }
+  );
 
 program
   .command("open")

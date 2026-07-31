@@ -48,6 +48,14 @@ interface DesignerState {
    */
   viewport: Viewport;
   fileName: string | null;
+  /**
+   * Absolute path of the project document, as the file API resolves it.
+   *
+   * The basename is already in `fileName`; the whole path is what tells an
+   * export which chronicle episode this board belongs to. Learned once from
+   * `/api/file` by whichever provider mounts first, and null until then.
+   */
+  docPath: string | null;
   dirty: boolean;
 
   // Bridge / disk sync
@@ -170,6 +178,7 @@ interface DesignerState {
   applyRemote: (json: string, mtime: number, fileName?: string) => void;
   setRemoteStatus: (status: DesignerState["remoteStatus"], message?: string | null) => void;
   setRemoteMtime: (mtime: number) => void;
+  setDocPath: (path: string | null) => void;
 
   // Real-time bridge (WS7a)
   enterState: (name: string) => void;
@@ -346,6 +355,7 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   layout: autoLayout(createEmptyDefinition(), createDefaultLayout()),
   viewport: { ...IDENTITY_VIEWPORT },
   fileName: null,
+  docPath: null,
   dirty: false,
   remoteMtime: null,
   remoteStatus: "idle",
@@ -728,6 +738,7 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
 
   setRemoteStatus: (status, message = null) => set({ remoteStatus: status, remoteMessage: message }),
   setRemoteMtime: (mtime) => set({ remoteMtime: mtime }),
+  setDocPath: (path) => set({ docPath: path || null }),
 
   enterState: (name) => {
     const cur = get().activeStates;

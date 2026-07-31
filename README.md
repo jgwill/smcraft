@@ -88,6 +88,40 @@ The MCP server (`mcp/`, published as `@miadi/stateloom-mcp`; the former
 mid-session — disk target and live bridge room both re-point (rooms are keyed by
 absolute path). Full contract in `rispecs/73-mcp-server.spec.md` ("Path Power").
 
+### Rendering a diagram
+
+Three surfaces draw the same board, so a machine can be looked at from wherever
+the work is happening:
+
+```bash
+smcx render --as png --scale 2 --open   # → /path/to/statemachine.png
+smcx render --as svg                    # needs no rasterizer at all
+smcx render --as mermaid --out -        # to stdout, for a README
+smcx render --as png --stamp            # → ep252--Film--260730175243.png
+```
+
+- **CLI** — `smcx render` reads the durable `.smdf.json` straight off disk (no
+  hub, no browser, no agent required) and prints the absolute path it wrote.
+  `png` goes through whichever rasterizer the host has — librsvg, Inkscape,
+  ImageMagick or headless Chrome, tried in that order; `svg` needs none.
+- **MCP** — `render_diagram` writes the same file and hands the picture back
+  inside the tool result, so an agent can see what it just designed. Same
+  formats, plus `stamp: true`.
+- **Web designer** — the format picker beside 📥 exports as PNG, JPEG, SVG,
+  Mermaid (`.mmd`) or Markdown (`.md`, the same graph inside a ```` ```mermaid ````
+  fence). The picture formats take the canvas as it stands, hand-dragged boxes
+  included; the two text formats come from the definition, since mermaid
+  describes a graph and has no placement to carry.
+
+The CLI and MCP derive their layout with the same `autoLayout` behind ⤢ Arrange,
+so all three agree on where the boxes sit.
+
+**Export names.** A browser download always, and `--stamp` / `stamp: true` on
+demand, produce `[ep252--]<Machine>--<yyMMddHHmmss>.<ext>` — the chronicle
+episode when the document lives under one, the machine's own name, and a stamp
+to the second so the afternoon's second export never lands on the first. Built
+in `bridge-protocol/src/exportName.ts`, so every surface names files alike.
+
 miadi-chronicle episodes host their machines at
 `<episode>/diagrams/<name>.smdf.json` (first proven inhabitant: ep103's
 `film-preprod`; ep090 predates the convention with six machines under

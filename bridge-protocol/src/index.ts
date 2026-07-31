@@ -18,3 +18,9 @@ export {
   collectEventIds,
   buildParentMap,
 } from "./tree.js";
+export { autoLayout, AUTO_LAYOUT_DEFAULTS } from "./autoLayout.js";
+export type { AutoLayoutOptions, LayoutBox } from "./autoLayout.js";
+export { renderMermaid } from "./render/mermaid.js";
+export { renderAscii } from "./render/ascii.js";
+export { diagramFileName, timeStamp, episodeOf } from "./exportName.js";
+export type { DiagramNameInput } from "./exportName.js";

@@ -70,6 +70,7 @@ Validation rules: V001-V014 (unique names, valid references, final state constra
 ### Action Tools
 - `validate_definition` — Run V001-V014 validation rules
 - `generate_code` — Generate Python or TypeScript code (language)
+- `render_diagram` — Draw the machine as a picture on disk and return the path, with the image inline for png (format?: png|svg|mermaid|ascii, path?, scale?, theme?, stamp?, open?). `stamp: true` names it `[ep252--]<Machine>--<yyMMddHHmmss>.<ext>` instead of overwriting.
 
 ## Runtime Engine
 

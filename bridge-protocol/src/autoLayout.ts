@@ -36,8 +36,14 @@
  * The result is a flat `Record<stateName, box>` — the same shape as the web
  * designer's `layout.positions`, so it drops straight into the store and can be
  * reused by any other renderer (forgewright included).
+ *
+ * It lives in the protocol — not in the React binding where it was first
+ * written — because the arrangement is not a browser concern: `smcx render` and
+ * the MCP server draw the same boxes headlessly, and both already depend on
+ * this package. `@miadi/stateloom-react` re-exports it, so the web imports it
+ * from exactly where it always did.
  */
-import type { StateDef, StateMachineDefinition } from "@miadi/stateloom-protocol";
+import type { StateDef, StateMachineDefinition } from "./definition.js";
 
 export interface LayoutBox {
   x: number;

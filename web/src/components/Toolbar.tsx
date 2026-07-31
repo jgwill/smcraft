@@ -2,11 +2,18 @@
 
 import { useRef, useState } from "react";
 import { useDesignerStore } from "@/store/useDesignerStore";
+import {
+  downloadCanvas,
+  EXPORT_FORMATS,
+  FORMAT_LABEL,
+  type ExportFormat,
+} from "@/lib/exportImage";
 import type { StateDef } from "@/types/definition";
 
 export default function Toolbar() {
   const definition = useDesignerStore((s) => s.definition);
   const fileName = useDesignerStore((s) => s.fileName);
+  const docPath = useDesignerStore((s) => s.docPath);
   const dirty = useDesignerStore((s) => s.dirty);
   const loadFromJson = useDesignerStore((s) => s.loadFromJson);
   const exportJson = useDesignerStore((s) => s.exportJson);
@@ -33,6 +40,10 @@ export default function Toolbar() {
   const [addingState, setAddingState] = useState(false);
   const [newStateName, setNewStateName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [imageFormat, setImageFormat] = useState<ExportFormat>("png");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exported, setExported] = useState<string | null>(null);
 
   const handleOpen = () => fileInputRef.current?.click();
 
@@ -82,6 +93,24 @@ export default function Toolbar() {
     a.download = fileName ?? "statemachine.smdf.json";
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  // The board as a file. For the picture formats, whatever is on the canvas is
+  // what gets written — hand-dragged boxes included — so it matches the screen
+  // it came from; mermaid and markdown come from the definition, which is all a
+  // graph description can carry. The name it lands under is worth showing,
+  // because it carries the episode, the machine and the minute.
+  const handleExportImage = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const name = await downloadCanvas(imageFormat, { definition, docPath, fileName });
+      setExported(name);
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleReloadFromDisk = async () => {
@@ -255,6 +284,38 @@ export default function Toolbar() {
       <button onClick={handleDownload} className="toolbar-btn" title="Download as file">
         📥
       </button>
+
+      {/* Export the board — pictures from the canvas as it stands, mermaid and
+          markdown from the definition. */}
+      <select
+        value={imageFormat}
+        onChange={(e) => {
+          setImageFormat(e.target.value as ExportFormat);
+          setExported(null);
+          setExportError(null);
+        }}
+        className="bg-gray-800 border border-gray-700 rounded text-xs text-gray-300 px-1 py-0.5"
+        title="Export format"
+      >
+        {EXPORT_FORMATS.map((f) => (
+          <option key={f} value={f}>
+            {FORMAT_LABEL[f]}
+          </option>
+        ))}
+      </select>
+      <button
+        onClick={handleExportImage}
+        disabled={exporting}
+        className={`toolbar-btn disabled:opacity-40 ${exportError ? "!text-red-400" : ""}`}
+        title={exportError ?? `Export the board as ${FORMAT_LABEL[imageFormat]}`}
+      >
+        {exporting ? "…" : "🖼 Export"}
+      </button>
+      {exported && !exportError && (
+        <span className="text-[10px] text-emerald-500 truncate max-w-[40vw] md:max-w-[16rem]" title={exported}>
+          ⤓ {exported}
+        </span>
+      )}
 
       <div className="w-px h-4 bg-gray-700" />
 

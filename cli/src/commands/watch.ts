@@ -7,11 +7,14 @@
  * set, and each change clears the screen and reprints the chosen renderer. Runs
  * until SIGINT.
  */
-import { applyPatchOps, type StateMachineDefinition } from "@miadi/stateloom-protocol";
+import {
+  applyPatchOps,
+  renderAscii,
+  renderMermaid,
+  type StateMachineDefinition,
+} from "@miadi/stateloom-protocol";
 import { createBridgeClient } from "@miadi/stateloom-client";
 import { EMPTY_DEF } from "../mutate.js";
-import { renderAscii } from "../render/ascii.js";
-import { renderMermaid } from "../render/mermaid.js";
 
 export interface WatchOpts {
   doc: string;

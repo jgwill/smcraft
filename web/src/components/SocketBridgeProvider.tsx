@@ -50,6 +50,8 @@ export default function SocketBridgeProvider() {
         // Connect anyway; the hub keys the doc by whatever id we send.
       }
       if (cancelled) return;
+      // The same path an export names its file after.
+      if (docId) useDesignerStore.getState().setDocPath(docId);
 
       session = createBridgeSession({
         url,

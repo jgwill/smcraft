@@ -24,6 +24,8 @@ export default function BridgeProvider() {
     (async () => {
       const data = await fetchFile();
       if (cancelled) return;
+      // The whole path, not just the basename: an export reads the episode off it.
+      if (data?.path) useDesignerStore.getState().setDocPath(data.path);
       if (data?.exists && data.content) {
         applyRemote(data.content, data.mtime, data.path.split("/").pop());
       } else {

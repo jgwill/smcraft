@@ -13,6 +13,7 @@
  *   - remove_state: Remove a state from the definition
  *   - validate_definition: Validate the current definition
  *   - generate_code: Generate Python or TypeScript code
+ *   - render_diagram: Draw the machine as an image on disk and return it
  *   - get_definition: Get the current definition as JSON
  *   - load_definition: Load a definition from JSON
  *   - list_states: List all states in the current definition
@@ -30,12 +31,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { execFileSync } from "child_process";
+import { execFileSync, spawn } from "child_process";
 import { writeFileSync, readFileSync, mkdtempSync, rmSync, existsSync, statSync } from "fs";
 import { join, resolve } from "path";
 import { tmpdir } from "os";
 import { createBridgeClient, type BridgeClient } from "@miadi/stateloom-client";
 import { envAlias, type PatchOp, type StateMachineDefinition } from "@miadi/stateloom-protocol";
+import { renderDiagramToFile, defaultOutputPath } from "@miadi/stateloom-cli/render";
 import { resolveProjectSwitch } from "./projectSwitch.js";
 
 // STATELOOM_* read first, SMCRAFT_* legacy twin honored — the live MCP
@@ -1021,6 +1023,106 @@ server.tool(
       return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
     const md = generateRispec(def, intent);
     return { content: [{ type: "text", text: md }] };
+  }
+);
+
+/**
+ * How large a PNG may be and still ride back inside the tool result. Past this
+ * the agent gets the path alone — a multi-megabyte base64 blob would crowd out
+ * the conversation it was meant to illustrate.
+ */
+const INLINE_IMAGE_LIMIT = 1_500_000;
+
+/** Hand a rendered file to the platform viewer. Never fatal — a server has none. */
+function openOnDesktop(path: string): string {
+  const opener =
+    process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+  try {
+    const child = spawn(opener, [path], {
+      stdio: "ignore",
+      detached: true,
+      shell: process.platform === "win32",
+    });
+    child.on("error", () => {});
+    child.unref();
+    return `opened with ${opener}`;
+  } catch {
+    return "no desktop opener available";
+  }
+}
+
+server.tool(
+  "render_diagram",
+  "Draw the current state machine as a picture. Writes the file next to the project document (or at `path`) and returns its absolute path — plus the image itself for png, so it can be looked at without leaving the conversation. Formats: png (raster, needs librsvg/Inkscape/ImageMagick/Chrome on the host), svg (needs nothing), mermaid, ascii. Pass stamp:true to keep every render instead of overwriting one file.",
+  {
+    format: z.enum(["png", "svg", "mermaid", "ascii"]).optional(),
+    path: z.string().optional(),
+    scale: z.number().optional(),
+    theme: z.enum(["dark", "light"]).optional(),
+    stamp: z.boolean().optional(),
+    open: z.boolean().optional(),
+  },
+  async ({ format, path, scale, theme, stamp, open }) => {
+    const def = readDef();
+    if (!def)
+      return {
+        content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }],
+        isError: true,
+      };
+
+    const chosen = format ?? "png";
+    try {
+      const result = await renderDiagramToFile(def as unknown as StateMachineDefinition, {
+        format: chosen,
+        out: path,
+        doc: PROJECT_FILE,
+        scale,
+        theme,
+        stamp,
+      });
+
+      const size = result.width && result.height ? `, ${result.width}×${result.height}` : "";
+      const how = result.backend ? `, drawn by ${result.backend}` : "";
+      const opened = open ? ` — ${openOnDesktop(result.path)}` : "";
+      const note = `Rendered '${def.settings.name}' → ${result.path} (${result.bytes} bytes${size}${how})${opened}`;
+
+      // png and svg come back as pictures; the text formats are already text.
+      if (chosen === "png" && result.bytes <= INLINE_IMAGE_LIMIT) {
+        return {
+          content: [
+            { type: "text", text: note },
+            {
+              type: "image",
+              data: readFileSync(result.path).toString("base64"),
+              mimeType: "image/png",
+            },
+          ],
+        };
+      }
+      if (chosen === "mermaid" || chosen === "ascii") {
+        return {
+          content: [
+            { type: "text", text: note },
+            { type: "text", text: readFileSync(result.path, "utf8") },
+          ],
+        };
+      }
+      return { content: [{ type: "text", text: note }] };
+    } catch (e) {
+      const why = e instanceof Error ? e.message : String(e);
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `render_diagram (${chosen}) failed: ${why}\n` +
+              `An SVG needs no rasterizer — retry with format "svg" ` +
+              `(it would land at ${defaultOutputPath(PROJECT_FILE, "svg")}).`,
+          },
+        ],
+        isError: true,
+      };
+    }
   }
 );
 

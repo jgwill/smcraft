@@ -14,6 +14,7 @@
     "test": "node --test dist/tests/*.test.js"
   },
   "dependencies": {
+    "@miadi/stateloom-cli": "file:../cli",
     "@miadi/stateloom-client": "file:../bridge-client",
     "@miadi/stateloom-protocol": "file:../bridge-protocol",
     "@modelcontextprotocol/sdk": "^1.12.1",
