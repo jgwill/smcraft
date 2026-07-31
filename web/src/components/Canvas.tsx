@@ -2,15 +2,21 @@
 
 import { useRef, useCallback, useState, useEffect, useMemo } from "react";
 import {
+  GLYPH_SIZE,
   IDENTITY_VIEWPORT,
+  SELF_LOOP_BULGE,
   VIEWPORT_LIMITS,
+  eventGlyph,
   fitToBoxes,
+  glyphAt,
   panBy,
+  placeLabels,
+  routeEdges,
   viewportTransform,
   zoomAt,
   zoomTo,
 } from "@miadi/stateloom-react";
-import type { Viewport } from "@miadi/stateloom-react";
+import type { Glyph, Viewport } from "@miadi/stateloom-react";
 import { useDesignerStore } from "@/store/useDesignerStore";
 import type { ContextMenuState } from "@/store/useDesignerStore";
 import { CANVAS_PINCH_OWNER } from "@/lib/gestureOwner";
@@ -96,6 +102,36 @@ function isTypingTarget(node: EventTarget | null): boolean {
   if (!el || typeof el.tagName !== "string") return false;
   if (el.isContentEditable) return true;
   return ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "OPTION"].includes(el.tagName);
+}
+
+/**
+ * The trigger mark on an event chip: a check for a confirmation, chevrons for
+ * an advance, two bars for a pause. Six chips reading `advance_context` are six
+ * identical words until something in front of them differs.
+ *
+ * Drawn from the protocol's glyph data in a 24-unit box, scaled where it
+ * stands — the same paths the exporter writes, so a picture taken of the board
+ * carries the marks the board showed.
+ */
+function TriggerGlyph({ mark, x, y, color }: { mark: Glyph; x: number; y: number; color: string }) {
+  return (
+    <g
+      transform={`translate(${x} ${y}) scale(${GLYPH_SIZE / 24})`}
+      fill="none"
+      stroke={color}
+      strokeWidth={mark.strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="pointer-events-none"
+    >
+      {(mark.circles ?? []).map((c, i) => (
+        <circle key={`c${i}`} cx={c.cx} cy={c.cy} r={c.r} fill={c.filled ? color : "none"} />
+      ))}
+      {mark.paths.map((d, i) => (
+        <path key={`p${i}`} d={d} />
+      ))}
+    </g>
+  );
 }
 
 export default function Canvas() {
@@ -694,6 +730,58 @@ export default function Canvas() {
     return result;
   }, [currentChildren]);
 
+  /**
+   * The drawable form of those transitions: a routed curve each, and a settled
+   * spot for each event chip.
+   *
+   * Both halves are level-wide on purpose. Every edge used to leave the
+   * bottom-centre of its source and enter the top-centre of its target, so the
+   * three transitions out of `draft` and the three `advance_context` edges
+   * coming back ran as one rope, and their chips — pinned to midpoints a few
+   * pixels apart — printed through each other: the board read
+   * `cadvance_contexon` where it meant two different events.
+   *
+   * `routeEdges` hands every edge its own spot on each box it touches and sends
+   * it through the gap that is actually there (an edge to a state above leaves
+   * the top, not the bottom). `placeLabels` then nudges any chip that still has
+   * a neighbour. The curve and the walker the chip rides come from the same
+   * control points, so a label can never be settled against a line other than
+   * the one drawn.
+   *
+   * Recomputed while a box is being dragged, which is what makes the arrows and
+   * their labels re-settle under the hand instead of after it.
+   */
+  const edges = useMemo(() => {
+    const curves = routeEdges(arrows, getPos);
+    const spots = placeLabels(
+      arrows.map((arrow, i) => {
+        const box = getPos(arrow.from);
+        return {
+          id: `${arrow.stateName}:${arrow.index}`,
+          event: arrow.event,
+          condition: arrow.condition,
+          glyph: true,
+          // A self-loop's arc is a short bulge with no room to carry a word on
+          // it; its chip sits just beyond the bulge instead.
+          at:
+            arrow.from === arrow.to
+              ? () => ({
+                  x: box.x + box.width + SELF_LOOP_BULGE + 30,
+                  y: box.y + box.height / 2 + 4,
+                })
+              : curves[i].at,
+        };
+      }),
+      currentChildren.map((s) => getPos(s.name))
+    );
+    const byId = new Map(spots.map((spot) => [spot.label.id, spot]));
+    return arrows.flatMap((arrow, i) => {
+      const id = `${arrow.stateName}:${arrow.index}`;
+      const spot = byId.get(id);
+      return spot ? [{ arrow, id, curve: curves[i], spot }] : [];
+    });
+  }, [arrows, currentChildren, getPos]);
+
   // WS7b — after each commit, diff the freshly-rendered nodes/edges against the
   // previous render (held in refs, touched only here). Newly-present names/edges
   // are flagged as "entering" (drives sm-node-enter / sm-edge-enter on the NEXT
@@ -883,24 +971,17 @@ export default function Canvas() {
         >
 
         {/* Transition arrows */}
-        {arrows.map((arrow, i) => {
-          const from = getPos(arrow.from);
-          const to = getPos(arrow.to);
-          const fx = from.x + from.width / 2;
-          const fy = from.y + from.height;
-          const tx = to.x + to.width / 2;
-          const ty = to.y;
-          const midY = (fy + ty) / 2;
-          const isSelected = selection.kind === "transition" && selection.id === `${arrow.stateName}:${arrow.index}`;
-
+        {edges.map(({ arrow, id: edgeId, curve, spot }) => {
+          const isSelected = selection.kind === "transition" && selection.id === edgeId;
           // WS7b — a new edge (flagged in the commit effect) draws itself on.
-          const edgeEntering = enteringEdges.has(`${arrow.stateName}:${arrow.index}`);
-          const edgeId = `${arrow.stateName}:${arrow.index}`;
-          const curve = `M ${fx} ${fy} C ${fx} ${midY}, ${tx} ${midY}, ${tx} ${ty}`;
-          const labelH = arrow.condition ? 28 : 18;
+          const edgeEntering = enteringEdges.has(edgeId);
+          // A chip that had to move is drawn back to its own curve with a hair
+          // line, so a displaced label still says which transition it names.
+          const anchor = curve.at(0.5);
+          const strayed = Math.hypot(anchor.x - spot.cx, anchor.y - spot.cy) > 4;
 
           return (
-            <g key={`arrow-${i}`}>
+            <g key={`arrow-${edgeId}`}>
               {/* A 1.5px thread is a fair target for a cursor and none at all for
                   a fingertip. This traces the same curve with a wide invisible
                   stroke underneath it — same selection, same path, just a band
@@ -908,7 +989,7 @@ export default function Canvas() {
                   the perimeter geometry regardless of what the paint does. */}
               {coarsePointer && (
                 <path
-                  d={curve}
+                  d={curve.path}
                   fill="none"
                   stroke="transparent"
                   strokeWidth={touchEdgeStroke}
@@ -921,7 +1002,7 @@ export default function Canvas() {
                 />
               )}
               <path
-                d={curve}
+                d={curve.path}
                 fill="none"
                 pathLength={1}
                 stroke={isSelected ? "#3b82f6" : "#94a3b8"}
@@ -930,43 +1011,62 @@ export default function Canvas() {
                 className={`cursor-pointer hover:stroke-blue-400${edgeEntering ? " sm-edge-enter" : ""}`}
                 onClick={(e) => {
                   e.stopPropagation();
-                  select("transition", `${arrow.stateName}:${arrow.index}`);
+                  select("transition", edgeId);
                 }}
               />
-              {/* Event label on edge */}
+              {/* Event label on edge — at the spot settled for it above, on a
+                  plate wide enough to hold its own text. */}
               <g
                 className="cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation();
-                  select("transition", `${arrow.stateName}:${arrow.index}`);
+                  select("transition", edgeId);
                 }}
               >
+                {strayed && (
+                  <line
+                    x1={anchor.x}
+                    y1={anchor.y}
+                    x2={spot.cx}
+                    y2={spot.cy - 5}
+                    stroke={isSelected ? "#3b82f6" : "#334155"}
+                    strokeWidth={1}
+                    strokeDasharray="2 3"
+                    className="pointer-events-none"
+                  />
+                )}
                 {/* The same cuff the boxes get, so the event chip is reachable
                     without the label itself being redrawn any larger. */}
                 {coarsePointer && (
                   <rect
-                    x={(fx + tx) / 2 - 40 - touchPad}
-                    y={midY - 18 - touchPad}
-                    width={80 + touchPad * 2}
-                    height={labelH + touchPad * 2}
+                    x={spot.x - touchPad}
+                    y={spot.y - touchPad}
+                    width={spot.width + touchPad * 2}
+                    height={spot.height + touchPad * 2}
                     fill="transparent"
                     pointerEvents="all"
                   />
                 )}
                 <rect
-                  x={(fx + tx) / 2 - 40}
-                  y={midY - 18}
-                  width={80}
-                  height={labelH}
+                  x={spot.x}
+                  y={spot.y}
+                  width={spot.width}
+                  height={spot.height}
                   rx={4}
                   fill={isSelected ? "#1e3a5f" : "#1e293b"}
                   stroke={isSelected ? "#3b82f6" : "#334155"}
                   strokeWidth={1}
                   className="hover:fill-gray-800"
                 />
+                <TriggerGlyph
+                  mark={eventGlyph(arrow.event)}
+                  x={glyphAt(spot).x}
+                  y={glyphAt(spot).y}
+                  color={isSelected ? "#93c5fd" : "#7c93b0"}
+                />
                 <text
-                  x={(fx + tx) / 2}
-                  y={midY - 5}
+                  x={spot.cx}
+                  y={spot.cy - 5}
                   fill={isSelected ? "#93c5fd" : "#94a3b8"}
                   fontSize={11}
                   fontWeight={500}
@@ -977,8 +1077,8 @@ export default function Canvas() {
                 </text>
                 {arrow.condition && (
                   <text
-                    x={(fx + tx) / 2}
-                    y={midY + 7}
+                    x={spot.cx}
+                    y={spot.cy + 7}
                     fill="#64748b"
                     fontSize={9}
                     textAnchor="middle"

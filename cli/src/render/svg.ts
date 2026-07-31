@@ -12,18 +12,31 @@
  * re-flowed. Two things follow: a parent can never grow into its neighbour, and
  * nesting of any depth renders without a second layout pass.
  *
- * Transitions are drawn as the canvas draws them — bottom-centre of the source
- * curving to top-centre of the target — when both ends live at the same level.
- * A self-loop becomes an arc off the right edge. A transition leaving the level
- * entirely (the one shape a curve cannot honestly show) is written under its
- * source as `event → Target`, so nothing in the machine goes unrepresented.
+ * Transitions are drawn as the canvas draws them — literally as the canvas
+ * draws them: `routeEdges` gives every edge at a level its own attachment point
+ * on each box it touches, and `placeLabels` settles the event chips onto spots
+ * of their own. Both live in the protocol, so an exported picture shows the
+ * reader what the live board showed them. A self-loop becomes an arc off the
+ * right edge. A transition leaving the level entirely (the one shape a curve
+ * cannot honestly show) is written under its source as `event → Target`, so
+ * nothing in the machine goes unrepresented.
  *
  * Pure: no clock, no randomness, no I/O. The same definition always renders the
  * same bytes.
  */
 import {
+  GLYPH_SIZE,
   autoLayout,
+  eventGlyph,
+  glyphAt,
+  placeLabels,
+  routeEdges,
+  textWidth,
+  SELF_LOOP_BULGE,
+  type Glyph,
   type LayoutBox,
+  type PendingLabel,
+  type PlacedLabel,
   type StateDef,
   type StateMachineDefinition,
 } from "@miadi/stateloom-protocol";
@@ -103,9 +116,6 @@ const PALETTES: Record<SvgTheme, Palette> = {
 
 const FONT =
   "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-
-/** Rough advance width of `text` at `size`, good enough to fit a chip around it. */
-const textWidth = (text: string, size: number): number => text.length * size * 0.55;
 
 function esc(text: string): string {
   return text
@@ -204,120 +214,42 @@ function drawNode(state: StateDef, box: LayoutBox, p: Palette, out: string[]): v
 
 const round = (n: number): number => Math.round(n * 100) / 100;
 
-/** A label waiting to be placed: its text, and the curve it may slide along. */
-interface PendingLabel {
-  event: string;
-  condition?: string;
-  /** Point on the label's own edge at parameter `t`, 0 = source, 1 = target. */
-  at: (t: number) => { x: number; y: number };
-}
-
-/** Where a chip ends up: the resolved centre, and the box it occupies. */
-interface PlacedLabel extends LayoutBox {
-  cx: number;
-  cy: number;
-  label: PendingLabel;
-}
-
-const overlaps = (a: LayoutBox, b: LayoutBox): boolean =>
-  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
-
-/** Cubic bezier point at `t` — the geometry every non-loop edge is drawn with. */
-function bezier(
-  p0: { x: number; y: number },
-  p1: { x: number; y: number },
-  p2: { x: number; y: number },
-  p3: { x: number; y: number }
-): (t: number) => { x: number; y: number } {
-  return (t: number) => {
-    const u = 1 - t;
-    const a = u * u * u;
-    const b = 3 * u * u * t;
-    const c = 3 * u * t * t;
-    const d = t * t * t;
-    return {
-      x: a * p0.x + b * p1.x + c * p2.x + d * p3.x,
-      y: a * p0.y + b * p1.y + c * p2.y + d * p3.y,
-    };
-  };
-}
-
-const chipSize = (label: PendingLabel): { width: number; height: number } => ({
-  width: Math.max(
-    56,
-    Math.max(
-      textWidth(label.event, 11),
-      label.condition ? textWidth(`[${label.condition}]`, 9) : 0
-    ) + 16
-  ),
-  height: label.condition ? 28 : 18,
-});
-
 /**
- * Settle every chip in one level onto a spot of its own.
+ * A trigger glyph, drawn where it stands.
  *
- * Four transitions leaving the same state land their midpoints within a few
- * pixels of each other, and a stack of unreadable chips is worse than no label
- * at all. Each one is offered a handful of positions along its *own* curve —
- * the midpoint first, then progressively further toward either end — and takes
- * the first that clears both the chips already placed and the state boxes,
- * which are drawn last and would otherwise cover half a word. A label that can
- * find no clear spot keeps the one that overlapped least, so a chip is never
- * dropped. Order of consideration is the order the transitions are declared, so
- * the outcome is the same on every render.
+ * Inlined rather than `<use>`d from a `<symbol>`: the picture has to survive
+ * every rasterizer this CLI might hand it to (inkscape, rsvg, a headless
+ * browser), and a scaled symbol reference is the first thing a thin SVG
+ * implementation gets wrong. A repeated path costs bytes; a missing mark costs
+ * the reader.
  */
-function placeLabels(pending: PendingLabel[], obstacles: LayoutBox[]): PlacedLabel[] {
-  /** Positions along the curve, midpoint outward. */
-  const ALONG = [0.5, 0.36, 0.64, 0.24, 0.76, 0.14, 0.86];
-  /** Sideways nudges, in chip widths. */
-  const ASIDE = [0, 0.6, -0.6];
-  /** Nudges across the curve, in chip heights — what unstacks a crowded row. */
-  const ACROSS = [0, -1.3, 1.3, -2.6, 2.6];
-
-  // Widest first: a long event id has the fewest places it can go, and a short
-  // chip that took the only wide gap cannot be asked to move afterwards. Ties
-  // keep declaration order, so the whole pass stays deterministic.
-  const order = pending
-    .map((label, i) => ({ label, i, width: chipSize(label).width }))
-    .sort((a, b) => (a.width === b.width ? a.i - b.i : b.width - a.width));
-
-  const placed: PlacedLabel[] = [];
-  for (const { label } of order) {
-    const { width, height } = chipSize(label);
-    let best: PlacedLabel | null = null;
-    let bestCost = Infinity;
-
-    search: for (const across of ACROSS) {
-      for (const aside of ASIDE) {
-        for (const t of ALONG) {
-          const point = label.at(t);
-          const cx = point.x + aside * width;
-          const cy = point.y + across * height;
-          const box: LayoutBox = { x: cx - width / 2, y: cy - 18, width, height };
-          const cost = [...placed, ...obstacles].filter((other) => overlaps(box, other)).length;
-          if (cost === 0) {
-            best = { ...box, cx, cy, label };
-            break search;
-          }
-          if (cost < bestCost) {
-            bestCost = cost;
-            best = { ...box, cx, cy, label };
-          }
-        }
-      }
-    }
-    if (best) placed.push(best);
+function drawGlyph(mark: Glyph, x: number, y: number, size: number, color: string, out: string[]): void {
+  const scale = round(size / 24);
+  out.push(
+    `<g transform="translate(${round(x)} ${round(y)}) scale(${scale})" fill="none" ` +
+      `stroke="${color}" stroke-width="${mark.strokeWidth}" stroke-linecap="round" ` +
+      `stroke-linejoin="round">`
+  );
+  for (const c of mark.circles ?? []) {
+    out.push(
+      `<circle cx="${c.cx}" cy="${c.cy}" r="${c.r}" fill="${c.filled ? color : "none"}"/>`
+    );
   }
-  return placed;
+  for (const d of mark.paths) out.push(`<path d="${d}"/>`);
+  out.push(`</g>`);
 }
 
-/** Emit the chip: a rounded plate, the event id, and the guard beneath it. */
+/** Emit the chip: a rounded plate, the trigger mark, the event id, and the guard. */
 function drawLabel(spot: PlacedLabel, p: Palette, out: string[]): void {
   const { event, condition } = spot.label;
   out.push(
     `<rect x="${round(spot.x)}" y="${round(spot.y)}" width="${round(spot.width)}" ` +
       `height="${spot.height}" rx="4" fill="${p.chip}" stroke="${p.chipBorder}" stroke-width="1"/>`
   );
+  if (spot.label.glyph) {
+    const at = glyphAt(spot);
+    drawGlyph(eventGlyph(event), at.x, at.y, GLYPH_SIZE, p.chipText, out);
+  }
   out.push(
     `<text x="${round(spot.cx)}" y="${round(spot.cy - 5)}" fill="${p.chipText}" ` +
       `font-family="${FONT}" font-size="11" font-weight="500" text-anchor="middle">` +
@@ -380,45 +312,34 @@ function drawLevel(
   }
 
   // Edges next, so the boxes land on top of the arrowheads exactly as the
-  // canvas stacks them. Their labels are held back until every curve is known —
-  // a chip can only avoid its neighbours once the neighbours exist.
-  const labels: PendingLabel[] = [];
+  // canvas stacks them. The whole level is routed in one call: an edge only
+  // knows which spot on a box belongs to it once every other edge touching that
+  // box is known. Labels are held back for the same reason — a chip can only
+  // avoid its neighbours once the neighbours exist.
+  const transitions: { event: string; condition?: string; from: string; to: string }[] = [];
   for (const child of children) {
-    const from = boxOf(child.name);
     for (const t of child.transitions ?? []) {
       if (!t.nextState || !here.has(t.nextState)) continue;
-
-      if (t.nextState === child.name) {
-        // A self-loop: an arc off the right edge, where a bottom-to-top curve
-        // would otherwise fold back through the box it starts in.
-        const x = from.x + from.width;
-        const y1 = from.y + from.height * 0.35;
-        const y2 = from.y + from.height * 0.65;
-        const bulge = 44;
-        out.push(
-          `<path d="M ${x} ${y1} C ${x + bulge} ${y1 - 12}, ${x + bulge} ${y2 + 12}, ${x} ${y2}" ` +
-            `fill="none" stroke="${p.edge}" stroke-width="1.5" marker-end="url(#sm-arrow)"/>`
-        );
-        const cx = x + bulge + 30;
-        const cy = from.y + from.height / 2 + 4;
-        labels.push({ event: t.event, condition: t.condition, at: () => ({ x: cx, y: cy }) });
-        continue;
-      }
-
-      const to = boxOf(t.nextState);
-      const p0 = { x: from.x + from.width / 2, y: from.y + from.height };
-      const p3 = { x: to.x + to.width / 2, y: to.y };
-      const midY = (p0.y + p3.y) / 2;
-      const p1 = { x: p0.x, y: midY };
-      const p2 = { x: p3.x, y: midY };
-      out.push(
-        `<path d="M ${p0.x} ${p0.y} C ${p1.x} ${round(p1.y)}, ${p2.x} ${round(p2.y)}, ` +
-          `${p3.x} ${p3.y}" fill="none" stroke="${p.edge}" stroke-width="1.5" ` +
-          `marker-end="url(#sm-arrow)"/>`
-      );
-      labels.push({ event: t.event, condition: t.condition, at: bezier(p0, p1, p2, p3) });
+      transitions.push({ event: t.event, condition: t.condition, from: child.name, to: t.nextState });
     }
   }
+  const curves = routeEdges(transitions, boxOf);
+  const labels: PendingLabel[] = transitions.map((t, i) => {
+    out.push(
+      `<path d="${curves[i].path}" fill="none" stroke="${p.edge}" stroke-width="1.5" ` +
+        `marker-end="url(#sm-arrow)"/>`
+    );
+    // A self-loop's arc is a short bulge; its chip sits beyond the bulge rather
+    // than on it, where the curve has no room to carry a word.
+    const at =
+      t.from === t.to
+        ? (): { x: number; y: number } => ({
+            x: boxOf(t.from).x + boxOf(t.from).width + SELF_LOOP_BULGE + 30,
+            y: boxOf(t.from).y + boxOf(t.from).height / 2 + 4,
+          })
+        : curves[i].at;
+    return { event: t.event, condition: t.condition, at, glyph: true };
+  });
   const obstacles = [...children.map((c) => boxOf(c.name)), ...stubs.map((s) => s.box)];
   for (const spot of placeLabels(labels, obstacles)) {
     drawLabel(spot, p, out);

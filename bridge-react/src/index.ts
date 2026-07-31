@@ -21,6 +21,40 @@ export type {
 export { autoLayout, AUTO_LAYOUT_DEFAULTS } from "./autoLayout.js";
 export type { AutoLayoutOptions, LayoutBox } from "./autoLayout.js";
 
+// Edge routing and label settling. Pure geometry from the protocol, re-exported
+// here because the designer canvas reaches for its drawing helpers at this
+// address and should not have to know which package underneath a curve was
+// bent, or a chip's spot computed, in.
+export {
+  routeEdges,
+  edgeCurve,
+  selfLoopCurve,
+  facingSides,
+  portAt,
+  placeLabels,
+  chipSize,
+  glyphAt,
+  textWidth,
+  eventGlyph,
+  ALL_GLYPHS,
+  PORT_PITCH,
+  SELF_LOOP_BULGE,
+  LABEL_FONT_SIZE,
+  GUARD_FONT_SIZE,
+  GLYPH_SIZE,
+  GLYPH_INSET,
+  GLYPH_COLUMN,
+} from "@miadi/stateloom-protocol";
+export type {
+  EdgeCurve,
+  EdgeEnds,
+  EdgeSide,
+  Glyph,
+  PendingLabel,
+  PlacedLabel,
+  PlaceLabelsOptions,
+} from "@miadi/stateloom-protocol";
+
 export {
   IDENTITY_VIEWPORT,
   VIEWPORT_LIMITS,
