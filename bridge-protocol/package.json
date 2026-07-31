@@ -1,6 +1,6 @@
 {
   "name": "@miadi/stateloom-protocol",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Pure, zero-runtime-dependency protocol foundation for the smcraft real-time design bridge (SMDF patch ops, diff/apply, envelopes)",
   "type": "module",
   "main": "dist/index.js",
