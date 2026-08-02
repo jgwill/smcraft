@@ -14,6 +14,9 @@
  *   - `textWidth`/`chipSize` — how wide a plate has to be to actually contain
  *     the words on it. A fixed-width chip is the other half of the same defect:
  *     `confirm_observation` spills out of an 80-unit plate at both ends.
+ *   - `guardText` — the far end of that: a guard is prose and can run to a
+ *     paragraph, so the chip prints the first `GUARD_MAX_CHARS` of it and
+ *     elides. A plate wide enough for a whole sentence is not a label.
  *   - `placeLabels` — offers each chip a handful of spots and takes the first
  *     that is clear of the chips already placed and of the state boxes.
  *
@@ -47,6 +50,35 @@ export const textWidth = (text: string, size: number): number => text.length * s
 /** Font size of the event id on a chip, and of the guard beneath it. */
 export const LABEL_FONT_SIZE = 11;
 export const GUARD_FONT_SIZE = 9;
+
+/**
+ * How many characters of a guard a chip will print before it elides.
+ *
+ * A condition is prose — `the return address matches where the seat actually
+ * sits, and the lease posture was read locally` is a legitimate guard — and a
+ * plate sized to contain it is six hundred units wide, wider than the states it
+ * sits between. One such chip pushes every other label off its curve and the
+ * board stops being a diagram of a machine. The full text is not lost: it lives
+ * in the definition and is edited in the properties panel, where there is room
+ * to read it. The chip only has to say *that there is a guard here, roughly
+ * about this*.
+ */
+export const GUARD_MAX_CHARS = 32;
+
+/**
+ * The guard exactly as a chip draws it: bracketed, and elided past
+ * `GUARD_MAX_CHARS`.
+ *
+ * `chipSize` measures this and the renderer prints it, which is the whole point
+ * of it being one function — a plate measured against the full condition and
+ * printed with a shortened one would be padded with empty space at both ends.
+ */
+export const guardText = (condition: string): string =>
+  `[${
+    condition.length > GUARD_MAX_CHARS
+      ? `${condition.slice(0, GUARD_MAX_CHARS - 1).trimEnd()}…`
+      : condition
+  }]`;
 
 /** Side of the trigger glyph a chip may carry, and the room reserved for it. */
 export const GLYPH_SIZE = 12;
@@ -92,7 +124,7 @@ export const chipSize = (label: PendingLabel): { width: number; height: number }
       56,
       Math.max(
         textWidth(label.event, LABEL_FONT_SIZE),
-        label.condition ? textWidth(`[${label.condition}]`, GUARD_FONT_SIZE) : 0
+        label.condition ? textWidth(guardText(label.condition), GUARD_FONT_SIZE) : 0
       ) + 16
     ) + (label.glyph ? GLYPH_COLUMN : 0),
   height: label.condition ? 28 : 18,

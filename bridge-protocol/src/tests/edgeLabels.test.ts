@@ -9,7 +9,15 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chipSize, overlaps, placeLabels, textWidth, type PendingLabel } from "../edgeLabels.js";
+import {
+  GUARD_MAX_CHARS,
+  chipSize,
+  guardText,
+  overlaps,
+  placeLabels,
+  textWidth,
+  type PendingLabel,
+} from "../edgeLabels.js";
 import { edgeCurve, routeEdges } from "../edgeRoutes.js";
 import type { LayoutBox } from "../autoLayout.js";
 
@@ -71,6 +79,32 @@ test("chipSize: a guard adds the second line, not extra words on the first", () 
   assert.equal(
     chipSize({ event: "advance_context", condition: "next context configured", at }).height,
     28
+  );
+});
+
+test("guardText: a paragraph-long guard elides instead of widening the plate", () => {
+  const at = () => ({ x: 0, y: 0 });
+  const prose =
+    "the return address matches where the seat actually sits, and the lease posture was read locally";
+  const short = "next context configured";
+
+  assert.equal(guardText(short), `[${short}]`, "a guard that fits is printed whole");
+  assert.ok(guardText(prose).endsWith("…]"), "a guard that does not fit is elided");
+  assert.ok(
+    guardText(prose).length <= GUARD_MAX_CHARS + 3,
+    `the drawn guard is bounded, got ${guardText(prose).length}`
+  );
+
+  // The chip is measured against what is drawn — a plate sized for the whole
+  // sentence and printed with a stub would be padded with empty space.
+  const elided = chipSize({ event: "VOICE_PUBLISHED", condition: prose, at });
+  assert.ok(
+    elided.width >= textWidth(guardText(prose), 9) + 16,
+    "the plate still contains the text it prints"
+  );
+  assert.ok(
+    elided.width < textWidth(`[${prose}]`, 9),
+    `an elided guard must not size the plate to the full sentence, got ${elided.width}`
   );
 });
 

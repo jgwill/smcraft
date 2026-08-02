@@ -9,6 +9,7 @@ import {
   eventGlyph,
   fitToBoxes,
   glyphAt,
+  guardText,
   panBy,
   placeLabels,
   routeEdges,
@@ -1076,15 +1077,19 @@ export default function Canvas() {
                   {arrow.event}
                 </text>
                 {arrow.condition && (
+                  // Elided to the width the chip was measured for. A guard is
+                  // prose and can run to a paragraph; the whole of it is in the
+                  // properties panel, and on the tooltip here.
                   <text
                     x={spot.cx}
                     y={spot.cy + 7}
                     fill="#64748b"
                     fontSize={9}
                     textAnchor="middle"
-                    className="pointer-events-none select-none"
+                    className="select-none"
                   >
-                    [{arrow.condition}]
+                    <title>{arrow.condition}</title>
+                    {guardText(arrow.condition)}
                   </text>
                 )}
               </g>

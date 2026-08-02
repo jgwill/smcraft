@@ -201,8 +201,12 @@ export default function PropertiesPanel() {
         </label>
         <label className="block">
           <span className="text-xs text-gray-500">Condition (guard)</span>
-          <input
-            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200"
+          {/* A guard is prose, not an identifier — three rows so a sentence is
+              readable without scrolling it sideways, and a resize grip for the
+              ones that are longer than that. */}
+          <textarea
+            rows={3}
+            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 resize-y leading-snug"
             value={trans.condition ?? ""}
             onChange={(e) => updateTransition(stateName, idx, { condition: e.target.value || undefined })}
           />
