@@ -25,6 +25,7 @@ export type {
 export {
   parseJson,
   parseFile,
+  unwrapDefinition,
   enrich,
   validate,
 } from "./parser.js";

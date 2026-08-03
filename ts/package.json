@@ -1,7 +1,17 @@
 {
   "name": "smcraft",
-  "version": "0.4.0",
-  "description": "State Machine Craft \u2014 design, generate, and run hierarchical state machines",
+  "version": "0.4.1",
+  "description": "State Machine Craft — design, generate, and run hierarchical state machines",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jgwill/smcraft.git",
+    "directory": "ts"
+  },
+  "homepage": "https://github.com/jgwill/smcraft#readme",
+  "bugs": {
+    "url": "https://github.com/jgwill/smcraft/issues"
+  },
+  "author": "Guillaume Isabelle <jgi@jgwill.com>",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -39,6 +49,9 @@
     "hierarchical"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "devDependencies": {
     "@types/node": "^25.3.0",
     "typescript": "^5.4.0"

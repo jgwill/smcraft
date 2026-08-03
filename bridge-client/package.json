@@ -1,7 +1,17 @@
 {
   "name": "@miadi/stateloom-client",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Framework-agnostic socket.io-client wrapper for the smcraft real-time design bridge (join/patch/full/presence + auto-resync)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jgwill/smcraft.git",
+    "directory": "bridge-client"
+  },
+  "homepage": "https://github.com/jgwill/smcraft#readme",
+  "bugs": {
+    "url": "https://github.com/jgwill/smcraft/issues"
+  },
+  "author": "Guillaume Isabelle <jgi@jgwill.com>",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -25,6 +35,9 @@
     "client"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "socket.io-client": "^4.8.1",
     "@miadi/stateloom-protocol": "file:../bridge-protocol"
@@ -36,6 +49,7 @@
   },
   "files": [
     "dist/**/*.js",
-    "dist/**/*.d.ts"
+    "dist/**/*.d.ts",
+    "!dist/tests/"
   ]
 }

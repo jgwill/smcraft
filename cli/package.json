@@ -1,7 +1,17 @@
 {
   "name": "@miadi/stateloom-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "smcx — the smcraft design-surface CLI: drive the live real-time bridge (durable-first mutate + emit, watch, presence) from the terminal",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jgwill/smcraft.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/jgwill/smcraft#readme",
+  "bugs": {
+    "url": "https://github.com/jgwill/smcraft/issues"
+  },
+  "author": "Guillaume Isabelle <jgi@jgwill.com>",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -31,6 +41,9 @@
     "realtime"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "commander": "^13.1.0",
     "@miadi/stateloom": "file:../bridge",
@@ -43,6 +56,7 @@
   },
   "files": [
     "dist/**/*.js",
-    "dist/**/*.d.ts"
+    "dist/**/*.d.ts",
+    "!dist/tests/"
   ]
 }

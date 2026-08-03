@@ -20,7 +20,7 @@ import {
 } from "./commands/mutations.js";
 import { watchCommand } from "./commands/watch.js";
 import { serveCommand } from "./commands/serve.js";
-import { openCommand } from "./commands/open.js";
+import { openCommand, defaultWebUrl } from "./commands/open.js";
 import { renderCommand } from "./commands/render.js";
 import { presenceCommand } from "./commands/presence.js";
 
@@ -29,7 +29,7 @@ const program = new Command();
 program
   .name("smcx")
   .description("smcraft design-surface CLI — drive the live smcraft bridge from the terminal")
-  .version("0.1.0")
+  .version("0.1.2")
   .option("--bridge <url>", "bridge socket.io URL", envAlias("BRIDGE_URL"))
   .option("--doc <path>", "SMDF project file (docId)", envAlias("PROJECT_FILE"))
   .option("--name <label>", "presence label for this CLI client");
@@ -134,7 +134,7 @@ program
 program
   .command("open")
   .description("open the web designer in the platform browser")
-  .option("--web <url>", "web URL", "http://localhost:3000")
+  .option("--web <url>", "web URL", defaultWebUrl())
   .action(async (opts: { web?: string }) => {
     await openCommand({ url: opts.web });
   });

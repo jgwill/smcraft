@@ -1,7 +1,17 @@
 {
   "name": "@miadi/stateloom-react",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Reusable React binding for the smcraft real-time design bridge (framework-agnostic session core + useSmcraftBridge hook over useSyncExternalStore)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jgwill/smcraft.git",
+    "directory": "bridge-react"
+  },
+  "homepage": "https://github.com/jgwill/smcraft#readme",
+  "bugs": {
+    "url": "https://github.com/jgwill/smcraft/issues"
+  },
+  "author": "Guillaume Isabelle <jgi@jgwill.com>",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -25,6 +35,9 @@
     "realtime"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@miadi/stateloom-client": "file:../bridge-client",
     "@miadi/stateloom-protocol": "file:../bridge-protocol"
@@ -41,6 +54,7 @@
   },
   "files": [
     "dist/**/*.js",
-    "dist/**/*.d.ts"
+    "dist/**/*.d.ts",
+    "!dist/tests/"
   ]
 }

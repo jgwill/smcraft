@@ -1,0 +1,63 @@
+{
+  "name": "@miadi/stateloom-skills",
+  "version": "0.1.0",
+  "description": "stateloom — installable agent skills for the stateloom/smcraft state-machine design system: `stateloom skills install <name>` drops a ready-to-use SKILL.md into .claude/skills",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "stateloom": "dist/bin.js",
+    "stateloom-skills": "dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./catalog": {
+      "import": "./dist/catalog.js",
+      "types": "./dist/catalog.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc && node scripts/sync-skills.mjs",
+    "prepack": "node scripts/sync-skills.mjs",
+    "test": "node --test dist/tests/*.test.js",
+    "clean": "rm -rf dist skills"
+  },
+  "keywords": [
+    "state-machine",
+    "smdf",
+    "stateloom",
+    "smcraft",
+    "skills",
+    "agent",
+    "claude",
+    "mcp",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "Guillaume Isabelle <jgi@jgwill.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jgwill/smcraft.git",
+    "directory": "skills-cli"
+  },
+  "homepage": "https://github.com/jgwill/smcraft#readme",
+  "bugs": {
+    "url": "https://github.com/jgwill/smcraft/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "^5.7",
+    "@types/node": "^22"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "!dist/tests/",
+    "skills/**/*"
+  ]
+}

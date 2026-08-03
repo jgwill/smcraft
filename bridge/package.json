@@ -1,7 +1,17 @@
 {
   "name": "@miadi/stateloom",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "socket.io hub for the smcraft real-time design bridge: in-memory doc + seq per room, presence, chokidar external-edit differ, mtime/hash dedup",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jgwill/smcraft.git",
+    "directory": "bridge"
+  },
+  "homepage": "https://github.com/jgwill/smcraft#readme",
+  "bugs": {
+    "url": "https://github.com/jgwill/smcraft/issues"
+  },
+  "author": "Guillaume Isabelle <jgi@jgwill.com>",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -28,6 +38,9 @@
     "hub"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "socket.io": "^4.8.1",
     "chokidar": "^4.0.3",
@@ -40,6 +53,7 @@
   },
   "files": [
     "dist/**/*.js",
-    "dist/**/*.d.ts"
+    "dist/**/*.d.ts",
+    "!dist/tests/"
   ]
 }

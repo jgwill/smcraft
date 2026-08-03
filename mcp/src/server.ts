@@ -698,8 +698,8 @@ function glyph(direction: string): string {
 // ─── MCP Server ──────────────────────────────────────────────────────
 
 const server = new McpServer({
-  name: "smcraft-mcp",
-  version: "0.1.0",
+  name: "stateloom-mcp",
+  version: "0.1.3",
 });
 
 // Tools

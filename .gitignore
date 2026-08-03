@@ -1,6 +1,10 @@
 node_modules/
 dist/
 .next/
+
+# skills-cli/skills is a build output — the canonical pack is /skills, mirrored
+# in by skills-cli/scripts/sync-skills.mjs on build and again on prepack
+/skills-cli/skills/
 .pytest_cache/
 __pycache__/
 *.egg-info/

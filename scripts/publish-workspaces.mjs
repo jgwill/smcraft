@@ -67,6 +67,7 @@ const PACKAGES = [
 	'bridge-react',
 	'cli',
 	'mcp',
+	'skills-cli', // @miadi/stateloom-skills — no intra-repo deps; ships the skill pack
 ];
 
 const ROOT = resolve(

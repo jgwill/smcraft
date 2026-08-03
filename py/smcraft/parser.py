@@ -54,6 +54,26 @@ class EnrichedModel:
     composite_states: list[StateDef] = field(default_factory=list)
 
 
+def unwrap_definition(data: Any) -> dict[str, Any]:
+    """Accept both shapes a ``.smdf.json`` is written in.
+
+    The design surfaces — ``smcx``, the MCP server, the hub — persist
+    canonically as ``{"stateMachine": {...}}``, while ``examples/`` and
+    hand-authored files carry the bare ``{settings, events, state}``. Both are
+    real documents in the wild, and a parser that reads only one of them breaks
+    the workflow the system exists for: design through the loom, then generate
+    code from what you designed. The failure reads as ``KeyError: 'settings'``
+    against a file whose settings are plainly there, one level down.
+
+    ``StateMachine`` is honored too; the C# StateForge lineage capitalized it.
+    """
+    if isinstance(data, dict):
+        inner = data.get("stateMachine") or data.get("StateMachine")
+        if isinstance(inner, dict):
+            return inner
+    return data
+
+
 class StateMachineParser:
     """Parses state machine definition files into validated models."""
 
@@ -78,9 +98,9 @@ class StateMachineParser:
         return self.enrich(definition)
 
     def parse_json(self, content: str) -> StateMachineDefinition:
-        """Parse a JSON definition string."""
+        """Parse a JSON definition string, wrapped or bare."""
         data = json.loads(content)
-        return self._parse_json_data(data)
+        return self._parse_json_data(unwrap_definition(data))
 
     def parse_xml(self, content: str) -> StateMachineDefinition:
         """Parse an XML definition string (StateMachineDotNet-v1 format)."""
