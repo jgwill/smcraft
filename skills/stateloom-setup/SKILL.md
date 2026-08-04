@@ -57,7 +57,7 @@ npm install -g @miadi/stateloom-cli @miadi/stateloom @miadi/stateloom-mcp
 pip install smcraft
 
 # TypeScript runtime — only if generated TS code will run in your project
-npm install smcraft
+npm install @miadi/stateloom-engine
 ```
 
 The full family, and what each is for:
@@ -70,7 +70,7 @@ The full family, and what each is for:
 | `@miadi/stateloom-react` | npm | `useSmcraftBridge` hook for React 19 canvases. |
 | `@miadi/stateloom-cli` | npm | Bin `smcx` + the renderers (`@miadi/stateloom-cli/render`). |
 | `@miadi/stateloom-mcp` | npm | The MCP server. Bins `stateloom-mcp` and legacy `smcraft-mcp`. |
-| `smcraft` | npm | The TypeScript engine: runtime, parser, `Machine` interpreter, codegen. |
+| `@miadi/stateloom-engine` | npm | The TypeScript engine: runtime, parser, `Machine` interpreter, codegen. (Renamed from `smcraft`, which is deprecated on npm.) |
 | `smcraft` | PyPI | The Python engine + the `smcg` code generator CLI. |
 
 **Check:**

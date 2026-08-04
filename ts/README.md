@@ -1,18 +1,22 @@
-# smcraft
+# @miadi/stateloom-engine
 
-[![npm](https://img.shields.io/npm/v/smcraft)](https://www.npmjs.com/package/smcraft)
+[![npm](https://img.shields.io/npm/v/%40miadi%2Fstateloom-engine)](https://www.npmjs.com/package/@miadi/stateloom-engine)
 
 State Machine Craft — parse, validate, run, and generate code from hierarchical state machines described in a single JSON file.
 
 ## Install
 
 ```bash
-npm install smcraft
+npm install @miadi/stateloom-engine
 ```
+
+> **Renamed from `smcraft`.** The npm package `smcraft` is deprecated and no longer
+> published; `@miadi/stateloom-engine` continues its version line. The PyPI package
+> keeps the name `smcraft` — Python imports are unaffected.
 
 ## What it is
 
-`smcraft` reads a **State Machine Definition Format** document (`.smdf.json`): settings, event sources, and one nested tree of states with transitions. From that document it gives you four things — a parser, a rule-coded validator, an interpreter that drives the machine at runtime, and code generators that emit standalone TypeScript or Python classes.
+`@miadi/stateloom-engine` reads a **State Machine Definition Format** document (`.smdf.json`): settings, event sources, and one nested tree of states with transitions. From that document it gives you four things — a parser, a rule-coded validator, an interpreter that drives the machine at runtime, and code generators that emit standalone TypeScript or Python classes.
 
 It is not a hub, a UI, or a network protocol. Nothing here opens a socket or touches a browser. The live design surfaces — the socket.io hub, the CLI, the React canvas, the MCP server — are the `@miadi/stateloom-*` packages listed below, and they read the same `.smdf.json` this engine runs.
 
@@ -23,7 +27,7 @@ A Python twin ships on PyPI under the same name (`pip install smcraft`, CLI `smc
 Drive a definition directly with the `Machine` interpreter. The constructor validates, builds the state tree, and enters the initial leaf state:
 
 ```ts
-import { Machine, listTransitions, type StateMachineDefinition } from "smcraft";
+import { Machine, listTransitions, type StateMachineDefinition } from "@miadi/stateloom-engine";
 
 const def: StateMachineDefinition = {
   settings: { namespace: "shop", name: "OrderWorkflow", asynchronous: false },
@@ -69,7 +73,7 @@ const withCustomGuard = new Machine(def, {
 Parse from disk, validate, and generate code:
 
 ```ts
-import { parseFile, enrich, validate, TypeScriptCodeGenerator } from "smcraft";
+import { parseFile, enrich, validate, TypeScriptCodeGenerator } from "@miadi/stateloom-engine";
 
 const definition = parseFile("./order.smdf.json");
 const model = enrich(definition);            // adds stateMap / parentMap / allStates
@@ -87,19 +91,19 @@ const source = new TypeScriptCodeGenerator(model).generate();
 
 | Import | Contents |
 |---|---|
-| `smcraft` | Everything below, re-exported |
-| `smcraft/runtime` | `Context`, `ContextAsync`, `ContextBase`, `State`, `StateKind`, `TransitionHelper`, `ObserverNull`, `ObserverConsole` |
-| `smcraft/machine` | `Machine`, `MachineDefinitionError`, `listTransitions` |
-| `smcraft/parser` | `parseJson`, `parseFile`, `enrich`, `validate` |
-| `smcraft/codegen` | `TypeScriptCodeGenerator` |
+| `@miadi/stateloom-engine` | Everything below, re-exported |
+| `@miadi/stateloom-engine/runtime` | `Context`, `ContextAsync`, `ContextBase`, `State`, `StateKind`, `TransitionHelper`, `ObserverNull`, `ObserverConsole` |
+| `@miadi/stateloom-engine/machine` | `Machine`, `MachineDefinitionError`, `listTransitions` |
+| `@miadi/stateloom-engine/parser` | `parseJson`, `parseFile`, `enrich`, `validate` |
+| `@miadi/stateloom-engine/codegen` | `TypeScriptCodeGenerator` |
 
-Generated code imports from `smcraft/runtime`, so the runtime is a dependency of what the generator emits — not a build-time artifact.
+Generated code imports from `@miadi/stateloom-engine/runtime`, so the runtime is a dependency of what the generator emits — not a build-time artifact.
 
 ## Part of the stateloom stack
 
 | Package | Role |
 |---|---|
-| [`smcraft`](https://www.npmjs.com/package/smcraft) | State machine engine: parser, validator, interpreter, code generators — **this package** |
+| **`@miadi/stateloom-engine`** | **this package — the engine** |
 | [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | Patch ops, diff/apply, layout, renderers — zero runtime deps |
 | [`@miadi/stateloom`](https://www.npmjs.com/package/@miadi/stateloom) | socket.io hub holding the live document |
 | [`@miadi/stateloom-client`](https://www.npmjs.com/package/@miadi/stateloom-client) | Framework-agnostic client for the hub |

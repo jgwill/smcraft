@@ -1,6 +1,6 @@
 {
   "name": "@miadi/stateloom-mcp",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "MCP server for miadi-stateloom (formerly smcraft-mcp) — lets LLM agents design state machines through conversation",
   "repository": {
     "type": "git",

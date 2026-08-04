@@ -60,8 +60,7 @@ import { fileURLToPath } from 'node:url';
 // published.
 // ─────────────────────────────────────────────────────────────────────────────
 const PACKAGES = [
-	'ts', // smcraft — no intra-repo deps, the root of the graph
-	'engine', // @miadi/stateloom-engine — the same dist as ts/, second name
+	'ts', // @miadi/stateloom-engine — no intra-repo deps, the root of the graph
 	'bridge-protocol',
 	'bridge-client',
 	'bridge',

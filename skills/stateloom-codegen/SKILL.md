@@ -212,19 +212,19 @@ ctx.enter_initial_state()
 
 ## Step 5 — TypeScript
 
-The TypeScript generator exists in the npm `smcraft` package but is **not wired to any CLI**.
+The TypeScript generator exists in the npm `@miadi/stateloom-engine` package but is **not wired to any CLI**.
 `smcg -l typescript` is rejected by argparse — `python` is the only choice.
 
 Generate programmatically:
 
 ```bash
-npm install smcraft
+npm install @miadi/stateloom-engine
 ```
 
 ```js
 // generate-ts.mjs
-import { parseFile, enrich, validate } from "smcraft/parser";
-import { TypeScriptCodeGenerator } from "smcraft/codegen";
+import { parseFile, enrich, validate } from "@miadi/stateloom-engine/parser";
+import { TypeScriptCodeGenerator } from "@miadi/stateloom-engine/codegen";
 import { writeFileSync } from "node:fs";
 
 const def = parseFile("/tmp/machine.bare.smdf.json");
@@ -252,7 +252,7 @@ node generate-ts.mjs && head -20 ./generated/traffic_light_fsm.ts
 That is right only if the file sits next to the runtime. In your own project, rewrite it:
 
 ```bash
-sed -i 's|} from "./runtime.js";|} from "smcraft/runtime";|' ./generated/traffic_light_fsm.ts
+sed -i 's|} from "./runtime.js";|} from "@miadi/stateloom-engine/runtime";|' ./generated/traffic_light_fsm.ts
 ```
 
 Then use it the same way as Python, camelCased:
@@ -265,7 +265,7 @@ ctx.enterInitialState();
 ctx.onTimerElapsed();
 ```
 
-The npm `smcraft` package also ships a `Machine` interpreter (`smcraft/machine`) that runs an
+The npm `@miadi/stateloom-engine` package also ships a `Machine` interpreter (`@miadi/stateloom-engine/machine`) that runs an
 SMDF definition directly, with no code generation step — reach for it when you want to
 *execute* a definition rather than compile it.
 
@@ -353,7 +353,7 @@ state — the whole pipeline proven in one run.
 | `AttributeError: '<Name>Context' object has no attribute 'x'` | An action's `code` is emitted as `context.x` and nothing implements `x` | Implement it on a subclass of the generated context |
 | `smcg: error: argument -l/--language: invalid choice: 'typescript'` | `smcg` only targets Python | Generate TypeScript programmatically (Step 5) |
 | `ModuleNotFoundError: No module named 'smcraft'` | Runtime not installed where the generated file runs | `pip install smcraft` |
-| `Cannot find module './runtime.js'` | Generated TS still has the relative import | Rewrite to `smcraft/runtime` |
+| `Cannot find module './runtime.js'` | Generated TS still has the relative import | Rewrite to `@miadi/stateloom-engine/runtime` |
 | Output is far smaller than expected | The lightweight fallback ran | Check the first line; run `smcg` directly |
 | Machine does not react to an event | The transition is on a composite, not a leaf | Declare it on each leaf too |
 | `[V0xx]` errors you do not recognize | Canonical rules, not the MCP subset | See `smdf-reference.md` in `stateloom-design` |

@@ -1,7 +1,7 @@
 {
-  "name": "smcraft",
-  "version": "0.4.2",
-  "description": "State Machine Craft — design, generate, and run hierarchical state machines",
+  "name": "@miadi/stateloom-engine",
+  "version": "0.4.3",
+  "description": "State machine engine for stateloom — SMDF parser, validator (V001–V014), hierarchical runtime, in-memory interpreter and Python/TypeScript code generators",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jgwill/smcraft.git",
@@ -46,7 +46,9 @@
     "state-machine",
     "code-generator",
     "fsm",
-    "hierarchical"
+    "hierarchical",
+    "stateloom",
+    "smdf"
   ],
   "license": "MIT",
   "engines": {

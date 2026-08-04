@@ -11,8 +11,7 @@ and a person at a canvas can all edit the same document while it is open.
 
 | Package | Install | Directory | What it is |
 |---|---|---|---|
-| [`@miadi/stateloom-engine`](https://www.npmjs.com/package/@miadi/stateloom-engine) | `npm i @miadi/stateloom-engine` | `engine/` | The engine: SMDF parser, validator V001–V014, hierarchical runtime, SMDF interpreter, TypeScript + Python codegen |
-| [`smcraft`](https://www.npmjs.com/package/smcraft) | `npm i smcraft` | `ts/` | The same engine, same version, under its original name — generated code emits `import … from "smcraft/runtime"` and the PyPI twin carries this name |
+| [`@miadi/stateloom-engine`](https://www.npmjs.com/package/@miadi/stateloom-engine) | `npm i @miadi/stateloom-engine` | `ts/` | The engine: SMDF parser, validator V001–V014, hierarchical runtime, SMDF interpreter, TypeScript + Python codegen. Renamed from `smcraft`, which is deprecated on npm |
 | [`smcraft`](https://pypi.org/project/smcraft/) | `pip install smcraft` | `py/` | The Python twin, plus the `smcg` generator CLI |
 | [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | `npm i @miadi/stateloom-protocol` | `bridge-protocol/` | Zero-dependency foundation: patch ops, diff/apply, envelopes, layout, edge routing, ASCII/Mermaid render, export naming |
 | [`@miadi/stateloom-client`](https://www.npmjs.com/package/@miadi/stateloom-client) | `npm i @miadi/stateloom-client` | `bridge-client/` | Framework-agnostic socket.io-client wrapper: join / patch / full / presence with auto-resync |
@@ -87,11 +86,11 @@ smcg examples/bdbo_strategy.smdf.json -o output/ -v
 ### TypeScript engine
 
 ```bash
-npm i smcraft
+npm i @miadi/stateloom-engine
 ```
 
 ```typescript
-import { Machine } from "smcraft/machine";
+import { Machine } from "@miadi/stateloom-engine/machine";
 const machine = new Machine(definition);   // runs the SMDF directly, no codegen
 machine.send("Start");
 ```
@@ -134,7 +133,7 @@ cd py   && pip install -e .
 ```
 
 The **runtime library** (`Context`, `State`, `TransitionHelper`, `Observer`) ships as a
-dependency — generated code imports from `smcraft`. `smcraft/machine` offers the other
+dependency — generated code imports from `@miadi/stateloom-engine`. `@miadi/stateloom-engine/machine` offers the other
 path: interpret the definition in memory and skip generation entirely.
 
 Alongside that, the **live pipeline**: agent, terminal and canvas each emit `PatchOp`s to

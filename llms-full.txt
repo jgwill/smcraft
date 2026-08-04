@@ -2,7 +2,7 @@
 
 > Design, validate, generate and run hierarchical state machines. One declarative format (SMDF) is read by an engine, a code generator, an MCP server, a terminal CLI, a socket.io hub and a browser canvas — so an agent, a person at a shell and a person at a canvas can edit the same document while it is open, and each sees the others' edits arrive.
 
-**Engine (npm):** `@miadi/stateloom-engine` and `smcraft` — 0.4.2, byte-identical dist under two names — parser, validator, runtime, SMDF interpreter, Python + TypeScript codegen
+**Engine (npm):** `@miadi/stateloom-engine` 0.4.3 — renamed from `smcraft`, which is deprecated on npm — parser, validator, runtime, SMDF interpreter, Python + TypeScript codegen
 **Engine (PyPI):** `smcraft` 0.1.5 — the Python twin, CLI `smcg`
 **Protocol:** `@miadi/stateloom-protocol` 0.1.3
 **Client:** `@miadi/stateloom-client` 0.1.1
@@ -65,7 +65,7 @@ Mutations are durable-first everywhere: write the file, then emit the patch. A s
 smcraft/
 ├── py/                    # PyPI: smcraft 0.1.5
 │   └── smcraft/           # model.py, parser.py, runtime.py, codegen.py, cli.py (smcg)
-├── ts/                    # npm: smcraft 0.4.2  (mirrored to engine/ as @miadi/stateloom-engine 0.4.2)
+├── ts/                    # npm: @miadi/stateloom-engine 0.4.3  (was smcraft)
 │   └── src/               # model.ts, parser.ts, runtime.ts, codegen.ts, index.ts,
 │                          # machine.ts — the SMDF interpreter (no codegen)
 ├── bridge-protocol/       # npm: @miadi/stateloom-protocol 0.1.3
@@ -389,11 +389,11 @@ Output: `{output_dir}/{snake_case_name}_fsm.py`
 
 ---
 
-## 4. TypeScript Engine Deep Dive (`smcraft` / `@miadi/stateloom-engine` 0.4.2, npm)
+## 4. TypeScript Engine Deep Dive (`@miadi/stateloom-engine` 0.4.3, npm)
 
 ### Installation
 ```bash
-npm install smcraft
+npm install @miadi/stateloom-engine
 # or from source:
 cd ts && npm install && npm run build
 ```
@@ -401,13 +401,13 @@ cd ts && npm install && npm run build
 ### Subpath Exports
 ```typescript
 import { ... } from "smcraft";           // Barrel: all exports
-import { ... } from "smcraft/runtime";   // Runtime only
-import { ... } from "smcraft/machine";   // SMDF interpreter
-import { ... } from "smcraft/parser";    // Parser only
-import { ... } from "smcraft/codegen";   // Code generator only
+import { ... } from "@miadi/stateloom-engine/runtime";   // Runtime only
+import { ... } from "@miadi/stateloom-engine/machine";   // SMDF interpreter
+import { ... } from "@miadi/stateloom-engine/parser";    // Parser only
+import { ... } from "@miadi/stateloom-engine/codegen";   // Code generator only
 ```
 
-### Model Types (`smcraft/model.ts`)
+### Model Types (`@miadi/stateloom-engine/model.ts`)
 The §2 schema, as interfaces:
 ```typescript
 interface StateMachineDefinition { settings: SettingsModel; events: EventSourceDef[]; state: StateDef }
@@ -422,9 +422,9 @@ interface ActionDef { code?: string; timerStart?: { timer: string; duration: str
 interface EventDef { id: string; name?: string; description?: string; parameters?: ParameterDef[] }
 ```
 
-### Parser (`smcraft/parser`)
+### Parser (`@miadi/stateloom-engine/parser`)
 ```typescript
-import { parseJson, parseFile, enrich, validate, type EnrichedModel, type ValidationError } from "smcraft/parser";
+import { parseJson, parseFile, enrich, validate, type EnrichedModel, type ValidationError } from "@miadi/stateloom-engine/parser";
 
 const definition = parseJson(jsonString);
 const model: EnrichedModel = enrich(definition);
@@ -440,13 +440,13 @@ model.leafStates      // StateDef[]
 model.compositeStates // StateDef[]
 ```
 
-### Runtime (`smcraft/runtime`)
+### Runtime (`@miadi/stateloom-engine/runtime`)
 ```typescript
 import {
   State, StateKind, Context, ContextAsync, ContextBase,
   TransitionHelper, ObserverNull, ObserverConsole,
   type IObserver, type EndHandler
-} from "smcraft/runtime";
+} from "@miadi/stateloom-engine/runtime";
 
 // StateKind: LEAF, COMPOSITE, ROOT, FINAL, PARALLEL, HISTORY
 
@@ -470,12 +470,12 @@ const data = ctx.serialize();
 ctx.deserialize(data);
 ```
 
-### Interpreter — `Machine` (`smcraft/machine`)
+### Interpreter — `Machine` (`@miadi/stateloom-engine/machine`)
 
 `Machine` drives a definition directly. No code generation, no build step — the drive-path contract external tools reach for when they hold an SMDF and want it to run.
 
 ```typescript
-import { Machine, MachineDefinitionError } from "smcraft/machine";
+import { Machine, MachineDefinitionError } from "@miadi/stateloom-engine/machine";
 
 const machine = new Machine(definition, {
   name: "OrderFlow",
@@ -510,10 +510,10 @@ Semantics, locked by `ts/src/tests/machine.test.ts`:
 
 Validation on construction: V001 (no root), V002 (duplicate state) and V006 (unknown `nextState`) throw `MachineDefinitionError`, because a definition carrying any of them cannot be interpreted at all. Every other finding lands in `machine.warnings`.
 
-### Code Generator (`smcraft/codegen`)
+### Code Generator (`@miadi/stateloom-engine/codegen`)
 ```typescript
-import { TypeScriptCodeGenerator } from "smcraft/codegen";
-import { parseJson, enrich } from "smcraft/parser";
+import { TypeScriptCodeGenerator } from "@miadi/stateloom-engine/codegen";
+import { parseJson, enrich } from "@miadi/stateloom-engine/parser";
 
 const model = enrich(parseJson(jsonString));
 const code: string = new TypeScriptCodeGenerator(model).generate();
@@ -991,7 +991,7 @@ def on_strategy_failed(self, context, error: str) -> None:
 Two ways to run a definition, and they are not competitors:
 
 - **Generate** (`smcg`, `generate_code`) — standalone source that imports only the runtime library. Ship it, read it, step through it in a debugger, edit the actions by hand.
-- **Interpret** (`smcraft/machine`) — hold the definition in memory and `send()` events at it. No build step, so a machine edited on the canvas a second ago is the machine you are driving now. `code` actions are inert here; they are strings for the generated path.
+- **Interpret** (`@miadi/stateloom-engine/machine`) — hold the definition in memory and `send()` events at it. No build step, so a machine edited on the canvas a second ago is the machine you are driving now. `code` actions are inert here; they are strings for the generated path.
 
 ---
 
@@ -1116,9 +1116,9 @@ print(PythonCodeGenerator(model).generate()[:200])
 
 ### Engine — TypeScript
 ```typescript
-import { parseJson, enrich, validate } from "smcraft/parser";
-import { TypeScriptCodeGenerator } from "smcraft/codegen";
-import { Machine } from "smcraft/machine";
+import { parseJson, enrich, validate } from "@miadi/stateloom-engine/parser";
+import { TypeScriptCodeGenerator } from "@miadi/stateloom-engine/codegen";
+import { Machine } from "@miadi/stateloom-engine/machine";
 import { readFileSync } from "node:fs";
 
 const definition = parseJson(readFileSync("examples/bdbo_strategy.smdf.json", "utf-8"));
@@ -1177,7 +1177,7 @@ npx -y @miadi/stateloom-skills skills install --all
 ## 17. For LLMs
 
 ### When to use SMCraft
-Designing a stateful workflow with hierarchical states, events and transitions; generating executable state machine code from a declarative definition; running a definition directly without a build step (`smcraft/machine`); validating structure before anything is generated; designing a machine collaboratively with a human who is watching a canvas.
+Designing a stateful workflow with hierarchical states, events and transitions; generating executable state machine code from a declarative definition; running a definition directly without a build step (`@miadi/stateloom-engine/machine`); validating structure before anything is generated; designing a machine collaboratively with a human who is watching a canvas.
 
 ### Key design decisions
 1. **SMDF is the single source of truth** — every package parses the same format.
