@@ -63,7 +63,13 @@ export default function SocketBridgeProvider() {
             .getState()
             .applyRemote(
               JSON.stringify({ stateMachine: e.def }),
-              e.mtime ?? Date.now()
+              e.mtime ?? Date.now(),
+              // Name the document from the resolved project file. Without this the
+              // toolbar falls back to "untitled.smdf.json" for every doc that
+              // arrived over the bridge rather than through a Disk load — the
+              // content and the save target were always correct, but the label
+              // told a reader they were editing an unnamed scratch file.
+              docId ? (docId.split("/").pop() || undefined) : undefined
             );
           lastSentDef = e.def;
         },
