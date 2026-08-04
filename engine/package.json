@@ -1,17 +1,7 @@
 {
-  "name": "smcraft",
+  "name": "@miadi/stateloom-engine",
   "version": "0.4.2",
-  "description": "State Machine Craft — design, generate, and run hierarchical state machines",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/jgwill/smcraft.git",
-    "directory": "ts"
-  },
-  "homepage": "https://github.com/jgwill/smcraft#readme",
-  "bugs": {
-    "url": "https://github.com/jgwill/smcraft/issues"
-  },
-  "author": "Guillaume Isabelle <jgi@jgwill.com>",
+  "description": "State machine engine for stateloom — SMDF parser, validator (V001–V014), hierarchical runtime, in-memory interpreter and Python/TypeScript code generators. Identical to the `smcraft` package under the @miadi/stateloom namespace.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -38,7 +28,8 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "node scripts/sync-engine.mjs",
+    "prepack": "node scripts/sync-engine.mjs",
     "test": "node --test dist/tests/*.test.js",
     "clean": "rm -rf dist"
   },
@@ -46,15 +37,23 @@
     "state-machine",
     "code-generator",
     "fsm",
-    "hierarchical"
+    "hierarchical",
+    "stateloom",
+    "smdf"
   ],
   "license": "MIT",
+  "author": "Guillaume Isabelle <jgi@jgwill.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jgwill/smcraft.git",
+    "directory": "engine"
+  },
+  "homepage": "https://github.com/jgwill/smcraft#readme",
+  "bugs": {
+    "url": "https://github.com/jgwill/smcraft/issues"
+  },
   "engines": {
     "node": ">=20"
-  },
-  "devDependencies": {
-    "@types/node": "^25.3.0",
-    "typescript": "^5.4.0"
   },
   "files": [
     "dist/**/*.js",

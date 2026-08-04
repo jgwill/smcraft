@@ -28,3 +28,6 @@ RESUME--*.sh
 /statemachine.smdf.json
 LAUNCH-DESIGNER.sh
 mcp-config-stateloom.json
+
+# engine/dist is a mirror of ts/dist, written by engine/scripts/sync-engine.mjs
+/engine/dist/

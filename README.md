@@ -11,7 +11,8 @@ and a person at a canvas can all edit the same document while it is open.
 
 | Package | Install | Directory | What it is |
 |---|---|---|---|
-| [`smcraft`](https://www.npmjs.com/package/smcraft) | `npm i smcraft` | `ts/` | The engine: SMDF parser, validator V001–V014, hierarchical runtime, SMDF interpreter, TypeScript + Python codegen |
+| [`@miadi/stateloom-engine`](https://www.npmjs.com/package/@miadi/stateloom-engine) | `npm i @miadi/stateloom-engine` | `engine/` | The engine: SMDF parser, validator V001–V014, hierarchical runtime, SMDF interpreter, TypeScript + Python codegen |
+| [`smcraft`](https://www.npmjs.com/package/smcraft) | `npm i smcraft` | `ts/` | The same engine, same version, under its original name — generated code emits `import … from "smcraft/runtime"` and the PyPI twin carries this name |
 | [`smcraft`](https://pypi.org/project/smcraft/) | `pip install smcraft` | `py/` | The Python twin, plus the `smcg` generator CLI |
 | [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | `npm i @miadi/stateloom-protocol` | `bridge-protocol/` | Zero-dependency foundation: patch ops, diff/apply, envelopes, layout, edge routing, ASCII/Mermaid render, export naming |
 | [`@miadi/stateloom-client`](https://www.npmjs.com/package/@miadi/stateloom-client) | `npm i @miadi/stateloom-client` | `bridge-client/` | Framework-agnostic socket.io-client wrapper: join / patch / full / presence with auto-resync |
