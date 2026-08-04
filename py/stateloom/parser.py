@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from smcraft.model import (
+from stateloom.model import (
     ActionDef,
     ContextConfig,
     EventDef,

@@ -72,7 +72,7 @@ client.disconnect();
 
 | Package | Role |
 |---|---|
-| [`smcraft`](https://www.npmjs.com/package/smcraft) | State machine engine: parser, validator, interpreter, code generators |
+| [`@miadi/stateloom-engine`](https://www.npmjs.com/package/@miadi/stateloom-engine) | State machine engine: parser, validator, interpreter, code generators |
 | [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | Patch ops, diff/apply, layout, renderers — zero runtime deps |
 | [`@miadi/stateloom`](https://www.npmjs.com/package/@miadi/stateloom) | socket.io hub holding the live document |
 | [`@miadi/stateloom-client`](https://www.npmjs.com/package/@miadi/stateloom-client) | Framework-agnostic client for the hub — **this package** |

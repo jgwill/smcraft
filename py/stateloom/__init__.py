@@ -1,5 +1,5 @@
 """
-SMCraft — State Machine Craft Framework
+Stateloom — the Python state machine engine
 =========================================
 
 A framework for designing, generating, and running hierarchical state machines.
@@ -13,9 +13,9 @@ Modules:
   - cli: Command-line interface for code generation
 """
 
-__version__ = "0.1.5"
+__version__ = "0.2.0"
 
-from smcraft.model import (
+from stateloom.model import (
     StateMachineDefinition,
     SettingsModel,
     EventSourceDef,
@@ -31,8 +31,8 @@ from smcraft.model import (
     StateKindType,
 )
 
-from smcraft.parser import StateMachineParser
-from smcraft.runtime import (
+from stateloom.parser import StateMachineParser
+from stateloom.runtime import (
     ContextBase,
     Context,
     ContextAsync,

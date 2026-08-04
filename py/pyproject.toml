@@ -3,13 +3,14 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "smcraft"
-version = "0.1.5"
-description = "State Machine Craft — design, generate, and run hierarchical state machines"
+name = "miadi-stateloom-engine"
+version = "0.2.0"
+description = "Stateloom engine (Python) — design, generate, and run hierarchical state machines from SMDF"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
-keywords = ["state-machine", "code-generator", "fsm", "hierarchical"]
+authors = [{ name = "Guillaume Isabelle", email = "jgi@jgwill.com" }]
+keywords = ["state-machine", "code-generator", "fsm", "hierarchical", "stateloom", "smdf"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -18,10 +19,15 @@ classifiers = [
 ]
 
 [project.scripts]
-smcg = "smcraft.cli:main"
+smcg = "stateloom.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["smcraft*"]
+include = ["stateloom*"]
+
+[project.urls]
+Homepage = "https://github.com/jgwill/smcraft"
+Repository = "https://github.com/jgwill/smcraft"
+Issues = "https://github.com/jgwill/smcraft/issues"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

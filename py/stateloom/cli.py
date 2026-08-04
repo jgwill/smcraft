@@ -18,8 +18,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from smcraft.codegen import PythonCodeGenerator, to_snake_case
-from smcraft.parser import StateMachineParser
+from stateloom.codegen import PythonCodeGenerator, to_snake_case
+from stateloom.parser import StateMachineParser
 
 
 def main() -> int:

@@ -1,6 +1,6 @@
 ---
 name: stateloom-codegen
-description: Turn a stateloom / smcraft .smdf.json state machine into runnable Python or TypeScript. Use when generating code with smcg or the generate_code MCP tool, validating a definition against V001-V014 before generating, running smcg --validate-only, wiring the smcraft runtime that generated code imports, running or testing a generated state machine, or diagnosing "Error parsing …: 'settings'" and lightweight fallback output.
+description: Turn a stateloom / smcraft .smdf.json state machine into runnable Python or TypeScript. Use when generating code with smcg or the generate_code MCP tool, validating a definition against V001-V014 before generating, running smcg --validate-only, wiring the stateloom runtime that generated code imports, running or testing a generated state machine, or diagnosing "Error parsing …: 'settings'" and lightweight fallback output.
 ---
 
 # SMDF → validated → code
@@ -20,12 +20,12 @@ description: Turn a stateloom / smcraft .smdf.json state machine into runnable P
    Generator ─────────► <machine>_fsm.py   (Python)
         │                <machine>_fsm.ts   (TypeScript)
         ▼
-   your code imports the smcraft runtime and drives it
+   your code imports the stateloom runtime and drives it
 ```
 
 The runtime — `Context`, `ContextAsync`, `State`, `StateKind`, `TransitionHelper`,
 `ObserverNull` — **ships as a dependency**. Generated code imports it; it is never inlined.
-Install `smcraft` (PyPI for Python, npm for TypeScript) alongside the generated file.
+Install `miadi-stateloom-engine` (PyPI) or `@miadi/stateloom-engine` (npm) alongside the generated file.
 
 ---
 
@@ -80,7 +80,7 @@ Error parsing /abs/path/machine.smdf.json: 'settings'
 ```
 
 This is a `smcg` (Python) constraint. The TypeScript engine's `parseFile` / `parseJson` unwrap
-`{ "stateMachine": … }` themselves in current `smcraft` — but unwrapping first works on every
+`{ "stateMachine": … }` themselves in current `@miadi/stateloom-engine` — but unwrapping first works on every
 version of both engines, so make it the habit.
 
 Unwrap first:
@@ -101,7 +101,7 @@ with `head -3` before converting.
 ## Step 3 — Generate Python
 
 ```bash
-pip install smcraft                       # runtime + parser + generator + the smcg CLI
+pip install miadi-stateloom-engine                       # runtime + parser + generator + the smcg CLI
 
 smcg /tmp/machine.bare.smdf.json -o ./generated/ -l python -v
 ```
@@ -352,7 +352,7 @@ state — the whole pipeline proven in one run.
 | `IndentationError: expected an indented block after function definition` | An internal transition with no `actions` produced an empty handler | Add an action to every `nextState`-less transition (behaviour 1) |
 | `AttributeError: '<Name>Context' object has no attribute 'x'` | An action's `code` is emitted as `context.x` and nothing implements `x` | Implement it on a subclass of the generated context |
 | `smcg: error: argument -l/--language: invalid choice: 'typescript'` | `smcg` only targets Python | Generate TypeScript programmatically (Step 5) |
-| `ModuleNotFoundError: No module named 'smcraft'` | Runtime not installed where the generated file runs | `pip install smcraft` |
+| `ModuleNotFoundError: No module named 'stateloom'` | Runtime not installed where the generated file runs | `pip install miadi-stateloom-engine` |
 | `Cannot find module './runtime.js'` | Generated TS still has the relative import | Rewrite to `@miadi/stateloom-engine/runtime` |
 | Output is far smaller than expected | The lightweight fallback ran | Check the first line; run `smcg` directly |
 | Machine does not react to an event | The transition is on a composite, not a leaf | Declare it on each leaf too |

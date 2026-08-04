@@ -11,13 +11,13 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from smcraft.model import (
+from stateloom.model import (
     ActionDef,
     StateDef,
     StateKindType,
     TransitionDef,
 )
-from smcraft.parser import EnrichedModel, StateMachineParser
+from stateloom.parser import EnrichedModel, StateMachineParser
 
 
 def to_snake_case(name: str) -> str:
@@ -91,7 +91,7 @@ class PythonCodeGenerator:
         self._line("from enum import IntEnum")
         self._line("from typing import Any, Optional")
         self._emit_blank()
-        self._line("from smcraft.runtime import (")
+        self._line("from stateloom.runtime import (")
         self._line("    Context,")
         self._line("    ContextAsync,")
         self._line("    ContextBase,")

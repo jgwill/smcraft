@@ -12,7 +12,7 @@ and a person at a canvas can all edit the same document while it is open.
 | Package | Install | Directory | What it is |
 |---|---|---|---|
 | [`@miadi/stateloom-engine`](https://www.npmjs.com/package/@miadi/stateloom-engine) | `npm i @miadi/stateloom-engine` | `ts/` | The engine: SMDF parser, validator V001–V014, hierarchical runtime, SMDF interpreter, TypeScript + Python codegen. Renamed from `smcraft`, which is deprecated on npm |
-| [`smcraft`](https://pypi.org/project/smcraft/) | `pip install smcraft` | `py/` | The Python twin, plus the `smcg` generator CLI |
+| [`miadi-stateloom-engine`](https://pypi.org/project/miadi-stateloom-engine/) | `pip install miadi-stateloom-engine` | `py/` | The Python twin, plus the `smcg` generator CLI |
 | [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | `npm i @miadi/stateloom-protocol` | `bridge-protocol/` | Zero-dependency foundation: patch ops, diff/apply, envelopes, layout, edge routing, ASCII/Mermaid render, export naming |
 | [`@miadi/stateloom-client`](https://www.npmjs.com/package/@miadi/stateloom-client) | `npm i @miadi/stateloom-client` | `bridge-client/` | Framework-agnostic socket.io-client wrapper: join / patch / full / presence with auto-resync |
 | [`@miadi/stateloom`](https://www.npmjs.com/package/@miadi/stateloom) | `npm i @miadi/stateloom` | `bridge/` | The socket.io hub. Bin `smcraft-bridge` |
@@ -49,6 +49,15 @@ No clone, no build:
 resolve a relative path against their own cwd, and the divergence is silent.
 `scripts/live-loop.sh mcp-line` prints the `claude mcp add` line with paths already resolved.
 
+The server speaks **stdio** by default. Setting `STATELOOM_MCP_HTTP_PORT` switches it to
+Streamable HTTP at `POST /mcp` (plus `GET /health`) so agents on other machines can reach
+the same loom — nothing changes unless you set the port. HTTP mode **requires**
+`STATELOOM_MCP_TOKEN` and refuses to start without one, binds `127.0.0.1` unless
+`STATELOOM_MCP_HTTP_HOST` says otherwise, and is not multi-tenant: the active document is
+process state, so every client shares one board. `STATELOOM_MCP_ROOT` confines that
+document to a directory; `STATELOOM_MCP_LOCK_PROJECT=1` refuses `set_project_file` outright.
+Full table in [`mcp/README.md`](./mcp/README.md#remote-access-optional-020).
+
 ### CLI
 
 ```bash
@@ -79,7 +88,7 @@ Drops a ready-to-use `SKILL.md` into `.claude/skills/` for each of
 ### Python engine
 
 ```bash
-pip install smcraft
+pip install miadi-stateloom-engine
 smcg examples/bdbo_strategy.smdf.json -o output/ -v
 ```
 

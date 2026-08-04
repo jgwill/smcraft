@@ -139,7 +139,7 @@ cannot ship a skill that was edited after the last build.
 
 | package | role |
 |---|---|
-| [`smcraft`](https://www.npmjs.com/package/smcraft) | the engine — SMDF parser, validator, hierarchical runtime, code generators |
+| [`@miadi/stateloom-engine`](https://www.npmjs.com/package/@miadi/stateloom-engine) | the engine — SMDF parser, validator, hierarchical runtime, code generators |
 | [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | patch ops, diff/apply, layout, export names — zero dependencies |
 | [`@miadi/stateloom-client`](https://www.npmjs.com/package/@miadi/stateloom-client) | framework-agnostic socket.io client |
 | [`@miadi/stateloom`](https://www.npmjs.com/package/@miadi/stateloom) | the socket.io hub |

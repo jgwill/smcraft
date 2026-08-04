@@ -12,7 +12,7 @@ npm install @miadi/stateloom-engine
 
 > **Renamed from `smcraft`.** The npm package `smcraft` is deprecated and no longer
 > published; `@miadi/stateloom-engine` continues its version line. The PyPI package
-> keeps the name `smcraft` — Python imports are unaffected.
+> The Python twin is now `miadi-stateloom-engine` (import package `stateloom`, CLI `smcg`).
 
 ## What it is
 
@@ -20,7 +20,7 @@ npm install @miadi/stateloom-engine
 
 It is not a hub, a UI, or a network protocol. Nothing here opens a socket or touches a browser. The live design surfaces — the socket.io hub, the CLI, the React canvas, the MCP server — are the `@miadi/stateloom-*` packages listed below, and they read the same `.smdf.json` this engine runs.
 
-A Python twin ships on PyPI under the same name (`pip install smcraft`, CLI `smcg`) with the same definition format.
+A Python twin ships on PyPI as `miadi-stateloom-engine` (`pip install miadi-stateloom-engine`, CLI `smcg`) with the same definition format.
 
 ## Usage
 

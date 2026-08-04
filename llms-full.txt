@@ -3,13 +3,13 @@
 > Design, validate, generate and run hierarchical state machines. One declarative format (SMDF) is read by an engine, a code generator, an MCP server, a terminal CLI, a socket.io hub and a browser canvas — so an agent, a person at a shell and a person at a canvas can edit the same document while it is open, and each sees the others' edits arrive.
 
 **Engine (npm):** `@miadi/stateloom-engine` 0.4.3 — renamed from `smcraft`, which is deprecated on npm — parser, validator, runtime, SMDF interpreter, Python + TypeScript codegen
-**Engine (PyPI):** `smcraft` 0.1.5 — the Python twin, CLI `smcg`
+**Engine (PyPI):** `miadi-stateloom-engine` 0.2.0 — the Python twin, CLI `smcg`
 **Protocol:** `@miadi/stateloom-protocol` 0.1.3
 **Client:** `@miadi/stateloom-client` 0.1.1
 **Hub:** `@miadi/stateloom` 0.1.1 — bin `smcraft-bridge`
 **React:** `@miadi/stateloom-react` 0.1.4
 **CLI:** `@miadi/stateloom-cli` 0.1.2 — bin `smcx`
-**MCP:** `@miadi/stateloom-mcp` 0.1.3 — bins `stateloom-mcp`, `smcraft-mcp`
+**MCP:** `@miadi/stateloom-mcp` 0.2.0 — bins `stateloom-mcp`, `smcraft-mcp`
 **Skills:** `@miadi/stateloom-skills` 0.1.0 — bin `stateloom`
 **Designer:** `web/` — `"private": true`, run from the repo, never published
 **Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
@@ -63,8 +63,8 @@ Mutations are durable-first everywhere: write the file, then emit the patch. A s
 
 ```
 smcraft/
-├── py/                    # PyPI: smcraft 0.1.5
-│   └── smcraft/           # model.py, parser.py, runtime.py, codegen.py, cli.py (smcg)
+├── py/                    # PyPI: miadi-stateloom-engine 0.2.0
+│   └── stateloom/           # model.py, parser.py, runtime.py, codegen.py, cli.py (smcg)
 ├── ts/                    # npm: @miadi/stateloom-engine 0.4.3  (was smcraft)
 │   └── src/               # model.ts, parser.ts, runtime.ts, codegen.ts, index.ts,
 │                          # machine.ts — the SMDF interpreter (no codegen)
@@ -80,7 +80,7 @@ smcraft/
 │   └── src/               # session.ts, useSmcraftBridge.ts, autoLayout.ts, viewport.ts
 ├── cli/                   # npm: @miadi/stateloom-cli 0.1.2 — bin smcx
 │   └── src/               # index.ts, docio.ts, mutate.ts, commands/, render/
-├── mcp/                   # npm: @miadi/stateloom-mcp 0.1.3
+├── mcp/                   # npm: @miadi/stateloom-mcp 0.2.0
 │   └── src/               # server.ts (15 tools, 1 resource, 1 prompt), projectSwitch.ts
 ├── skills-cli/            # npm: @miadi/stateloom-skills 0.1.0 — bin stateloom
 ├── skills/                # the six skill sources the CLI installs
@@ -252,20 +252,20 @@ V002 is load-bearing beyond validation: because state names are unique, `name` i
 
 ---
 
-## 3. Python Package Deep Dive (`smcraft` 0.1.5, PyPI)
+## 3. Python Package Deep Dive (`miadi-stateloom-engine` 0.2.0, PyPI)
 
 ### Installation
 ```bash
-pip install smcraft
+pip install miadi-stateloom-engine
 # or from source:
 cd py && pip install -e .
 ```
 
-### Module: `smcraft.model` (Spec 70)
+### Module: `stateloom.model` (Spec 70)
 Dataclass-based SMDF representation.
 
 ```python
-from smcraft import (
+from stateloom import (
     StateMachineDefinition,  # Root: settings + event_sources + root_state
     SettingsModel, EventSourceDef, EventDef, TimerDef, ParameterDef,
     StateDef, TransitionDef, ActionDef, ParallelDef,
@@ -280,10 +280,10 @@ definition = StateMachineDefinition(settings=..., event_sources=[...], root_stat
 json_str = definition.to_json(indent=2)
 ```
 
-### Module: `smcraft.parser` (Spec 70)
+### Module: `stateloom.parser` (Spec 70)
 
 ```python
-from smcraft.parser import StateMachineParser, EnrichedModel, ValidationError
+from stateloom.parser import StateMachineParser, EnrichedModel, ValidationError
 
 parser = StateMachineParser()
 
@@ -301,10 +301,10 @@ for err in errors:
 
 **XML support:** parses the StateMachineDotNet-v1 namespace (`http://www.stateforge.com/StateMachineDotNet-v1`), namespaced and non-namespaced alike, including the legacy `.fsm` extension.
 
-### Module: `smcraft.runtime` (Spec 71)
+### Module: `stateloom.runtime` (Spec 71)
 
 ```python
-from smcraft.runtime import (
+from stateloom.runtime import (
     StateKind,          # LEAF=0, COMPOSITE=1, ROOT=2, FINAL=3, PARALLEL=4, HISTORY=5
     State, Context, ContextAsync, ContextBase, TransitionHelper,
     IObserver, ObserverNull, ObserverConsole, ObserverLogger,
@@ -351,10 +351,10 @@ TransitionHelper.process_transition_end(context, state_prev, state_next)
 `on_transition_end(…)`, `on_timer_start(context_name, timer_name, duration)`,
 `on_timer_stop(context_name, timer_name)`.
 
-### Module: `smcraft.codegen` (Spec 72)
+### Module: `stateloom.codegen` (Spec 72)
 
 ```python
-from smcraft.codegen import PythonCodeGenerator, generate_python
+from stateloom.codegen import PythonCodeGenerator, generate_python
 
 # High-level:
 code = generate_python("input.smdf.json", "output/machine_fsm.py")
@@ -374,7 +374,7 @@ Generated structure:
 
 Naming: PascalCase → snake_case for Python identifiers (`OrderCreated` → `on_order_created`). Type mapping: string→str, int→int, float→float, bool→bool, object→Any.
 
-### Module: `smcraft.cli` (Spec 72)
+### Module: `stateloom.cli` (Spec 72)
 
 ```bash
 smcg <input-file> [--output|-o <dir>] [--language|-l python] [--name|-n <name>]
@@ -400,7 +400,7 @@ cd ts && npm install && npm run build
 
 ### Subpath Exports
 ```typescript
-import { ... } from "smcraft";           // Barrel: all exports
+import { ... } from "@miadi/stateloom-engine";           // Barrel: all exports
 import { ... } from "@miadi/stateloom-engine/runtime";   // Runtime only
 import { ... } from "@miadi/stateloom-engine/machine";   // SMDF interpreter
 import { ... } from "@miadi/stateloom-engine/parser";    // Parser only
@@ -665,7 +665,7 @@ Every mutation is **durable-first**: persist to disk, then emit to the hub. The 
 
 `render` reads the durable `.smdf.json` straight off disk: no hub, no browser, no agent needed. It prints the absolute path it wrote.
 
-### 5.6 `@miadi/stateloom-mcp` 0.1.3 — see §6
+### 5.6 `@miadi/stateloom-mcp` 0.2.0 — see §6
 
 The MCP server is a bridge client like any other. It depends on `stateloom-cli` (for the render path), `stateloom-client` and `stateloom-protocol`.
 
@@ -748,6 +748,26 @@ Reports the active document path, whether it exists on disk, and live-bridge sta
 
 ### Prompt
 `design-state-machine(domain?, name?)` — a guided conversation: create → identify states → define events → wire transitions → validate → generate. `domain` is context such as "trading" or "order processing".
+
+### Transport (0.2.0+)
+
+Stdio is the default and is unchanged — one child process beside one agent, with that
+agent's filesystem trust. `STATELOOM_MCP_HTTP_PORT` switches to Streamable HTTP: `POST /mcp`
+for the protocol, `GET /health` for a liveness probe. Stateless by design — a fresh
+`McpServer` and transport per request, because one `McpServer` refuses a second
+`initialize`, so a shared instance would serve exactly one client for the life of the
+process.
+
+The mode is deliberately narrow, because a port gives away the two things stdio got for
+free — one client, and the caller's own trust:
+
+- **No token, no start.** Without `STATELOOM_MCP_TOKEN` the server exits 1.
+- **Loopback default.** `0.0.0.0` is allowed but logs a warning to put TLS in front.
+- **Not multi-tenant.** The active document is process state; one caller's
+  `set_project_file` moves the board for everyone. `STATELOOM_MCP_ROOT` bounds where it can
+  move, `STATELOOM_MCP_LOCK_PROJECT` stops it moving. Run one server per document or per
+  team, not one for everybody.
+- **8 MiB body cap** so an unauthenticated probe cannot be a memory attack.
 
 ### Design session protocol
 1. **Point** — `set_project_file` (or let `STATELOOM_PROJECT_FILE` do it)
@@ -846,6 +866,11 @@ Built once in `bridge-protocol/src/exportName.ts`, so every surface names files 
 | `STATELOOM_BRIDGE_URL` | `http://$HOST:$PORT` | |
 | `STATELOOM_WEB_PORT` | `4598` | The canvas. |
 | `NEXT_PUBLIC_STATELOOM_BRIDGE_URL` | mirrors `BRIDGE_URL` | Inlined at web **build** time — a running server cannot flip it. |
+| `STATELOOM_MCP_HTTP_PORT` | — | Serve the MCP over Streamable HTTP instead of stdio. **Unset = stdio**, the default and unchanged path. |
+| `STATELOOM_MCP_HTTP_HOST` | `127.0.0.1` | Interface for MCP HTTP mode. Loopback by default; widen only behind a TLS terminator. |
+| `STATELOOM_MCP_TOKEN` | — | Bearer token, **required** in HTTP mode — the server exits rather than open an unauthenticated write primitive on the host. Compared in constant time. |
+| `STATELOOM_MCP_ROOT` | — | Confine the MCP's active document to this directory; `set_project_file` refuses to leave it. |
+| `STATELOOM_MCP_LOCK_PROJECT` | — | `1`/`true`/`yes` refuses `set_project_file` entirely. |
 
 **Why absolute.** `mcp/src/server.ts` and `web/src/lib/projectFile.ts` each resolve the project file against their own cwd. Two processes, two cwds, one relative path, and the divergence is silent — it presents as "○ no disk" on the canvas while the agent is happily writing somewhere else. `scripts/live-loop.sh` computes absolute paths once and hands the same values to every process, writing them to `.env.smcraft-live` where they can be read back.
 
@@ -932,7 +957,7 @@ Generated by SMCG. Do not edit manually.
 """
 
 from enum import IntEnum
-from smcraft.runtime import Context, ObserverNull, State, StateKind, TransitionHelper
+from stateloom.runtime import Context, ObserverNull, State, StateKind, TransitionHelper
 
 class OrderWorkflowStateEnum(IntEnum):
     ROOT = 0; PENDING = 1; ACTIVE = 2; COMPLETED = 3
@@ -1103,12 +1128,12 @@ miadi-chronicle episodes host their machines at `<episode>/diagrams/<name>.smdf.
 
 ### Engine — Python
 ```bash
-pip install smcraft
+pip install miadi-stateloom-engine
 smcg examples/bdbo_strategy.smdf.json -o output/ -v
 
 python -c "
-from smcraft import StateMachineParser
-from smcraft.codegen import PythonCodeGenerator
+from stateloom import StateMachineParser
+from stateloom.codegen import PythonCodeGenerator
 model = StateMachineParser().parse_file('examples/bdbo_strategy.smdf.json')
 print(PythonCodeGenerator(model).generate()[:200])
 "

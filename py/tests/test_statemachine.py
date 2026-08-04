@@ -10,10 +10,10 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from smcraft.model import StateMachineDefinition, SettingsModel
-from smcraft.parser import StateMachineParser
-from smcraft.codegen import generate_python, PythonCodeGenerator
-from smcraft.runtime import (
+from stateloom.model import StateMachineDefinition, SettingsModel
+from stateloom.parser import StateMachineParser
+from stateloom.codegen import generate_python, PythonCodeGenerator
+from stateloom.runtime import (
     Context,
     ContextBase,
     State,
@@ -304,7 +304,7 @@ def test_model_to_json_roundtrip():
 
 def test_cli_validate():
     """Test CLI in validate-only mode."""
-    from smcraft.cli import main
+    from stateloom.cli import main
     import sys
 
     old_argv = sys.argv

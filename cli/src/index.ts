@@ -28,7 +28,7 @@ const program = new Command();
 
 program
   .name("smcx")
-  .description("smcraft design-surface CLI — drive the live smcraft bridge from the terminal")
+  .description("stateloom design-surface CLI — drive the live stateloom bridge from the terminal")
   .version("0.1.2")
   .option("--bridge <url>", "bridge socket.io URL", envAlias("BRIDGE_URL"))
   .option("--doc <path>", "SMDF project file (docId)", envAlias("PROJECT_FILE"))

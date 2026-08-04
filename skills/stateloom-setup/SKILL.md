@@ -1,6 +1,6 @@
 ---
 name: stateloom-setup
-description: Install and wire the whole stateloom / smcraft state-machine system from nothing. Use when setting up stateloom or smcraft from scratch, installing the @miadi/stateloom npm packages or the smcraft PyPI package, registering the stateloom MCP server with Claude Code or another MCP client, choosing or creating a .smdf.json project document, starting the design bridge hub on port 4599, wiring the web designer on port 4598, setting STATELOOM_PROJECT_FILE / STATELOOM_BRIDGE_URL, or verifying that the hub, the MCP server and the canvas are all live and pointing at the same file.
+description: Install and wire the whole stateloom / smcraft state-machine system from nothing. Use when setting up stateloom or smcraft from scratch, installing the @miadi/stateloom npm packages or the `miadi-stateloom-engine` PyPI package, registering the stateloom MCP server with Claude Code or another MCP client, choosing or creating a .smdf.json project document, starting the design bridge hub on port 4599, wiring the web designer on port 4598, setting STATELOOM_PROJECT_FILE / STATELOOM_BRIDGE_URL, or verifying that the hub, the MCP server and the canvas are all live and pointing at the same file.
 ---
 
 # Standing up stateloom
@@ -54,7 +54,7 @@ Decide now which of the two modes you are in, because every later command differ
 npm install -g @miadi/stateloom-cli @miadi/stateloom @miadi/stateloom-mcp
 
 # Python engine + code generator (bin: smcg) — only for Python codegen
-pip install smcraft
+pip install miadi-stateloom-engine
 
 # TypeScript runtime — only if generated TS code will run in your project
 npm install @miadi/stateloom-engine
@@ -71,7 +71,7 @@ The full family, and what each is for:
 | `@miadi/stateloom-cli` | npm | Bin `smcx` + the renderers (`@miadi/stateloom-cli/render`). |
 | `@miadi/stateloom-mcp` | npm | The MCP server. Bins `stateloom-mcp` and legacy `smcraft-mcp`. |
 | `@miadi/stateloom-engine` | npm | The TypeScript engine: runtime, parser, `Machine` interpreter, codegen. (Renamed from `smcraft`, which is deprecated on npm.) |
-| `smcraft` | PyPI | The Python engine + the `smcg` code generator CLI. |
+| `miadi-stateloom-engine` | PyPI | The Python engine + the `smcg` code generator CLI. |
 
 **Check:**
 
@@ -178,6 +178,39 @@ cat .env.smcraft-live           # inspect what every process will see
 
 **Check:** `echo "$STATELOOM_PROJECT_FILE"` starts with `/`. If it does not, stop and fix it —
 this is the single most common cause of a broken loop (see Step 7).
+
+---
+
+### Remote MCP (optional, `@miadi/stateloom-mcp` 0.2.0+)
+
+The registration above is stdio and needs nothing new. To reach one loom from another
+machine:
+
+```bash
+STATELOOM_MCP_HTTP_PORT=4790 \
+STATELOOM_MCP_TOKEN="$(openssl rand -hex 32)" \
+STATELOOM_MCP_ROOT=/srv/machines \
+STATELOOM_MCP_LOCK_PROJECT=1 \
+  npx -y @miadi/stateloom-mcp
+# → stateloom-mcp on http://127.0.0.1:4790/mcp
+```
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `STATELOOM_MCP_HTTP_PORT` | — | Bind and speak HTTP. **Unset means stdio.** |
+| `STATELOOM_MCP_HTTP_HOST` | `127.0.0.1` | Interface. |
+| `STATELOOM_MCP_TOKEN` | — | **Required in HTTP mode**; `Authorization: Bearer <token>`. |
+| `STATELOOM_MCP_ROOT` | — | Confine the document to this directory. |
+| `STATELOOM_MCP_LOCK_PROJECT` | — | `1` refuses `set_project_file`. |
+
+**Check:**
+
+```bash
+curl -s http://127.0.0.1:4790/health          # {"ok":true,"transport":"http",...}
+curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4790/mcp   # 401
+```
+
+Every HTTP client shares one board — this is not multi-tenant. Run one server per document.
 
 ---
 

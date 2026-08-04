@@ -57,7 +57,7 @@
 # Cutting a release:
 #   1. bump only the packages you are shipping:
 #        cd <pkg> && npm version patch --no-git-tag-version
-#      Versions are INDEPENDENT here — `smcraft` is on 0.4.x, every
+#      Versions are INDEPENDENT here — `@miadi/stateloom-engine` is on 0.4.x, every
 #      `@miadi/stateloom-*` on 0.1.x. There is no lockstep and nothing to sync: the
 #      published dependency ranges are read from the sibling manifests at
 #      publish time, so a bumped bridge-protocol is picked up automatically.
@@ -95,7 +95,7 @@ env:
   # TOPOLOGICAL ORDER — do not alphabetize. Mirrors PACKAGES in
   # scripts/publish-workspaces.mjs. `web` is absent on purpose: it is
   # "private": true and must never be published.
-  PKG_ORDER: 'ts bridge-protocol bridge-client bridge bridge-react cli mcp'
+  PKG_ORDER: 'ts bridge-protocol bridge-client bridge bridge-react cli mcp skills-cli'
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@ export interface ServeOpts {
 
 export async function serveCommand(opts: ServeOpts): Promise<void> {
   const handle = await startBridge({ port: opts.port, host: opts.host, file: opts.file });
-  console.log(`smcraft bridge listening on ${handle.url}`);
+  console.log(`stateloom bridge listening on ${handle.url}`);
   if (opts.file) console.log(`  doc: ${opts.file}`);
   console.log("  (Ctrl-C to stop)");
 

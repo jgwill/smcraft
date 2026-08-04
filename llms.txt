@@ -2,7 +2,7 @@
 
 > Design, validate, generate and run hierarchical state machines. One declarative format (SMDF) read by an engine, a code generator, an MCP server, a terminal CLI, a socket.io hub and a browser canvas — so an agent, a person at a shell and a person at a canvas can all edit the same document while it is open.
 
-**Engine:** `@miadi/stateloom-engine` — 0.4.3 (npm; renamed from `smcraft`, deprecated) / `smcraft` 0.1.5 (PyPI, CLI `smcg`)
+**Engine:** `@miadi/stateloom-engine` — 0.4.3 (npm; renamed from `smcraft`, deprecated) / `miadi-stateloom-engine` 0.2.0 (PyPI, CLI `smcg`)
 **Loom packages:** `@miadi/stateloom-*` — protocol, client, hub, react, cli, mcp, skills
 **Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
 **Repository:** https://github.com/jgwill/smcraft
@@ -15,13 +15,13 @@ Eight published npm packages, plus the Python engine on PyPI. `web/` is `"privat
 | Install | What it is |
 |---|---|
 | `npm i @miadi/stateloom-engine` (0.4.3) | The engine. SMDF parser, validator V001–V014, hierarchical runtime, SMDF interpreter, Python + TypeScript code generators. |
-| `pip install smcraft` (0.1.5) | The Python twin of the engine, plus the `smcg` generator CLI. |
+| `pip install miadi-stateloom-engine` (0.2.0) | The Python twin of the engine, plus the `smcg` generator CLI. |
 | `npm i @miadi/stateloom-protocol` (0.1.3) | Zero-runtime-dependency foundation: patch ops, diff/apply, wire envelopes, layout, edge routing, ASCII/Mermaid render, export naming, env aliasing. |
 | `npm i @miadi/stateloom-client` (0.1.1) | Framework-agnostic socket.io-client wrapper: join / patch / full / presence with auto-resync. |
 | `npm i @miadi/stateloom` (0.1.1) | The socket.io hub. Bin `smcraft-bridge`. |
 | `npm i @miadi/stateloom-react` (0.1.4) | React 19 binding: `useSmcraftBridge`, session core, viewport helpers. |
 | `npm i -g @miadi/stateloom-cli` (0.1.2) | Bin `smcx` — drive the loom from a terminal. |
-| `npx -y @miadi/stateloom-mcp` (0.1.4) | The MCP server. Bins `stateloom-mcp` and legacy `smcraft-mcp`. |
+| `npx -y @miadi/stateloom-mcp` (0.2.0) | The MCP server. Bins `stateloom-mcp` and legacy `smcraft-mcp`. |
 | `npx -y @miadi/stateloom-skills` (0.1.0) | Bin `stateloom` — installs agent skills into `.claude/skills/`. |
 
 Dependency direction: everything points at `@miadi/stateloom-protocol`. Nothing points back.
@@ -44,7 +44,7 @@ npm subpath exports:
 - `@miadi/stateloom-engine/parser` — `parseJson`, `parseFile`, `enrich`, `validate`
 - `@miadi/stateloom-engine/codegen` — `TypeScriptCodeGenerator`
 
-Python mirrors this as `smcraft.model`, `smcraft.parser`, `smcraft.runtime`, `smcraft.codegen`, `smcraft.cli`. `ObserverLogger` (Python `logging`) exists on the Python side only.
+Python mirrors this as `stateloom.model`, `stateloom.parser`, `stateloom.runtime`, `stateloom.codegen`, `stateloom.cli`. `ObserverLogger` (Python `logging`) exists on the Python side only.
 
 ## SMDF — State Machine Definition Format
 
@@ -60,7 +60,7 @@ Full schema: [Spec 70 — SMDF Format](./rispecs/70-smdf-format.spec.md)
 
 ## MCP server — 15 tools
 
-`@miadi/stateloom-mcp`, stdio transport. Registration:
+`@miadi/stateloom-mcp`, stdio by default (Streamable HTTP optional — see Transport below). Registration:
 
 ```json
 {
@@ -86,6 +86,8 @@ Full schema: [Spec 70 — SMDF Format](./rispecs/70-smdf-format.spec.md)
 **Document** — `set_project_file(path)`, `get_project_file()`
 
 Plus resource `smcraft://definition` and prompt `design-state-machine(domain?, name?)`.
+
+**Transport.** Stdio by default — the server runs as a child process beside one agent. Setting `STATELOOM_MCP_HTTP_PORT` serves Streamable HTTP at `POST /mcp` instead (plus `GET /health`), for agents on other machines. HTTP mode requires `STATELOOM_MCP_TOKEN` and refuses to start without it, binds loopback unless told otherwise, and is **not multi-tenant**: the active document is process state, so every client shares one board. `STATELOOM_MCP_ROOT` bounds where that document can move and `STATELOOM_MCP_LOCK_PROJECT` pins it.
 
 Three of these carry more than their names say:
 
@@ -141,6 +143,11 @@ Installs a ready-to-use `SKILL.md` into `.claude/skills/`. Six skills, sources i
 | `STATELOOM_BRIDGE_URL` | `http://$HOST:$PORT` | |
 | `STATELOOM_WEB_PORT` | `4598` | The canvas. |
 | `NEXT_PUBLIC_STATELOOM_BRIDGE_URL` | mirrors `BRIDGE_URL` | Inlined at web BUILD time, not runtime. |
+| `STATELOOM_MCP_HTTP_PORT` | — | Serve the MCP over HTTP instead of stdio. Unset = stdio, the default. |
+| `STATELOOM_MCP_HTTP_HOST` | `127.0.0.1` | Interface for MCP HTTP mode. |
+| `STATELOOM_MCP_TOKEN` | — | Bearer token, REQUIRED in HTTP mode — the server refuses to start without it. |
+| `STATELOOM_MCP_ROOT` | — | Confine the MCP's active document to this directory. |
+| `STATELOOM_MCP_LOCK_PROJECT` | — | `1` refuses `set_project_file` entirely. |
 
 4598 (canvas) and 4599 (hub) are the loom's pair. `scripts/live-loop.sh env|hub|web-build|web|mcp-line` resolves all of it once and writes `.env.smcraft-live`.
 

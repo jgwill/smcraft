@@ -16,7 +16,7 @@ npx @miadi/stateloom-cli render --as svg
 
 A terminal client for the same `.smdf.json` document a browser canvas and an LLM agent are editing. Mutations are **durable-first**: `smcx` writes the file, then emits the change to the hub — so the document on disk is the truth, and the hub only sequences and rebroadcasts it. `smcx render` skips the hub entirely and draws straight from disk, which means it works with no server, no browser, and no agent running.
 
-It is not the hub (that is `@miadi/stateloom`, bootable here via `smcx serve`) and not the engine (`smcraft` runs the machines this designs).
+It is not the hub (that is `@miadi/stateloom`, bootable here via `smcx serve`) and not the engine (`@miadi/stateloom-engine` runs the machines this designs).
 
 ## Usage
 
@@ -89,7 +89,7 @@ Also exported there: `renderAscii`, `renderSvg`, `svgToPng`, `svgSize`, `renderD
 
 | Package | Role |
 |---|---|
-| [`smcraft`](https://www.npmjs.com/package/smcraft) | State machine engine: parser, validator, interpreter, code generators |
+| [`@miadi/stateloom-engine`](https://www.npmjs.com/package/@miadi/stateloom-engine) | State machine engine: parser, validator, interpreter, code generators |
 | [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | Patch ops, diff/apply, layout, renderers — zero runtime deps |
 | [`@miadi/stateloom`](https://www.npmjs.com/package/@miadi/stateloom) | socket.io hub holding the live document |
 | [`@miadi/stateloom-client`](https://www.npmjs.com/package/@miadi/stateloom-client) | Framework-agnostic client for the hub |
