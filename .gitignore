@@ -31,3 +31,9 @@ mcp-config-stateloom.json
 
 # engine/dist is a mirror of ts/dist, written by engine/scripts/sync-engine.mjs
 /engine/dist/
+
+# python build outputs
+/py/dist/
+/py/build/
+/py-smcraft-deprecated/dist/
+/py-smcraft-deprecated/build/

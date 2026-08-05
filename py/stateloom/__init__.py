@@ -13,7 +13,7 @@ Modules:
   - cli: Command-line interface for code generation
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from stateloom.model import (
     StateMachineDefinition,

@@ -3,7 +3,7 @@
 > Design, validate, generate and run hierarchical state machines. One declarative format (SMDF) is read by an engine, a code generator, an MCP server, a terminal CLI, a socket.io hub and a browser canvas — so an agent, a person at a shell and a person at a canvas can edit the same document while it is open, and each sees the others' edits arrive.
 
 **Engine (npm):** `@miadi/stateloom-engine` 0.4.3 — renamed from `smcraft`, which is deprecated on npm — parser, validator, runtime, SMDF interpreter, Python + TypeScript codegen
-**Engine (PyPI):** `miadi-stateloom-engine` 0.2.0 — the Python twin, CLI `smcg`
+**Engine (PyPI):** `miadi-stateloom-engine` 0.2.1 — the Python twin, CLI `smcg`
 **Protocol:** `@miadi/stateloom-protocol` 0.1.3
 **Client:** `@miadi/stateloom-client` 0.1.1
 **Hub:** `@miadi/stateloom` 0.1.1 — bin `smcraft-bridge`
@@ -63,7 +63,7 @@ Mutations are durable-first everywhere: write the file, then emit the patch. A s
 
 ```
 smcraft/
-├── py/                    # PyPI: miadi-stateloom-engine 0.2.0
+├── py/                    # PyPI: miadi-stateloom-engine 0.2.1
 │   └── stateloom/           # model.py, parser.py, runtime.py, codegen.py, cli.py (smcg)
 ├── ts/                    # npm: @miadi/stateloom-engine 0.4.3  (was smcraft)
 │   └── src/               # model.ts, parser.ts, runtime.ts, codegen.ts, index.ts,
@@ -252,7 +252,7 @@ V002 is load-bearing beyond validation: because state names are unique, `name` i
 
 ---
 
-## 3. Python Package Deep Dive (`miadi-stateloom-engine` 0.2.0, PyPI)
+## 3. Python Package Deep Dive (`miadi-stateloom-engine` 0.2.1, PyPI)
 
 ### Installation
 ```bash
