@@ -70,6 +70,7 @@ The full family, and what each is for:
 | `@miadi/stateloom-react` | npm | `useSmcraftBridge` hook for React 19 canvases. |
 | `@miadi/stateloom-cli` | npm | Bin `smcx` + the renderers (`@miadi/stateloom-cli/render`). |
 | `@miadi/stateloom-mcp` | npm | The MCP server. Bins `stateloom-mcp` and legacy `smcraft-mcp`. |
+| `@miadi/stateloom-web` | npm | The visual designer, prebuilt. Bin `stateloom-web`. No build step, no clone. |
 | `@miadi/stateloom-engine` | npm | The TypeScript engine: runtime, parser, `Machine` interpreter, codegen. (Renamed from `smcraft`, which is deprecated on npm.) |
 | `miadi-stateloom-engine` | PyPI | The Python engine + the `smcg` code generator CLI. |
 
@@ -310,11 +311,26 @@ running server cannot be re-pointed by exporting a new value.
 Mode B, from the repository:
 
 ```bash
+# Mode A — nothing checked out. The designer ships prebuilt.
+npx -y @miadi/stateloom-web \
+  --doc "$STATELOOM_PROJECT_FILE" \
+  --bridge "$STATELOOM_BRIDGE_URL" \
+  --port 4598
+
+# Mode B — from the repository
 scripts/live-loop.sh web-build      # builds with the bridge URL inlined
 scripts/live-loop.sh web            # serves on $STATELOOM_WEB_PORT
 
 # or, for development
 cd web && PORT=4598 npm run dev
+```
+
+The published designer learns its bridge URL at runtime from `GET /api/config`,
+so one prebuilt bundle serves any hub — nothing is baked in. Verify with:
+
+```bash
+curl -s http://127.0.0.1:4598/api/config
+# {"bridgeUrl":"http://127.0.0.1:4599","projectFile":"/abs/path/machine.smdf.json"}
 ```
 
 Open it:

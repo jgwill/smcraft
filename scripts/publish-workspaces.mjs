@@ -57,7 +57,8 @@ import { fileURLToPath } from 'node:url';
 // does not exist yet.
 //
 // `web` is deliberately absent: it is `"private": true` and must never be
-// published.
+// published. Its BUILD ships as `web-dist` (@miadi/stateloom-web), which mirrors
+// `web/.next/standalone` in rather than publishing the source tree.
 // ─────────────────────────────────────────────────────────────────────────────
 const PACKAGES = [
 	'ts', // @miadi/stateloom-engine — no intra-repo deps, the root of the graph
@@ -68,6 +69,7 @@ const PACKAGES = [
 	'cli',
 	'mcp',
 	'skills-cli', // @miadi/stateloom-skills — no intra-repo deps; ships the skill pack
+	'web-dist', // @miadi/stateloom-web — ships web/'s prebuilt standalone server
 ];
 
 const ROOT = resolve(

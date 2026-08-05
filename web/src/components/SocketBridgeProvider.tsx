@@ -20,16 +20,14 @@ const OUTBOUND_DEBOUNCE_MS = 60;
  * the local edit stream back out as debounced PatchOp diffs. Disk persistence
  * stays the existing manual "💾 Disk" save — the hub does not write disk.
  *
- * Rendered only when NEXT_PUBLIC_STATELOOM_BRIDGE_URL (or the legacy
- * NEXT_PUBLIC_SMCRAFT_BRIDGE_URL twin) is set — see DesignBridge.
+ * Rendered only once a bridge URL is known — see DesignBridge, which resolves
+ * it from the serving process at runtime so a published build carries nobody's
+ * URL baked in.
  */
-export default function SocketBridgeProvider() {
+export default function SocketBridgeProvider({ url }: { url: string }) {
   const presence = useDesignerStore((s) => s.presence);
 
   useEffect(() => {
-    const url =
-      process.env.NEXT_PUBLIC_STATELOOM_BRIDGE_URL ??
-      process.env.NEXT_PUBLIC_SMCRAFT_BRIDGE_URL;
     if (!url) return;
 
     let cancelled = false;
@@ -117,7 +115,9 @@ export default function SocketBridgeProvider() {
       if (unsub) unsub();
       if (session) session.disconnect();
     };
-  }, []);
+    // Re-run when the URL arrives: DesignBridge resolves it asynchronously from
+    // /api/config, so the first render can legitimately have a different value.
+  }, [url]);
 
   if (presence.length === 0) return null;
 

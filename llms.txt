@@ -10,7 +10,7 @@
 
 ## Packages
 
-Eight published npm packages, plus the Python engine on PyPI. `web/` is `"private": true` — it is the designer app you run out of this repo, not something you install.
+Nine published npm packages, plus the Python engine on PyPI. The designer source (`web/`) stays `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web`.
 
 | Install | What it is |
 |---|---|
@@ -22,7 +22,8 @@ Eight published npm packages, plus the Python engine on PyPI. `web/` is `"privat
 | `npm i @miadi/stateloom-react` (0.1.4) | React 19 binding: `useSmcraftBridge`, session core, viewport helpers. |
 | `npm i -g @miadi/stateloom-cli` (0.1.2) | Bin `smcx` — drive the loom from a terminal. |
 | `npx -y @miadi/stateloom-mcp` (0.2.0) | The MCP server. Bins `stateloom-mcp` and legacy `smcraft-mcp`. |
-| `npx -y @miadi/stateloom-skills` (0.1.0) | Bin `stateloom` — installs agent skills into `.claude/skills/`. |
+| `npx -y @miadi/stateloom-skills` (0.2.0) | Bin `stateloom` — installs agent skills into `.claude/skills/`. |
+| `npx -y @miadi/stateloom-web` (0.1.0) | Bin `stateloom-web` — the visual designer, prebuilt. Serves on 4598; reads its bridge URL at runtime from `GET /api/config`. |
 
 Dependency direction: everything points at `@miadi/stateloom-protocol`. Nothing points back.
 

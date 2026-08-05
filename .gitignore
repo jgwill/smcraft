@@ -37,3 +37,6 @@ mcp-config-stateloom.json
 /py/build/
 /py-smcraft-deprecated/dist/
 /py-smcraft-deprecated/build/
+
+# web-dist/server is the mirrored Next.js standalone build
+/web-dist/server/

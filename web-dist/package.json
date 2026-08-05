@@ -1,0 +1,41 @@
+{
+  "name": "@miadi/stateloom-web",
+  "version": "0.1.0",
+  "description": "The stateloom visual state machine designer — a prebuilt Next.js canvas you run with `stateloom-web`, joined live to the bridge hub so an agent and a person edit the same board",
+  "type": "module",
+  "bin": {
+    "stateloom-web": "bin/stateloom-web.mjs"
+  },
+  "scripts": {
+    "build": "node scripts/sync-web.mjs",
+    "prepack": "node scripts/sync-web.mjs"
+  },
+  "keywords": [
+    "state-machine",
+    "smdf",
+    "stateloom",
+    "designer",
+    "canvas",
+    "visual-editor",
+    "nextjs",
+    "realtime"
+  ],
+  "license": "MIT",
+  "author": "Guillaume Isabelle <jgi@jgwill.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jgwill/smcraft.git",
+    "directory": "web-dist"
+  },
+  "homepage": "https://github.com/jgwill/smcraft#readme",
+  "bugs": {
+    "url": "https://github.com/jgwill/smcraft/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "bin/**/*.mjs",
+    "server/**/*"
+  ]
+}

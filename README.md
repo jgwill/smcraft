@@ -20,7 +20,7 @@ and a person at a canvas can all edit the same document while it is open.
 | [`@miadi/stateloom-cli`](https://www.npmjs.com/package/@miadi/stateloom-cli) | `npm i -g @miadi/stateloom-cli` | `cli/` | Bin `smcx` — drive the loom from a terminal |
 | [`@miadi/stateloom-mcp`](https://www.npmjs.com/package/@miadi/stateloom-mcp) | `npx -y @miadi/stateloom-mcp` | `mcp/` | The MCP server. Bins `stateloom-mcp` and legacy `smcraft-mcp` |
 | [`@miadi/stateloom-skills`](https://www.npmjs.com/package/@miadi/stateloom-skills) | `npx -y @miadi/stateloom-skills` | `skills-cli/` | Bin `stateloom` — installs agent skills into `.claude/skills/` |
-| — | run from this repo | `web/` | The visual designer (Next.js). `"private": true`, never published |
+| [`@miadi/stateloom-web`](https://www.npmjs.com/package/@miadi/stateloom-web) | `npx -y @miadi/stateloom-web` | `web/` → `web-dist/` | The visual designer (Next.js), prebuilt. `web/` stays private; `web-dist/` ships its standalone build |
 
 Everything depends on `@miadi/stateloom-protocol`. Nothing depends back on it.
 
@@ -110,6 +110,8 @@ machine.send("Start");
 export STATELOOM_PROJECT_FILE=/abs/path/machine.smdf.json
 scripts/live-loop.sh hub                                       # hub on 4599
 scripts/live-loop.sh web-build && scripts/live-loop.sh web     # canvas on 4598
+# or, with nothing checked out:
+npx -y @miadi/stateloom-web --bridge http://127.0.0.1:4599
 ```
 
 4598 (canvas) and 4599 (hub) are the loom's pair. `scripts/live-loop.sh env` prints

@@ -1,23 +1,42 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import BridgeProvider from "@/components/BridgeProvider";
 import SocketBridgeProvider from "@/components/SocketBridgeProvider";
+import { buildTimeBridgeUrl, loadRuntimeConfig } from "@/lib/runtimeConfig";
 
 /**
- * Runtime bridge picker. When NEXT_PUBLIC_STATELOOM_BRIDGE_URL (legacy twin
- * NEXT_PUBLIC_SMCRAFT_BRIDGE_URL) is a non-empty
- * string the app joins the real-time socket hub (live patches + presence +
- * outbound emit); otherwise it falls back to the existing file-backed SSE
- * bridge. With the env unset, behaviour is identical to before WS7a.
+ * Runtime bridge picker. With a bridge URL the app joins the real-time socket
+ * hub (live patches + presence + outbound emit); without one it falls back to
+ * the file-backed SSE bridge. With nothing configured anywhere, behaviour is
+ * identical to before WS7a.
+ *
+ * The URL is asked of the server rather than read out of the bundle, so a
+ * *published* build can point at whatever hub the operator is running —
+ * NEXT_PUBLIC_* is inlined at build time and would otherwise bake in the URL of
+ * whoever ran the build. A copy built from source with the env already set uses
+ * that value on the first render, exactly as it always did.
  */
 export default function DesignBridge() {
-  // NEXT_PUBLIC_* is inlined at build time from literal accesses only, so the
-  // rename alias is an explicit twin chain here (envAlias cannot apply).
-  const url =
-    process.env.NEXT_PUBLIC_STATELOOM_BRIDGE_URL ??
-    process.env.NEXT_PUBLIC_SMCRAFT_BRIDGE_URL;
+  const baked = buildTimeBridgeUrl();
+  const [url, setUrl] = useState<string | undefined>(baked);
+
+  useEffect(() => {
+    // Ask even when a value was baked in: the operator's own environment is the
+    // more specific answer, and /api/config only overrides when it has one.
+    let live = true;
+    loadRuntimeConfig().then((c) => {
+      if (live && c.bridgeUrl) setUrl(c.bridgeUrl);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // While the fetch is in flight the file-backed bridge renders, so the canvas
+  // is never blank waiting on configuration.
   if (typeof url === "string" && url.length > 0) {
-    return <SocketBridgeProvider />;
+    return <SocketBridgeProvider url={url} />;
   }
   return <BridgeProvider />;
 }
