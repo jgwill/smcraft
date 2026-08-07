@@ -142,6 +142,13 @@ export function startBridge(opts: StartBridgeOpts = {}): Promise<BridgeHandle> {
       }
       const room = getRoom(payload.docId ?? defaultDocId);
       const roomId = room.docId;
+      // A socket re-joining onto a different document leaves its previous room
+      // first (chart_1785683047363): without this, the second join subscribes
+      // it to BOTH rooms — harmless when every client joins once, a live
+      // defect the moment a page switches documents without reloading.
+      if (socket.data.roomId && socket.data.roomId !== roomId) {
+        socket.leave(socket.data.roomId);
+      }
       socket.data.roomId = roomId;
       socket.join(roomId);
 
