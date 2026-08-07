@@ -988,7 +988,7 @@ server.tool(
 
 server.tool(
   "set_project_file",
-  "Choose which .smdf.json path is the active document the loom weaves. Disk persistence AND the live bridge room (the hub keys rooms by this path) both re-point to it. A missing file is legitimate — create_state_machine or load_definition writes it next. Path must end in .json; convention is *.smdf.json.",
+  "Choose the active document the loom weaves — two modalities. STANDALONE: any .smdf.json path. RELATIONAL: a chronicle address `miadi-chronicle://<episode>/<diagram>` resolving over $MIADI_CHRONICLE_ROOT to <episode-dir>/diagrams/<diagram>.smdf.json — an ambiguous episode number is a hard error naming the candidates. Disk persistence AND the live bridge room both re-point. A missing file is legitimate — naming it is how an episode's first diagram is created.",
   { path: z.string() },
   async ({ path }) => {
     try {
