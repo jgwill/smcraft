@@ -2,18 +2,23 @@
 
 import { useEffect } from "react";
 import { useDesignerStore } from "@/store/useDesignerStore";
+import { docQuery, useRequestedDoc } from "@/lib/docParam";
 
 export default function BridgeProvider() {
   const applyRemote = useDesignerStore((s) => s.applyRemote);
   const setRemoteStatus = useDesignerStore((s) => s.setRemoteStatus);
   const setRemoteMtime = useDesignerStore((s) => s.setRemoteMtime);
+  // Step 2: the requested `?doc=` rides both the file fetch and the watch
+  // stream; the server resolves and guards, the browser only passes through.
+  const requested = useRequestedDoc();
 
   useEffect(() => {
     let cancelled = false;
+    const qs = docQuery(requested);
 
     async function fetchFile(): Promise<{ content: string | null; mtime: number; path: string; exists: boolean } | null> {
       try {
-        const r = await fetch("/api/file", { cache: "no-store" });
+        const r = await fetch(`/api/file${qs}`, { cache: "no-store" });
         if (!r.ok) return null;
         return await r.json();
       } catch {
@@ -33,7 +38,7 @@ export default function BridgeProvider() {
       }
     })();
 
-    const es = new EventSource("/api/watch");
+    const es = new EventSource(`/api/watch${qs}`);
 
     es.addEventListener("hello", (ev) => {
       try {
@@ -68,7 +73,9 @@ export default function BridgeProvider() {
       cancelled = true;
       es.close();
     };
-  }, [applyRemote, setRemoteStatus, setRemoteMtime]);
+    // `requested` re-keys the whole effect (step 3): a document switch closes
+    // the old watch stream and loads + watches the new document, no reload.
+  }, [applyRemote, setRemoteStatus, setRemoteMtime, requested]);
 
   return null;
 }

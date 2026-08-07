@@ -36,6 +36,21 @@ export interface LayoutMemory {
   viewport: Viewport;
 }
 
+/** Documents this browser holds layout memory for — the picker's recents
+ *  (chart_1785683062725: presentation over state that already exists). */
+export function rememberedDocs(): string[] {
+  try {
+    const docs: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (k?.startsWith(KEY_PREFIX)) docs.push(k.slice(KEY_PREFIX.length));
+    }
+    return docs.sort();
+  } catch {
+    return [];
+  }
+}
+
 export function memoryKey(docId: string): string {
   return `${KEY_PREFIX}${docId}`;
 }
@@ -108,10 +123,13 @@ export function writeMemory(
   }
 }
 
-/** The document this browser is remembering for: the resolved project path. */
+/** The document this browser is remembering for: the resolved project path.
+ *  The requested `?doc=` rides along (step 2) so memory keys follow the
+ *  document the page actually asked for, not always the default. */
 async function resolveDocId(): Promise<string> {
   try {
-    const r = await fetch("/api/file", { cache: "no-store" });
+    const { requestedDoc, docQuery } = await import("./docParam");
+    const r = await fetch(`/api/file${docQuery(requestedDoc())}`, { cache: "no-store" });
     if (r.ok) {
       const path = (await r.json())?.path;
       if (typeof path === "string" && path.length > 0) return path;

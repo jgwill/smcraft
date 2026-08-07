@@ -11,6 +11,7 @@ import {
   type StateMachineDefinition,
 } from "@miadi/stateloom-protocol";
 import { useDesignerStore } from "@/store/useDesignerStore";
+import { docQuery, useRequestedDoc } from "@/lib/docParam";
 
 const OUTBOUND_DEBOUNCE_MS = 60;
 
@@ -26,6 +27,9 @@ const OUTBOUND_DEBOUNCE_MS = 60;
  */
 export default function SocketBridgeProvider({ url }: { url: string }) {
   const presence = useDesignerStore((s) => s.presence);
+  // The requested `?doc=` (step 2): passed through to the file API, which
+  // resolves and guards it; the join below keys the room by the RESOLVED path.
+  const requested = useRequestedDoc();
 
   useEffect(() => {
     if (!url) return;
@@ -42,7 +46,7 @@ export default function SocketBridgeProvider({ url }: { url: string }) {
       // Learn the docId (the resolved project-file path) from the file API.
       let docId = "";
       try {
-        const r = await fetch("/api/file", { cache: "no-store" });
+        const r = await fetch(`/api/file${docQuery(requested)}`, { cache: "no-store" });
         if (r.ok) docId = (await r.json())?.path ?? "";
       } catch {
         // Connect anyway; the hub keys the doc by whatever id we send.
@@ -115,9 +119,12 @@ export default function SocketBridgeProvider({ url }: { url: string }) {
       if (unsub) unsub();
       if (session) session.disconnect();
     };
-    // Re-run when the URL arrives: DesignBridge resolves it asynchronously from
-    // /api/config, so the first render can legitimately have a different value.
-  }, [url]);
+    // Re-run when the URL arrives (DesignBridge resolves it asynchronously from
+    // /api/config) AND when the requested document changes (step 3): the
+    // cleanup disconnects the old session, the new run joins the new room —
+    // switching needs no reload. applyRemote already rebuilds everything from
+    // an arbitrary definition, so the arriving full-def repaints the canvas.
+  }, [url, requested]);
 
   if (presence.length === 0) return null;
 

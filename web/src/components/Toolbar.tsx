@@ -9,6 +9,8 @@ import {
   type ExportFormat,
 } from "@/lib/exportImage";
 import type { StateDef } from "@/types/definition";
+import DocSwitcher from "./DocSwitcher";
+import { docQuery, useRequestedDoc } from "@/lib/docParam";
 
 export default function Toolbar() {
   const definition = useDesignerStore((s) => s.definition);
@@ -35,6 +37,11 @@ export default function Toolbar() {
   const setRemoteStatus = useDesignerStore((s) => s.setRemoteStatus);
   const setRemoteMtime = useDesignerStore((s) => s.setRemoteMtime);
   const applyRemote = useDesignerStore((s) => s.applyRemote);
+
+  // Save and reload must follow the SAME document the page is viewing —
+  // without this, 💾 on a switched document would silently write the default
+  // file (the exact mismatch the allowlist exists to prevent).
+  const requested = useRequestedDoc();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [addingState, setAddingState] = useState(false);
@@ -63,7 +70,7 @@ export default function Toolbar() {
     const json = exportJson();
     setSaving(true);
     try {
-      const r = await fetch("/api/file", {
+      const r = await fetch(`/api/file${docQuery(requested)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: json }),
@@ -115,7 +122,7 @@ export default function Toolbar() {
 
   const handleReloadFromDisk = async () => {
     try {
-      const r = await fetch("/api/file", { cache: "no-store" });
+      const r = await fetch(`/api/file${docQuery(requested)}`, { cache: "no-store" });
       if (!r.ok) {
         setRemoteStatus("error", "Reload failed");
         return;
@@ -198,11 +205,12 @@ export default function Toolbar() {
           className="hidden"
         />
 
-        {/* File name + bridge status */}
+        {/* File name + document switcher + bridge status */}
         <span className="text-xs text-gray-400 mr-1 truncate max-w-[50vw] md:max-w-none">
           {fileName ?? "untitled.smdf.json"}
           {dirty && <span className="text-yellow-500 ml-0.5">●</span>}
         </span>
+        <DocSwitcher />
         {remoteStatus === "synced" && (
           <span className="text-[10px] text-emerald-500" title="In sync with disk">⌁ synced</span>
         )}

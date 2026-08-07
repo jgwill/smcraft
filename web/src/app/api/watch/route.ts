@@ -1,11 +1,19 @@
+import { NextRequest, NextResponse } from "next/server";
 import { existsSync, statSync, watch } from "fs";
-import { getProjectFilePath } from "@/lib/projectFile";
+import { resolveDocPath } from "@/lib/projectFile";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET() {
-  const path = getProjectFilePath();
+export async function GET(req: NextRequest) {
+  // Same optional `?doc=` and the same allowlist as /api/file — the watch
+  // stream follows whichever document the page asked for (step 2 of
+  // chart_1785683010290). A refusal is a named 403, not a stream.
+  const resolution = resolveDocPath(req.nextUrl.searchParams.get("doc"));
+  if (!resolution.ok) {
+    return NextResponse.json({ error: resolution.error }, { status: 403 });
+  }
+  const path = resolution.path;
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
