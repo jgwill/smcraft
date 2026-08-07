@@ -58,6 +58,14 @@ const BRIDGE_URL = envAlias("BRIDGE_URL");
 const AGENT_NAME = envAlias("AGENT_NAME");
 const BRIDGE_TOKEN = envAlias("BRIDGE_TOKEN");
 
+// The canvas address for a document (chart_1785683055671): when the agent
+// re-points the loom, the human gets a link to LOOK at the same document —
+// the `?doc=` parameter is resolved and allowlist-guarded by the web side.
+const CANVAS_URL =
+  envAlias("CANVAS_URL") ?? `http://127.0.0.1:${envAlias("WEB_PORT") ?? "4598"}`;
+const canvasLink = (path: string): string =>
+  `${CANVAS_URL}/?doc=${encodeURIComponent(path)}`;
+
 // ─── In-memory state machine definition ──────────────────────────────
 
 interface StateDef {
@@ -1007,7 +1015,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `Active document: ${r.path}\nPrevious: ${r.previous}\n${summary}\n${bridgeNote}`,
+            text: `Active document: ${r.path}\nPrevious: ${r.previous}\n${summary}\n${bridgeNote}\nCanvas: ${canvasLink(r.path)}`,
           },
         ],
       };
@@ -1036,7 +1044,7 @@ server.tool(
       : "bridge not configured (STATELOOM_BRIDGE_URL unset)";
     return {
       content: [
-        { type: "text", text: `Active document: ${PROJECT_FILE}\n${summary}\n${bridgeNote}` },
+        { type: "text", text: `Active document: ${PROJECT_FILE}\n${summary}\n${bridgeNote}\nCanvas: ${canvasLink(PROJECT_FILE)}` },
       ],
     };
   }
