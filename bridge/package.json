@@ -1,6 +1,6 @@
 {
   "name": "@miadi/stateloom",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "socket.io hub for the smcraft real-time design bridge: in-memory doc + seq per room, presence, chokidar external-edit differ, mtime/hash dedup",
   "repository": {
     "type": "git",

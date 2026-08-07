@@ -1,6 +1,6 @@
 {
   "name": "@miadi/stateloom-web",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The stateloom visual state machine designer — a prebuilt Next.js canvas you run with `stateloom-web`, joined live to the bridge hub so an agent and a person edit the same board",
   "type": "module",
   "bin": {
