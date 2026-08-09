@@ -1,11 +1,11 @@
 {
-  "name": "@miadi/stateloom-react",
-  "version": "0.1.6",
-  "description": "Reusable React binding for the smcraft real-time design bridge (framework-agnostic session core + useSmcraftBridge hook over useSyncExternalStore)",
+  "name": "@miadi/stateloom-canvas",
+  "version": "0.1.1",
+  "description": "The reusable SMDF design surface: a pannable, zoomable, drillable React SVG canvas with routed edges, settled labels and a navigation HUD",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jgwill/smcraft.git",
-    "directory": "bridge-react"
+    "directory": "bridge-canvas"
   },
   "homepage": "https://github.com/jgwill/smcraft#readme",
   "bugs": {
@@ -20,42 +20,43 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
-    }
+    },
+    "./styles.css": "./dist/styles.css"
   },
   "scripts": {
-    "build": "tsc",
-    "test": "node --test dist/tests/*.test.js",
+    "build": "tsc && node scripts/copy-styles.mjs",
     "clean": "rm -rf dist"
   },
   "keywords": [
     "state-machine",
     "smdf",
-    "bridge",
+    "canvas",
+    "designer",
+    "svg",
     "react",
-    "hook",
-    "realtime"
+    "pan",
+    "zoom",
+    "diagram"
   ],
   "license": "MIT",
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "@miadi/stateloom-client": "file:../bridge-client",
     "@miadi/stateloom-protocol": "file:../bridge-protocol"
   },
   "peerDependencies": {
     "react": "^19"
   },
   "devDependencies": {
-    "@types/node": "^22",
     "@types/react": "^19",
     "react": "^19",
-    "socket.io": "^4.8.1",
     "typescript": "^5.7"
   },
   "files": [
     "dist/**/*.js",
     "dist/**/*.d.ts",
+    "dist/styles.css",
     "!dist/tests/"
   ]
 }

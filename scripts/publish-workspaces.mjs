@@ -66,6 +66,7 @@ const PACKAGES = [
 	'bridge-client',
 	'bridge',
 	'bridge-react',
+	'bridge-canvas', // @miadi/stateloom-canvas — the design surface; needs bridge-protocol
 	'cli',
 	'mcp',
 	'skills-cli', // @miadi/stateloom-skills — no intra-repo deps; ships the skill pack

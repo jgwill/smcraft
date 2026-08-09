@@ -1,6 +1,6 @@
 {
   "name": "@miadi/stateloom-client",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Framework-agnostic socket.io-client wrapper for the smcraft real-time design bridge (join/patch/full/presence + auto-resync)",
   "repository": {
     "type": "git",
@@ -17,8 +17,9 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "default": "./dist/index.js"
     }
   },
   "scripts": {

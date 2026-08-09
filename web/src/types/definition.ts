@@ -10,8 +10,11 @@ export interface ObjectRef {
 }
 
 export interface ContextConfig {
+  /** The generated context's class name — what `ts/src/codegen.ts` reads. */
   class?: string;
   instance?: string;
+  /** The designer's own extra: a base the generated context extends. */
+  baseClass?: string;
 }
 
 export interface SettingsModel {
@@ -19,8 +22,15 @@ export interface SettingsModel {
   name?: string;
   description?: string;
   asynchronous: boolean;
-  objects?: { name: string; type: string }[];
-  context?: { className?: string; baseClass?: string };
+  /**
+   * Objects the generated context is constructed with. `ObjectRef` is what
+   * `ts/src/codegen.ts` actually reads (`obj.instance`, `obj.class`); the
+   * `{ name, type }` pair this field used to carry was a shape no generator
+   * could consume, so an "Object References" line typed into the designer was
+   * silently dropped on the way to code.
+   */
+  objects?: ObjectRef[];
+  context?: ContextConfig;
   imports?: string[];
   using?: string[];
   targetLanguage?: string;

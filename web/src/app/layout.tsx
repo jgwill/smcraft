@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+// The board's own colours and animations. It ships with the canvas package so
+// forgewright gets the identical surface from the identical stylesheet.
+import "@miadi/stateloom-canvas/styles.css";
 
 export const metadata: Metadata = {
   title: "SMCraft Designer",

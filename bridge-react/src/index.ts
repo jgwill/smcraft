@@ -57,6 +57,10 @@ export type {
   PlaceLabelsOptions,
 } from "@miadi/stateloom-protocol";
 
+// Viewport math. It moved down into `@miadi/stateloom-protocol` alongside
+// `autoLayout` once a second React package — the reusable canvas — needed the
+// same arithmetic without dragging the socket client in behind it. Re-exported
+// from here unchanged: the web designer's imports never had to move.
 export {
   IDENTITY_VIEWPORT,
   VIEWPORT_LIMITS,
@@ -71,5 +75,5 @@ export {
   worldToScreen,
   zoomAt,
   zoomTo,
-} from "./viewport.js";
-export type { Box, FitOptions, Point, ScaleLimits, Viewport } from "./viewport.js";
+} from "@miadi/stateloom-protocol";
+export type { Box, FitOptions, Point, ScaleLimits, Viewport } from "@miadi/stateloom-protocol";
