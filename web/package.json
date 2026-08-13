@@ -1,14 +1,18 @@
 {
-  "name": "web",
-  "version": "0.1.0",
+  "name": "stateloom-web",
+  "version": "0.1.2",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p ${PORT:-4598}",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p ${PORT:-4598}",
     "lint": "eslint"
   },
   "dependencies": {
+    "@miadi/stateloom-canvas": "file:../bridge-canvas",
+    "@miadi/stateloom-client": "file:../bridge-client",
+    "@miadi/stateloom-protocol": "file:../bridge-protocol",
+    "@miadi/stateloom-react": "file:../bridge-react",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",

@@ -1,0 +1,263 @@
+{
+  "id": "a6582030-15cc-4896-9d6a-962d9c8d252a",
+  "timestamp": "2026-04-16T17:00:01.854Z",
+  "engine": "claude",
+  "model": "sonnet",
+  "prompt": "Build a small CLI that watches a directory and notifies via webhook when a markdown file changes",
+  "result": {
+    "primary": {
+      "action": "build",
+      "target": "CLI tool that watches a directory and sends webhook notifications on markdown file changes",
+      "urgency": "session",
+      "confidence": 0.95
+    },
+    "secondary": [
+      {
+        "action": "implement",
+        "target": "directory watcher for filesystem change events",
+        "implicit": false,
+        "dependency": null,
+        "confidence": 0.95
+      },
+      {
+        "action": "filter",
+        "target": "change events to markdown files only (.md extension)",
+        "implicit": true,
+        "dependency": "directory watcher implemented",
+        "confidence": 0.85
+      },
+      {
+        "action": "send",
+        "target": "HTTP POST webhook payload on detected markdown change",
+        "implicit": false,
+        "dependency": "markdown file change detected",
+        "confidence": 0.9
+      },
+      {
+        "action": "parse",
+        "target": "CLI arguments for directory path and webhook URL",
+        "implicit": true,
+        "dependency": null,
+        "confidence": 0.88
+      },
+      {
+        "action": "define",
+        "target": "webhook payload schema (file path, event type, timestamp)",
+        "implicit": true,
+        "dependency": null,
+        "confidence": 0.7
+      },
+      {
+        "action": "handle",
+        "target": "errors for invalid directory, unreachable webhook, or permission issues",
+        "implicit": true,
+        "dependency": "core watcher and webhook sender implemented",
+        "confidence": 0.65
+      },
+      {
+        "action": "choose",
+        "target": "language and filesystem-watch library (e.g. Node/chokidar, Python/watchdog, Go/fsnotify)",
+        "implicit": true,
+        "dependency": null,
+        "confidence": 0.8
+      }
+    ],
+    "context": {
+      "files_needed": [],
+      "tools_required": [
+        "filesystem watcher library",
+        "HTTP client",
+        "CLI argument parser"
+      ],
+      "assumptions": [
+        "webhook endpoint URL is user-supplied at runtime",
+        "markdown files are identified by .md extension",
+        "notification means HTTP POST to the webhook URL",
+        "'small' implies minimal dependencies and single-file or minimal-file implementation",
+        "watching is continuous/persistent until process is killed"
+      ]
+    },
+    "outputs": {
+      "artifacts": [
+        "cli entry point (e.g. watch-md.js / watch_md.py / main.go)",
+        "package manifest if needed (package.json / requirements.txt / go.mod)"
+      ],
+      "updates": [],
+      "communications": []
+    },
+    "directions": {
+      "east": [
+        {
+          "text": "CLI watches a target directory for .md file changes and notifies an external system via webhook",
+          "confidence": 0.95,
+          "implicit": false
+        },
+        {
+          "text": "User invokes CLI with directory path and webhook URL as arguments",
+          "confidence": 0.88,
+          "implicit": true
+        },
+        {
+          "text": "Webhook payload should communicate what changed and when",
+          "confidence": 0.7,
+          "implicit": true
+        }
+      ],
+      "south": [
+        {
+          "text": "Select language and appropriate filesystem-watch library",
+          "confidence": 0.8,
+          "implicit": true
+        },
+        {
+          "text": "Determine webhook payload schema: file path, event type (created/modified/deleted), timestamp",
+          "confidence": 0.7,
+          "implicit": true
+        },
+        {
+          "text": "Investigate debounce needs — rapid saves could fire multiple events for one logical change",
+          "confidence": 0.6,
+          "implicit": true
+        },
+        {
+          "text": "Decide whether directory watching is recursive or top-level only",
+          "confidence": 0.55,
+          "implicit": true
+        }
+      ],
+      "west": [
+        {
+          "text": "Test watcher detects .md changes and ignores non-.md files",
+          "confidence": 0.85,
+          "implicit": true
+        },
+        {
+          "text": "Validate webhook POST is sent with correct payload on change",
+          "confidence": 0.85,
+          "implicit": true
+        },
+        {
+          "text": "Verify graceful error output for missing directory or unreachable webhook",
+          "confidence": 0.65,
+          "implicit": true
+        }
+      ],
+      "north": [
+        {
+          "text": "Implement CLI argument parsing (directory, webhook URL)",
+          "confidence": 0.88,
+          "implicit": true
+        },
+        {
+          "text": "Implement directory watcher filtering for .md files",
+          "confidence": 0.95,
+          "implicit": false
+        },
+        {
+          "text": "Implement HTTP POST webhook sender with JSON payload",
+          "confidence": 0.9,
+          "implicit": false
+        },
+        {
+          "text": "Wire watcher events to webhook sender",
+          "confidence": 0.92,
+          "implicit": false
+        },
+        {
+          "text": "Add basic error handling and user-facing console output",
+          "confidence": 0.7,
+          "implicit": true
+        }
+      ]
+    },
+    "actionStack": [
+      {
+        "text": "Choose implementation language and filesystem-watch library",
+        "direction": "south",
+        "dependency": null,
+        "completed": false
+      },
+      {
+        "text": "Define CLI interface: required args (directory, webhook-url), optional flags (recursive, debounce-ms)",
+        "direction": "east",
+        "dependency": "language chosen",
+        "completed": false
+      },
+      {
+        "text": "Define webhook POST payload schema (path, event, timestamp)",
+        "direction": "south",
+        "dependency": null,
+        "completed": false
+      },
+      {
+        "text": "Implement CLI argument parsing",
+        "direction": "north",
+        "dependency": "CLI interface defined",
+        "completed": false
+      },
+      {
+        "text": "Implement directory watcher with .md file filter",
+        "direction": "north",
+        "dependency": "language and library chosen",
+        "completed": false
+      },
+      {
+        "text": "Implement HTTP POST webhook sender",
+        "direction": "north",
+        "dependency": "payload schema defined",
+        "completed": false
+      },
+      {
+        "text": "Wire change events to webhook sender",
+        "direction": "north",
+        "dependency": "watcher and webhook sender implemented",
+        "completed": false
+      },
+      {
+        "text": "Add error handling for bad directory path and webhook failures",
+        "direction": "north",
+        "dependency": "core wiring complete",
+        "completed": false
+      },
+      {
+        "text": "Test .md change detection and webhook delivery end-to-end",
+        "direction": "west",
+        "dependency": "full implementation complete",
+        "completed": false
+      },
+      {
+        "text": "Verify non-.md file changes are ignored",
+        "direction": "west",
+        "dependency": "full implementation complete",
+        "completed": false
+      }
+    ],
+    "ambiguities": [
+      {
+        "text": "'small' — no language specified",
+        "suggestion": "Clarify preferred language; Node.js (chokidar) or Python (watchdog) are common minimal choices"
+      },
+      {
+        "text": "Webhook notification format unspecified",
+        "suggestion": "Confirm expected payload: at minimum { path, event, timestamp } as JSON"
+      },
+      {
+        "text": "Recursive vs. top-level directory watching unspecified",
+        "suggestion": "Clarify whether subdirectories should be watched; default to recursive for most use cases"
+      },
+      {
+        "text": "Which change events to notify on — created, modified, deleted, renamed?",
+        "suggestion": "Assume all events by default, or confirm if only 'modified' is wanted"
+      },
+      {
+        "text": "Debounce behavior unspecified — editors often write files multiple times per save",
+        "suggestion": "Add optional debounce flag (e.g. --debounce 300ms) to avoid duplicate webhook calls"
+      }
+    ]
+  },
+  "options": {
+    "extractImplicit": true,
+    "mapDependencies": true
+  },
+  "folder_name": "2604161300--a6582030-15cc-4896-9d6a-962d9c8d252a"
+}

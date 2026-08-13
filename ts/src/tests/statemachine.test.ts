@@ -38,6 +38,50 @@ function loadBdboModel(): EnrichedModel {
   return enrich(definition);
 }
 
+describe("Parser envelope", () => {
+  // The design surfaces (smcx, the MCP server, the hub) persist as
+  // { "stateMachine": … }; examples/ and hand-authored files are bare. An
+  // engine that reads only one of them breaks design-then-generate, and does
+  // it silently: V001 "No root state defined" against a file whose root state
+  // is right there, one level down.
+  const bare = {
+    settings: { namespace: "App", name: "Wrapped", asynchronous: false },
+    events: [{ name: "Internal", events: [{ id: "Start" }] }],
+    state: {
+      name: "Root",
+      states: [
+        { name: "Pending", transitions: [{ event: "Start", nextState: "Done" }] },
+        { name: "Done", kind: "final" },
+      ],
+    },
+  };
+
+  it("reads the bare { settings, events, state } form", () => {
+    const definition = parseJson(JSON.stringify(bare));
+    assert.equal(definition.state.name, "Root");
+    assert.equal(validate(enrich(definition)).length, 0);
+  });
+
+  it("unwraps the { stateMachine: … } form the loom writes", () => {
+    const definition = parseJson(JSON.stringify({ stateMachine: bare }));
+    assert.equal(definition.settings.name, "Wrapped");
+    assert.equal(definition.state.name, "Root");
+    assert.equal(validate(enrich(definition)).length, 0);
+  });
+
+  it("unwraps the capitalized StateMachine of the C# lineage", () => {
+    const definition = parseJson(JSON.stringify({ StateMachine: bare }));
+    assert.equal(definition.state.name, "Root");
+  });
+
+  it("leaves a definition whose own state is named stateMachine alone", () => {
+    // The key is only an envelope when its value is an object; a definition
+    // that merely mentions the word must not be mistaken for one.
+    const definition = parseJson(JSON.stringify({ ...bare, stateMachine: null }));
+    assert.equal(definition.state.name, "Root");
+  });
+});
+
 describe("Parser", () => {
   it("should parse BDBO strategy JSON", () => {
     const model = loadBdboModel();

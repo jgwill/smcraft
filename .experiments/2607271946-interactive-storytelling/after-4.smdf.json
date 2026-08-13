@@ -1,0 +1,323 @@
+{
+  "stateMachine": {
+    "settings": {
+      "namespace": "miadi.chronicle",
+      "name": "InteractiveProduction",
+      "asynchronous": false
+    },
+    "events": [
+      {
+        "name": "Internal",
+        "events": [
+          {
+            "id": "ARTIFACT_CAPTURED",
+            "description": "Something is taken down where it happened — abstract, typed by nothing yet"
+          },
+          {
+            "id": "ARTIFACT_TYPED",
+            "description": "The abstract thing learns what it is — a film shot, a musical idea, a note, a testimony"
+          },
+          {
+            "id": "TRANSCRIBED",
+            "description": "Legible at last — the artifact can take a number"
+          },
+          {
+            "id": "EPISODE_NUMBERED",
+            "description": "Another episode takes its number — the memory lengthens"
+          },
+          {
+            "id": "MANUSCRIPT_CALLS",
+            "description": "The episodes have enough weight to hold covers — the chronicle turns toward a book"
+          },
+          {
+            "id": "SCREEN_CALLS",
+            "description": "The episodes ask to be seen, not only read — the chronicle turns toward a film"
+          },
+          {
+            "id": "BOOK_BOUND",
+            "description": "Chapters set and bound — the manuscript becomes a delivered book"
+          },
+          {
+            "id": "SCENES_ASSEMBLED",
+            "description": "Scenes hang on the spine in story order"
+          },
+          {
+            "id": "CUT_READY",
+            "description": "Rough cut complete with temp sound — ready to screen"
+          },
+          {
+            "id": "CHANGES_REQUESTED",
+            "description": "Director/producers request editorial changes — back to the bench"
+          },
+          {
+            "id": "CUT_APPROVED",
+            "description": "Picture lock — no further editorial changes"
+          },
+          {
+            "id": "GRADE_LOCKED",
+            "description": "Color grade approved shot by shot"
+          },
+          {
+            "id": "SCORE_WRITTEN",
+            "description": "Key, tempo, sections and chords set against picture — the music is ready to be mixed"
+          },
+          {
+            "id": "MIX_LOCKED",
+            "description": "Dialogue, music and effects mixed to final levels"
+          },
+          {
+            "id": "QC_PASSED",
+            "description": "Delivery master passes technical quality control"
+          },
+          {
+            "id": "QC_FAILED_PICTURE",
+            "description": "QC found a picture defect — regrade required"
+          },
+          {
+            "id": "QC_FAILED_SOUND",
+            "description": "QC found an audio defect — remix required"
+          },
+          {
+            "id": "QC_FAILED_MUSIC",
+            "description": "QC found the score wrong against picture — rewrite required"
+          },
+          {
+            "id": "LAND_CALLS",
+            "description": "The screening room is not enough — the work needs to be carried onto the land"
+          },
+          {
+            "id": "KNOWLEDGE_RECEIVED",
+            "description": "What presence on the land taught returns as a new gathering, not as a note"
+          },
+          {
+            "id": "LISTENER_ARRIVES",
+            "description": "Someone presses play — the work finds an audience"
+          },
+          {
+            "id": "PASSAGE_TURNS",
+            "description": "The listener moves on — the work advances, the story holds"
+          },
+          {
+            "id": "AUDIENCE_FORKS",
+            "description": "A listener leaves the master line to author their own narrative"
+          }
+        ]
+      }
+    ],
+    "state": {
+      "name": "Root",
+      "states": [
+        {
+          "name": "Gathering",
+          "kind": "normal",
+          "description": "Wherever you are — a mobile surface open where the knowledge lives: voice, image, video, a MIDI take, a note. The device is incidental; being present is the point",
+          "transitions": [
+            {
+              "event": "ARTIFACT_CAPTURED",
+              "nextState": "Artifact",
+              "description": "Taken down on the spot — held before it is named"
+            }
+          ]
+        },
+        {
+          "name": "Artifact",
+          "kind": "normal",
+          "description": "Captured and still abstract — it carries its provenance before it knows whether it is a shot, a motif, a note, or testimony",
+          "transitions": [
+            {
+              "event": "ARTIFACT_TYPED",
+              "description": "INTERNAL — the artifact acquires a type and stays itself"
+            },
+            {
+              "event": "TRANSCRIBED",
+              "nextState": "Chronicle",
+              "description": "Legible and typed — it can now take a number"
+            }
+          ]
+        },
+        {
+          "name": "Chronicle",
+          "kind": "normal",
+          "description": "Episodic memory — each artifact takes its number and its place in the sequence; the chronicle lengthens and ripens",
+          "transitions": [
+            {
+              "event": "EPISODE_NUMBERED",
+              "description": "INTERNAL — the chronicle grows by one episode and stays itself"
+            },
+            {
+              "event": "MANUSCRIPT_CALLS",
+              "nextState": "Manuscript",
+              "description": "BRANCH — the episodes ripen toward a book"
+            },
+            {
+              "event": "SCREEN_CALLS",
+              "nextState": "StorySpine",
+              "description": "BRANCH — the episodes ripen toward a film"
+            }
+          ]
+        },
+        {
+          "name": "Manuscript",
+          "kind": "normal",
+          "description": "Episodes gathered into chapters — the chronicle takes the shape of a book",
+          "transitions": [
+            {
+              "event": "BOOK_BOUND",
+              "nextState": "Released",
+              "description": "Chapters set and bound — the book is delivered"
+            }
+          ]
+        },
+        {
+          "name": "StorySpine",
+          "kind": "normal",
+          "description": "The thematic spine every rib attaches to and every fork branches from — scenes laid in story order",
+          "transitions": [
+            {
+              "event": "SCENES_ASSEMBLED",
+              "nextState": "RoughCut",
+              "description": "Spine holds — refine into a full cut"
+            }
+          ]
+        },
+        {
+          "name": "RoughCut",
+          "kind": "normal",
+          "description": "Full-length cut with temp sound and placeholder VFX",
+          "transitions": [
+            {
+              "event": "CUT_READY",
+              "nextState": "Review",
+              "description": "Cut screens for director and producers"
+            }
+          ]
+        },
+        {
+          "name": "Review",
+          "kind": "normal",
+          "description": "Director and producers screen the cut — verdict branches here",
+          "transitions": [
+            {
+              "event": "CHANGES_REQUESTED",
+              "nextState": "StorySpine",
+              "description": "LOOP — notes go back to the spine"
+            },
+            {
+              "event": "CUT_APPROVED",
+              "nextState": "ColorGrade",
+              "description": "BRANCH — picture lock, finishing begins"
+            },
+            {
+              "event": "LAND_CALLS",
+              "nextState": "OnTheLand",
+              "description": "The verdict is neither approve nor revise — the work goes to the land first"
+            }
+          ]
+        },
+        {
+          "name": "ColorGrade",
+          "kind": "normal",
+          "description": "Picture-locked footage graded shot by shot",
+          "transitions": [
+            {
+              "event": "GRADE_LOCKED",
+              "nextState": "MusicalComposition",
+              "description": "Graded picture hands off to the songwriting bench"
+            }
+          ]
+        },
+        {
+          "name": "MusicalComposition",
+          "kind": "normal",
+          "description": "Music written to picture — key, capo, tempo, sections and chords; the same mobile surface as Gathering, used now for what it was named for",
+          "transitions": [
+            {
+              "event": "SCORE_WRITTEN",
+              "nextState": "SoundMix",
+              "description": "Cues written against picture — the score hands off to the mix stage"
+            }
+          ]
+        },
+        {
+          "name": "SoundMix",
+          "kind": "normal",
+          "description": "Dialogue, score and effects mixed against the graded picture",
+          "transitions": [
+            {
+              "event": "MIX_LOCKED",
+              "nextState": "Master",
+              "description": "Final mix conforms into the delivery master"
+            }
+          ]
+        },
+        {
+          "name": "Master",
+          "kind": "normal",
+          "description": "Grade, score and mix conformed into the delivery master — QC gate",
+          "transitions": [
+            {
+              "event": "QC_PASSED",
+              "nextState": "Released",
+              "description": "QC clean — the film ships"
+            },
+            {
+              "event": "QC_FAILED_PICTURE",
+              "nextState": "ColorGrade",
+              "description": "BRANCH — picture defect routes back to the grade"
+            },
+            {
+              "event": "QC_FAILED_MUSIC",
+              "nextState": "MusicalComposition",
+              "description": "BRANCH — a cue wrong against picture routes back to the songwriting bench"
+            },
+            {
+              "event": "QC_FAILED_SOUND",
+              "nextState": "SoundMix",
+              "description": "BRANCH — audio defect routes back to the mix"
+            }
+          ]
+        },
+        {
+          "name": "Released",
+          "kind": "normal",
+          "description": "Delivered, as book or as film — no longer an ending, but the door an audience walks in through",
+          "transitions": [
+            {
+              "event": "LISTENER_ARRIVES",
+              "nextState": "Playback",
+              "description": "ENTRY — someone presses play and the traversal begins"
+            }
+          ]
+        },
+        {
+          "name": "Playback",
+          "kind": "normal",
+          "description": "The audience is inside the work — listening, reading, moving through it in time",
+          "transitions": [
+            {
+              "event": "PASSAGE_TURNS",
+              "description": "INTERNAL — the work advances, the story holds its shape"
+            },
+            {
+              "event": "AUDIENCE_FORKS",
+              "nextState": "StorySpine",
+              "description": "FORK — the listener becomes an author and comes home to the spine"
+            }
+          ]
+        },
+        {
+          "name": "OnTheLand",
+          "kind": "normal",
+          "description": "The circle goes on the land — knowledge received through presence, place, and relations, not through the screen",
+          "transitions": [
+            {
+              "event": "KNOWLEDGE_RECEIVED",
+              "nextState": "Gathering",
+              "description": "LOOP — the land's teaching re-enters as a new gathering and earns its own artifact"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

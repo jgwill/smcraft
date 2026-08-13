@@ -1,0 +1,142 @@
+{
+  "settings": {
+    "namespace": "Miaco.Ceremony",
+    "name": "CliWatcherPDE",
+    "asynchronous": false,
+    "_source": {
+      "kind": "miaco-pde",
+      "pdeId": "a6582030-15cc-4896-9d6a-962d9c8d252a",
+      "pdeFolder": ".pde/2604161300--a6582030-15cc-4896-9d6a-962d9c8d252a/",
+      "originalPrompt": "Build a small CLI that watches a directory and notifies via webhook when a markdown file changes",
+      "engine": "claude/sonnet"
+    }
+  },
+  "events": [
+    {
+      "name": "Progress",
+      "events": [
+        { "id": "ceremony_open", "description": "Open the medicine wheel ceremony" },
+        { "id": "step_complete", "description": "Current action step finished" },
+        { "id": "ceremony_close", "description": "Close the ceremony — all directions walked" }
+      ]
+    }
+  ],
+  "state": {
+    "name": "Root",
+    "states": [
+      {
+        "name": "South",
+        "kind": "normal",
+        "description": "🔥 Analysis — research, learning, growth",
+        "states": [
+          {
+            "name": "ChooseLanguageLib",
+            "kind": "normal",
+            "description": "Choose implementation language and filesystem-watch library",
+            "transitions": [
+              { "event": "step_complete", "nextState": "DefinePayloadSchema" }
+            ]
+          },
+          {
+            "name": "DefinePayloadSchema",
+            "kind": "normal",
+            "description": "Define webhook POST payload schema (path, event, timestamp)",
+            "transitions": [
+              { "event": "step_complete", "nextState": "DefineCLIInterface" }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "East",
+        "kind": "normal",
+        "description": "🌅 Vision — clarify desired outcomes",
+        "states": [
+          {
+            "name": "DefineCLIInterface",
+            "kind": "normal",
+            "description": "Define CLI interface: directory, webhook-url, --recursive, --debounce-ms",
+            "transitions": [
+              { "event": "step_complete", "nextState": "ImplementArgParsing" }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "North",
+        "kind": "normal",
+        "description": "❄️ Action — implementation, delivery",
+        "states": [
+          {
+            "name": "ImplementArgParsing",
+            "kind": "normal",
+            "description": "Implement CLI argument parsing",
+            "transitions": [
+              { "event": "step_complete", "nextState": "ImplementWatcher" }
+            ]
+          },
+          {
+            "name": "ImplementWatcher",
+            "kind": "normal",
+            "description": "Implement directory watcher with .md filter",
+            "transitions": [
+              { "event": "step_complete", "nextState": "ImplementWebhookSender" }
+            ]
+          },
+          {
+            "name": "ImplementWebhookSender",
+            "kind": "normal",
+            "description": "Implement HTTP POST webhook sender",
+            "transitions": [
+              { "event": "step_complete", "nextState": "WireEvents" }
+            ]
+          },
+          {
+            "name": "WireEvents",
+            "kind": "normal",
+            "description": "Wire change events to webhook sender",
+            "transitions": [
+              { "event": "step_complete", "nextState": "AddErrorHandling" }
+            ]
+          },
+          {
+            "name": "AddErrorHandling",
+            "kind": "normal",
+            "description": "Add error handling for bad path and webhook failures",
+            "transitions": [
+              { "event": "step_complete", "nextState": "TestE2E" }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "West",
+        "kind": "normal",
+        "description": "🌊 Validation — testing, reflection",
+        "states": [
+          {
+            "name": "TestE2E",
+            "kind": "normal",
+            "description": "Test .md change detection and webhook delivery end-to-end",
+            "transitions": [
+              { "event": "step_complete", "nextState": "VerifyIgnoreNonMd" }
+            ]
+          },
+          {
+            "name": "VerifyIgnoreNonMd",
+            "kind": "normal",
+            "description": "Verify non-.md changes are ignored",
+            "transitions": [
+              { "event": "ceremony_close", "nextState": "Done" }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Done",
+        "kind": "final",
+        "description": "Ceremony closed — all action steps complete"
+      }
+    ]
+  }
+}

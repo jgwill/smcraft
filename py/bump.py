@@ -56,10 +56,10 @@ if __name__ == "__main__":
     parser.add_argument('version', nargs='?', help='New version number (e.g., 1.2.3)')
     args = parser.parse_args()
 
-    # Determine the base directory for smcraft
+    # Determine the base directory for the stateloom package
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    base_dir = script_dir # For smcraft, base_dir is the script's directory
-    package_name = 'smcraft'
+    base_dir = script_dir # base_dir is the script's directory
+    package_name = 'stateloom'
 
     # Get or increment version
     pyproject_path = os.path.join(base_dir, 'pyproject.toml')

@@ -1,4 +1,8 @@
 import { create } from "zustand";
+import { applyPatchOps } from "@miadi/stateloom-protocol";
+import type { PatchOp, Presence } from "@miadi/stateloom-protocol";
+import { autoLayout as deriveLayout, IDENTITY_VIEWPORT } from "@miadi/stateloom-react";
+import type { Viewport } from "@miadi/stateloom-react";
 import type {
   StateMachineDefinition,
   StateDef,
@@ -37,8 +41,33 @@ interface DesignerState {
   // Definition
   definition: StateMachineDefinition;
   layout: DesignerLayout;
+  /**
+   * Where the canvas is looking: `translate(x, y) scale(scale)` over the world
+   * coordinates in `layout.positions`. View state — never part of the SMDF,
+   * never undoable, never dirties the document.
+   */
+  viewport: Viewport;
   fileName: string | null;
+  /**
+   * Absolute path of the project document, as the file API resolves it.
+   *
+   * The basename is already in `fileName`; the whole path is what tells an
+   * export which chronicle episode this board belongs to. Learned once from
+   * `/api/file` by whichever provider mounts first, and null until then.
+   */
+  docPath: string | null;
   dirty: boolean;
+
+  // Bridge / disk sync
+  remoteMtime: number | null;
+  remoteStatus: "idle" | "synced" | "remote-changed" | "error";
+  remoteMessage: string | null;
+
+  // Real-time bridge (WS7a) — runtime highlight + presence, NOT part of SMDF
+  activeStates: string[];
+  presence: Presence[];
+  // Guard so remote-applied ops are not re-emitted by the outbound subscription
+  _applyingRemote: boolean;
 
   // Selection
   selection: Selection;
@@ -108,6 +137,17 @@ interface DesignerState {
 
   // Layout
   setStatePosition: (name: string, pos: StatePosition) => void;
+  /** Re-derive the whole arrangement, overwriting hand-placed boxes. */
+  arrangeLayout: () => void;
+  /**
+   * Apply positions this browser remembers for the open document. Remembered
+   * boxes win over whatever auto-layout derived; names that no longer exist are
+   * carried harmlessly and pruned on the next write.
+   */
+  hydrateLayout: (positions: Record<string, StatePosition>, viewport?: Viewport) => void;
+
+  // Viewport (pan / zoom)
+  setViewport: (viewport: Viewport) => void;
 
   // Selection
   select: (kind: SelectionKind, id: string | null) => void;
@@ -133,6 +173,18 @@ interface DesignerState {
   // File operations
   loadFromJson: (json: string, fileName?: string) => void;
   exportJson: () => string;
+
+  // Bridge / disk sync
+  applyRemote: (json: string, mtime: number, fileName?: string) => void;
+  setRemoteStatus: (status: DesignerState["remoteStatus"], message?: string | null) => void;
+  setRemoteMtime: (mtime: number) => void;
+  setDocPath: (path: string | null) => void;
+
+  // Real-time bridge (WS7a)
+  enterState: (name: string) => void;
+  exitState: (name: string) => void;
+  setPresence: (list: Presence[]) => void;
+  applyRemoteOps: (ops: PatchOp[], mtime: number, seq: number) => void;
 
   // Validation
   validate: () => ValidationError[];
@@ -278,39 +330,22 @@ function validateDefinition(def: StateMachineDefinition): ValidationError[] {
   return errors;
 }
 
+/**
+ * Full layered arrangement of every state — the layout an agent-authored machine
+ * gets when nothing has been placed by hand. Derived by `@miadi/stateloom-react`
+ * so the same pure function serves any other renderer of these definitions.
+ */
+function derivedLayout(def: StateMachineDefinition): DesignerLayout {
+  return { positions: deriveLayout(def) };
+}
+
+/**
+ * Layout for a definition that may already carry hand-placed boxes: derive
+ * readable positions for the whole tree, then let every stored position win.
+ * Auto-layout fills the blanks; a state the user dragged never jumps.
+ */
 function autoLayout(def: StateMachineDefinition, existing: DesignerLayout): DesignerLayout {
-  const positions = { ...existing.positions };
-
-  function layoutChildren(parent: StateDef, offsetX: number, offsetY: number) {
-    const children = parent.states ?? [];
-    children.forEach((s, i) => {
-      if (!positions[s.name]) {
-        const hasChildren = (s.states?.length ?? 0) > 0;
-        positions[s.name] = {
-          x: offsetX + i * 220,
-          y: offsetY,
-          width: hasChildren ? 300 : 160,
-          height: hasChildren ? 200 : 60,
-        };
-      }
-      if (s.states && s.states.length > 0) {
-        const p = positions[s.name];
-        layoutChildren(s, p.x + 20, p.y + 40);
-      }
-    });
-  }
-
-  layoutChildren(def.state, 100, 120);
-
-  if (!positions[def.state.name]) {
-    const children = def.state.states ?? [];
-    positions[def.state.name] = {
-      x: 20, y: 20,
-      width: Math.max(children.length * 220 + 80, 400),
-      height: 350,
-    };
-  }
-  return { positions };
+  return { positions: { ...deriveLayout(def), ...existing.positions } };
 }
 
 const MAX_UNDO = 50;
@@ -318,8 +353,16 @@ const MAX_UNDO = 50;
 export const useDesignerStore = create<DesignerState>((set, get) => ({
   definition: createEmptyDefinition(),
   layout: autoLayout(createEmptyDefinition(), createDefaultLayout()),
+  viewport: { ...IDENTITY_VIEWPORT },
   fileName: null,
+  docPath: null,
   dirty: false,
+  remoteMtime: null,
+  remoteStatus: "idle",
+  remoteMessage: null,
+  activeStates: [],
+  presence: [],
+  _applyingRemote: false,
   selection: { kind: null, id: null },
   drawMode: "select",
   drawSource: null,
@@ -552,6 +595,25 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
     set({ layout: { positions: { ...get().layout.positions, [name]: pos } } });
   },
 
+  arrangeLayout: () => {
+    // Positions are view state, not SMDF — arranging never dirties the document,
+    // but it is undoable, so a hand-tuned board can always be recovered.
+    get()._pushHistory();
+    set({ layout: derivedLayout(get().definition) });
+  },
+
+  hydrateLayout: (positions, viewport) => {
+    // Remembered last, so a box this browser was told to keep wins over the
+    // derivation. Never touches `dirty` or the undo stack: restoring a view is
+    // not an edit of the machine.
+    set({
+      layout: { positions: { ...get().layout.positions, ...positions } },
+      ...(viewport ? { viewport } : {}),
+    });
+  },
+
+  setViewport: (viewport) => set({ viewport }),
+
   select: (kind, id) => set({ selection: { kind, id } }),
   clearSelection: () => set({ selection: { kind: null, id: null } }),
 
@@ -628,6 +690,133 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   exportJson: () => {
     const { definition } = get();
     return JSON.stringify({ stateMachine: definition }, null, 2);
+  },
+
+  applyRemote: (json, mtime, fileName) => {
+    try {
+      const parsed = JSON.parse(json);
+      const def: StateMachineDefinition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
+      const layout = autoLayout(def, get().layout);
+      const rootName = def.state?.name ?? "Root";
+
+      // Preserve the user's drill-down + selection across live syncs when the
+      // referenced states still exist — so watching an agent build out a
+      // composite doesn't snap the canvas back to Root on every tool call.
+      const prev = get();
+      const names = new Set(collectStateNames(def.state));
+      const keptPath = prev.navigationPath.filter((n) => names.has(n));
+      const navigationPath = keptPath.length ? keptPath : [rootName];
+      const currentParent = navigationPath[navigationPath.length - 1];
+      const sel = prev.selection;
+      const selectionValid =
+        sel.kind === "state"
+          ? !!sel.id && names.has(sel.id)
+          : sel.kind === "transition"
+          ? !!sel.id && names.has(sel.id.split(":")[0])
+          : sel.kind === "event"
+          ? !!sel.id && collectEventIds(def).includes(sel.id)
+          : false;
+      const selection = selectionValid ? sel : { kind: null, id: null };
+
+      set({
+        definition: def,
+        layout,
+        fileName: fileName ?? get().fileName,
+        dirty: false,
+        remoteMtime: mtime,
+        remoteStatus: "synced",
+        remoteMessage: null,
+        errors: validateDefinition(def),
+        selection,
+        navigationPath,
+        currentParent,
+      });
+    } catch (e) {
+      set({ remoteStatus: "error", remoteMessage: String(e) });
+    }
+  },
+
+  setRemoteStatus: (status, message = null) => set({ remoteStatus: status, remoteMessage: message }),
+  setRemoteMtime: (mtime) => set({ remoteMtime: mtime }),
+  setDocPath: (path) => set({ docPath: path || null }),
+
+  enterState: (name) => {
+    const cur = get().activeStates;
+    if (cur.includes(name)) return;
+    set({ activeStates: [...cur, name] });
+  },
+
+  exitState: (name) => {
+    const cur = get().activeStates;
+    if (!cur.includes(name)) return;
+    set({ activeStates: cur.filter((s) => s !== name) });
+  },
+
+  setPresence: (list) => set({ presence: list }),
+
+  applyRemoteOps: (ops, mtime, _seq) => {
+    // Mark the batch as remote BEFORE the definition-changing set() fires, so the
+    // outbound store subscription skips it (no echo back to the hub).
+    set({ _applyingRemote: true });
+    try {
+      const prev = get();
+
+      // Structural ops rebuild the definition purely; runtime ops only adjust the
+      // presentational activeStates highlight (never the SMDF).
+      const structural = ops.filter(
+        (o) => o.op !== "runtime.enter" && o.op !== "runtime.exit"
+      );
+      const def: StateMachineDefinition = structural.length
+        ? (applyPatchOps(prev.definition, structural) as StateMachineDefinition)
+        : prev.definition;
+
+      let activeStates = prev.activeStates;
+      for (const op of ops) {
+        if (op.op === "runtime.enter") {
+          if (!activeStates.includes(op.state)) activeStates = [...activeStates, op.state];
+        } else if (op.op === "runtime.exit") {
+          if (activeStates.includes(op.state)) activeStates = activeStates.filter((s) => s !== op.state);
+        }
+      }
+
+      const layout = autoLayout(def, prev.layout);
+      const rootName = def.state?.name ?? "Root";
+
+      // Preserve drill-down + selection across live syncs when the referenced
+      // states still exist (mirrors applyRemote) — don't snap back to Root.
+      const names = new Set(collectStateNames(def.state));
+      const keptPath = prev.navigationPath.filter((n) => names.has(n));
+      const navigationPath = keptPath.length ? keptPath : [rootName];
+      const currentParent = navigationPath[navigationPath.length - 1];
+      const sel = prev.selection;
+      const selectionValid =
+        sel.kind === "state"
+          ? !!sel.id && names.has(sel.id)
+          : sel.kind === "transition"
+          ? !!sel.id && names.has(sel.id.split(":")[0])
+          : sel.kind === "event"
+          ? !!sel.id && collectEventIds(def).includes(sel.id)
+          : false;
+      const selection = selectionValid ? sel : { kind: null, id: null };
+
+      set({
+        definition: def,
+        layout,
+        activeStates,
+        dirty: false,
+        remoteMtime: mtime,
+        remoteStatus: "synced",
+        remoteMessage: null,
+        errors: validateDefinition(def),
+        selection,
+        navigationPath,
+        currentParent,
+      });
+    } catch (e) {
+      set({ remoteStatus: "error", remoteMessage: String(e) });
+    } finally {
+      set({ _applyingRemote: false });
+    }
   },
 
   validate: () => {

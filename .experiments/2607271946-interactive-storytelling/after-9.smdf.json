@@ -1,0 +1,595 @@
+{
+  "stateMachine": {
+    "settings": {
+      "namespace": "miadi.chronicle",
+      "name": "InteractiveProduction",
+      "asynchronous": false
+    },
+    "events": [
+      {
+        "name": "Internal",
+        "events": [
+          {
+            "id": "ARTEFACT_CAPTURED",
+            "description": "Something is taken down where it happened — abstract, typed by nothing yet"
+          },
+          {
+            "id": "ARTEFACT_TYPED",
+            "description": "The artefact learns what it is — a shot, a motif, a note, a testimony; the vocabulary stays open, never an enum"
+          },
+          {
+            "id": "TRANSCRIBED",
+            "description": "Legible at last — the artefact can be read, though not yet told"
+          },
+          {
+            "id": "PERMISSION_STANDS",
+            "description": "The yes was spoken in pre-production, by people who were actually in the room, before anything was carried onto the land — this artefact enters the memory carrying that yes, not seeking one"
+          },
+          {
+            "id": "ANOTHER_VOICE_PRESENT",
+            "description": "Someone is in this whom pre-production never covered — an Elder who spoke on the land, a voice a contributor brought, a stranger who forked the work"
+          },
+          {
+            "id": "CONSENT_GIVEN",
+            "description": "A named person said yes at a named threshold, and was in the room to say it"
+          },
+          {
+            "id": "CONSENT_WITHHELD",
+            "description": "Withheld for now, or never asked — both of them wait"
+          },
+          {
+            "id": "CONSENT_REFUSED",
+            "description": "Someone who was in the room said no — an answer, not a pause"
+          },
+          {
+            "id": "CONSENT_RESOLVED",
+            "description": "The one who had to be asked has answered — the threshold is approached again, never around"
+          },
+          {
+            "id": "AUTHORITY_PAUSED",
+            "description": "A flag raised on any artefact below holds the work above it — restriction climbs where permission never does"
+          },
+          {
+            "id": "PUBLICATION_RESOLVED",
+            "description": "The hold lifts — the finished work returns to the publication threshold intact"
+          },
+          {
+            "id": "PUBLICATION_CONSENTED",
+            "description": "Cleared to be seen at this scale — a page, a screening room, or a live room with people breathing in it"
+          },
+          {
+            "id": "PUBLICATION_REFUSED",
+            "description": "Someone with standing said it may never be seen — the record keeps the no rather than forgetting it"
+          },
+          {
+            "id": "EPISODE_NUMBERED",
+            "description": "Another episode takes its number — the memory lengthens"
+          },
+          {
+            "id": "WORK_OFFERED",
+            "description": "The maker sets the work down where others can find it, before anyone has asked — generosity is unasked by definition"
+          },
+          {
+            "id": "OFFERED_ONWARD",
+            "description": "Carried to another room, another circle — the offering repeats and stays itself"
+          },
+          {
+            "id": "QUESTION_ASKED",
+            "description": "Someone outside the work asks a question, or names a requirement they carry"
+          },
+          {
+            "id": "QUESTION_RECURS",
+            "description": "The same question arrives again, from someone else — recurrence is the evidence; a single asking never was"
+          },
+          {
+            "id": "ANSWERED_IN_PLACE",
+            "description": "An episode already held the answer — the question is met without a book, and that is a good outcome"
+          },
+          {
+            "id": "CONTEXT_OPENED",
+            "description": "The inquiry turns outward — the context so far, and what a part of it could be, laid open to someone who might make it"
+          },
+          {
+            "id": "CONTRIBUTOR_JOINS",
+            "description": "Another pair of hands answers the opening — the circle widens and stays itself"
+          },
+          {
+            "id": "CONTRIBUTION_BEGUN",
+            "description": "A human contributor opens their own surface — their work enters by the same door as everything else and meets the same gates"
+          },
+          {
+            "id": "NO_HANDS_ANSWER",
+            "description": "The opening met silence — the inquiry keeps its standing and waits"
+          },
+          {
+            "id": "PROPOSALS_REQUESTED",
+            "description": "The circle asks the agents for parts — on request, never unbidden"
+          },
+          {
+            "id": "PROPOSAL_REVISED",
+            "description": "Taken apart and put back changed — the hand that revises it is the one that will answer for it"
+          },
+          {
+            "id": "PROPOSAL_SELECTED",
+            "description": "A person picks it up and it becomes material — chosen, which is not what generated means"
+          },
+          {
+            "id": "PROPOSALS_DECLINED",
+            "description": "Nothing here is worth taking, and saying so leaves no one waiting"
+          },
+          {
+            "id": "MANUSCRIPT_CALLS",
+            "description": "A need has been shown rather than merely felt — now there is a reason for covers"
+          },
+          {
+            "id": "SCREEN_CALLS",
+            "description": "The question asks to be seen and not only read — now there is a reason for a film"
+          },
+          {
+            "id": "BOOK_BOUND",
+            "description": "Chapters set and bound — the manuscript is finished, which is not the same as permitted"
+          },
+          {
+            "id": "SCENES_ASSEMBLED",
+            "description": "Scenes hang on the spine in story order"
+          },
+          {
+            "id": "CUT_READY",
+            "description": "Rough cut complete with temp sound — ready to screen"
+          },
+          {
+            "id": "CHANGES_REQUESTED",
+            "description": "Director/producers request editorial changes — back to the bench"
+          },
+          {
+            "id": "CUT_APPROVED",
+            "description": "Picture lock — no further editorial changes"
+          },
+          {
+            "id": "GRADE_LOCKED",
+            "description": "Color grade approved shot by shot"
+          },
+          {
+            "id": "SCORE_WRITTEN",
+            "description": "Key, tempo, sections and chords set against picture — the music is ready to be mixed"
+          },
+          {
+            "id": "MIX_LOCKED",
+            "description": "Final mix joins the rest — every hand's work onto one timeline"
+          },
+          {
+            "id": "QC_PASSED",
+            "description": "The conform passes technical quality control — the machine is satisfied, which settles nothing relational"
+          },
+          {
+            "id": "QC_FAILED_PICTURE",
+            "description": "QC found a picture defect — regrade required"
+          },
+          {
+            "id": "QC_FAILED_SOUND",
+            "description": "QC found an audio defect — remix required"
+          },
+          {
+            "id": "QC_FAILED_MUSIC",
+            "description": "QC found the score wrong against picture — rewrite required"
+          },
+          {
+            "id": "LAND_CALLS",
+            "description": "The screening room is not enough — the work needs to be carried onto the land"
+          },
+          {
+            "id": "KNOWLEDGE_RECEIVED",
+            "description": "What presence on the land taught returns as a new gathering, not as a note"
+          },
+          {
+            "id": "LISTENER_ARRIVES",
+            "description": "Someone presses play, opens the cover, or takes a seat — the work finds an audience"
+          },
+          {
+            "id": "PASSAGE_TURNS",
+            "description": "The listener moves on — the work advances, the story holds"
+          },
+          {
+            "id": "AUDIENCE_FORKS",
+            "description": "A listener leaves the master line to author their own narrative — a new telling, at a new scale"
+          }
+        ]
+      }
+    ],
+    "state": {
+      "name": "Root",
+      "states": [
+        {
+          "name": "Gathering",
+          "kind": "normal",
+          "description": "SOUTH · Zhaawanong, land-based learning. Wherever you are — a mobile surface open where the knowledge lives: voice, image, video, a MIDI take, a note. The device is incidental; being present is the point. Whose hands are on it is not fixed either",
+          "transitions": [
+            {
+              "event": "ARTEFACT_CAPTURED",
+              "nextState": "Artefact",
+              "description": "Taken down on the spot — held before it is named"
+            }
+          ]
+        },
+        {
+          "name": "Artefact",
+          "kind": "normal",
+          "description": "SOUTH · The abstract type, carrying its provenance from birth — sources, authorityFlags, and a consent list. Promotion forks on one question, and it is no longer whether anyone else is here, but whether anyone is here whom pre-production never covered",
+          "transitions": [
+            {
+              "event": "ARTEFACT_TYPED",
+              "description": "INTERNAL — the artefact acquires a kind and stays itself"
+            },
+            {
+              "event": "TRANSCRIBED",
+              "description": "INTERNAL — legible now, and still not told"
+            },
+            {
+              "event": "PERMISSION_STANDS",
+              "nextState": "Chronicle",
+              "description": "BRANCH — the ordinary production path; the yes is upstream and this artefact carries it"
+            },
+            {
+              "event": "ANOTHER_VOICE_PRESENT",
+              "nextState": "ConsentGate",
+              "description": "BRANCH — someone pre-production never spoke for is in this, so they decide"
+            }
+          ]
+        },
+        {
+          "name": "ProposalBench",
+          "kind": "normal",
+          "description": "EAST→SOUTH · Agents lay out narrative parts and melodies against the context they were given. Nothing here has been anywhere. The work is to read it, revise it, and take what is worth taking — being generated is not being chosen",
+          "transitions": [
+            {
+              "event": "PROPOSAL_REVISED",
+              "description": "INTERNAL — a hand goes through it; the bench keeps working"
+            },
+            {
+              "event": "PROPOSAL_SELECTED",
+              "nextState": "Artefact",
+              "description": "Taken up by a person — it enters as material, never as presence; it was never on the land"
+            },
+            {
+              "event": "PROPOSALS_DECLINED",
+              "nextState": "ContributorCircle",
+              "description": "LOOP — nothing worth taking; the circle keeps looking and nobody is left waiting"
+            }
+          ]
+        },
+        {
+          "name": "ConsentGate",
+          "kind": "normal",
+          "description": "WEST · Epangishmok, the talking circle. Not a toll on the production path — a threshold for the voices pre-production could not speak for. Do they consent to THIS telling, at THIS scale? A named person answers; nothing generated here may answer on their behalf",
+          "transitions": [
+            {
+              "event": "CONSENT_GIVEN",
+              "nextState": "Chronicle",
+              "description": "Yes, from someone who was in the room — the artefact may take a number"
+            },
+            {
+              "event": "CONSENT_WITHHELD",
+              "nextState": "Held",
+              "description": "BRANCH — withheld for now, or never asked; both of them wait"
+            },
+            {
+              "event": "CONSENT_REFUSED",
+              "nextState": "Withheld",
+              "description": "BRANCH — a no that is an answer, not a delay"
+            }
+          ]
+        },
+        {
+          "name": "Held",
+          "kind": "normal",
+          "description": "WEST · Paused and routed to a named human — the work is not lost and not refused, it is waiting to be asked. Readiness cannot be rushed. Nothing ships while this holds",
+          "transitions": [
+            {
+              "event": "CONSENT_RESOLVED",
+              "nextState": "ConsentGate",
+              "description": "LOOP — the answer comes back to the threshold, never around it"
+            },
+            {
+              "event": "PUBLICATION_RESOLVED",
+              "nextState": "PublicationGate",
+              "description": "LOOP — a hold raised at publication returns there, with the finished work intact"
+            }
+          ]
+        },
+        {
+          "name": "Withheld",
+          "kind": "final",
+          "description": "WEST · Someone with standing said no. The telling ends here, and the record keeps the no rather than forgetting it",
+          "transitions": []
+        },
+        {
+          "name": "Chronicle",
+          "kind": "normal",
+          "description": "NORTH · Kiiwedinong, story archiving. Internal episodic memory — observations, research questions, subjects being explored, each taking its number and its place. This is the maker's own room; it lengthens on its own, and it turns toward nothing on its own",
+          "transitions": [
+            {
+              "event": "EPISODE_NUMBERED",
+              "description": "INTERNAL — the chronicle grows by one episode and stays itself"
+            },
+            {
+              "event": "QUESTION_ASKED",
+              "nextState": "CommunityInquiry",
+              "description": "NORTH→EAST — the wheel turns; someone outside carries a question the work might answer"
+            }
+          ]
+        },
+        {
+          "name": "CommunityInquiry",
+          "kind": "normal",
+          "description": "EAST · Waabinong, new beginnings and vision. A question or requirement arrives from the community. One asking is a conversation; the same question arriving again is a need. An inquiry faces two ways: it asks something of the work, and it is the first moment the work has something to offer back",
+          "transitions": [
+            {
+              "event": "QUESTION_RECURS",
+              "description": "INTERNAL — the same question returns from someone else; the inquiry deepens and stays itself"
+            },
+            {
+              "event": "CONTEXT_OPENED",
+              "nextState": "ContributorCircle",
+              "description": "BRANCH — the inquiry turns outward; the context is laid open to whoever might make a part of it"
+            },
+            {
+              "event": "MANUSCRIPT_CALLS",
+              "nextState": "Manuscript",
+              "description": "BRANCH — the need is shown; there is now a reason for covers"
+            },
+            {
+              "event": "SCREEN_CALLS",
+              "nextState": "StorySpine",
+              "description": "BRANCH — the need asks to be seen and not only read; the film answers a question too"
+            },
+            {
+              "event": "ANSWERED_IN_PLACE",
+              "nextState": "Chronicle",
+              "description": "LOOP — an episode already held the answer; nothing is made, and nothing is lost"
+            }
+          ]
+        },
+        {
+          "name": "ContributorCircle",
+          "kind": "normal",
+          "description": "EAST · Co-authorship and decision-making authority. The context so far is visible to someone who is not the maker — a composer, a writer, a pair of hands the work needs. They see what has been done and what a part of it could be, and they decide for themselves whether to make it. Being shown is not being asked to serve",
+          "transitions": [
+            {
+              "event": "CONTRIBUTOR_JOINS",
+              "description": "INTERNAL — another pair of hands answers; the circle widens and stays itself"
+            },
+            {
+              "event": "CONTRIBUTION_BEGUN",
+              "nextState": "Gathering",
+              "description": "The contributor opens their own surface — no side door; their work enters where everything else does"
+            },
+            {
+              "event": "PROPOSALS_REQUESTED",
+              "nextState": "ProposalBench",
+              "description": "BRANCH — the circle asks the agents for parts; they are asked, they do not volunteer"
+            },
+            {
+              "event": "NO_HANDS_ANSWER",
+              "nextState": "CommunityInquiry",
+              "description": "LOOP — the opening met silence; the question keeps its standing and waits"
+            }
+          ]
+        },
+        {
+          "name": "Manuscript",
+          "kind": "normal",
+          "description": "SOUTH · Episodes gathered into chapters against a question that would not go away — the chronicle takes the shape of a book because someone needed one, and it may carry more hands than the maker's",
+          "transitions": [
+            {
+              "event": "BOOK_BOUND",
+              "nextState": "PublicationGate",
+              "description": "Bound and finished — now it must still be permitted"
+            }
+          ]
+        },
+        {
+          "name": "StorySpine",
+          "kind": "normal",
+          "description": "SOUTH · The thematic spine every rib attaches to and every fork branches from — scenes laid in story order",
+          "transitions": [
+            {
+              "event": "SCENES_ASSEMBLED",
+              "nextState": "RoughCut",
+              "description": "Spine holds — refine into a full cut"
+            }
+          ]
+        },
+        {
+          "name": "RoughCut",
+          "kind": "normal",
+          "description": "SOUTH · Full-length cut with temp sound and placeholder VFX",
+          "transitions": [
+            {
+              "event": "CUT_READY",
+              "nextState": "Review",
+              "description": "Cut screens for director and producers"
+            }
+          ]
+        },
+        {
+          "name": "Review",
+          "kind": "normal",
+          "description": "WEST · A talking circle around the cut — director and producers screen it, and the verdict branches here",
+          "transitions": [
+            {
+              "event": "CHANGES_REQUESTED",
+              "nextState": "StorySpine",
+              "description": "LOOP — notes go back to the spine"
+            },
+            {
+              "event": "CUT_APPROVED",
+              "nextState": "ColorGrade",
+              "description": "BRANCH — picture lock, finishing begins"
+            },
+            {
+              "event": "LAND_CALLS",
+              "nextState": "OnTheLand",
+              "description": "The verdict is neither approve nor revise — the work goes to the land first"
+            }
+          ]
+        },
+        {
+          "name": "ColorGrade",
+          "kind": "normal",
+          "description": "SOUTH · Picture-locked footage graded shot by shot",
+          "transitions": [
+            {
+              "event": "GRADE_LOCKED",
+              "nextState": "MusicalComposition",
+              "description": "Graded picture hands off to the songwriting bench"
+            }
+          ]
+        },
+        {
+          "name": "MusicalComposition",
+          "kind": "normal",
+          "description": "SOUTH · Music written to picture — key, capo, tempo, sections and chords; the same mobile surface as Gathering, whosever hands are on it. The composer may be the maker, and may well not be",
+          "transitions": [
+            {
+              "event": "SCORE_WRITTEN",
+              "nextState": "SoundMix",
+              "description": "Cues written against picture — the score hands off to the mix stage"
+            }
+          ]
+        },
+        {
+          "name": "SoundMix",
+          "kind": "normal",
+          "description": "SOUTH · Dialogue, score and effects mixed against the graded picture",
+          "transitions": [
+            {
+              "event": "MIX_LOCKED",
+              "nextState": "Conform",
+              "description": "Final mix joins the rest — every hand's work onto one timeline"
+            }
+          ]
+        },
+        {
+          "name": "Conform",
+          "kind": "normal",
+          "description": "SOUTH→WEST · Every contributor's work brought into agreement — grade, score, mix, and whatever else the circle made, conformed into one deliverable. Nobody masters it; the parts are made to agree. The technical gate, and only the technical one",
+          "transitions": [
+            {
+              "event": "QC_PASSED",
+              "nextState": "PublicationGate",
+              "description": "QC clean — the machine is satisfied; the circle has not been asked"
+            },
+            {
+              "event": "QC_FAILED_PICTURE",
+              "nextState": "ColorGrade",
+              "description": "BRANCH — picture defect routes back to the grade"
+            },
+            {
+              "event": "QC_FAILED_MUSIC",
+              "nextState": "MusicalComposition",
+              "description": "BRANCH — a cue wrong against picture routes back to whoever wrote it"
+            },
+            {
+              "event": "QC_FAILED_SOUND",
+              "nextState": "SoundMix",
+              "description": "BRANCH — audio defect routes back to the mix"
+            }
+          ]
+        },
+        {
+          "name": "PublicationGate",
+          "kind": "normal",
+          "description": "WEST→NORTH · The second threshold — not is it finished, but may it be seen, and at what scale: a page, a screening room, a live room with people breathing in it. Everything that stayed private needed no one's permission; leaving the room is where that stops being true, and everyone whose hands are in it has standing here",
+          "transitions": [
+            {
+              "event": "PUBLICATION_CONSENTED",
+              "nextState": "Released",
+              "description": "Cleared to be seen at this scale, by someone with the standing to say so"
+            },
+            {
+              "event": "AUTHORITY_PAUSED",
+              "nextState": "Held",
+              "description": "BRANCH — a flag on any artefact below holds the finished work above it"
+            },
+            {
+              "event": "PUBLICATION_REFUSED",
+              "nextState": "Withheld",
+              "description": "BRANCH — never, not merely not yet"
+            }
+          ]
+        },
+        {
+          "name": "Released",
+          "kind": "normal",
+          "description": "NORTH · Generosity. Delivered — as a book, as a film, as a room where it is performed live. No longer an ending, but a door",
+          "transitions": [
+            {
+              "event": "WORK_OFFERED",
+              "nextState": "Offering",
+              "description": "The maker carries it out before anyone asks"
+            },
+            {
+              "event": "LISTENER_ARRIVES",
+              "nextState": "Playback",
+              "description": "ENTRY — someone arrives on their own and the traversal begins"
+            }
+          ]
+        },
+        {
+          "name": "Offering",
+          "kind": "normal",
+          "description": "NORTH · Knowledge sharing, and the only place the maker can move the work alone. Released waits to be found; an offering is carried — set down in a room, a circle, a feed, unasked. This is where generosity lives, and it is the turn toward EAST",
+          "transitions": [
+            {
+              "event": "OFFERED_ONWARD",
+              "description": "INTERNAL — carried to another room, another circle; the offering repeats and stays itself"
+            },
+            {
+              "event": "LISTENER_ARRIVES",
+              "nextState": "Playback",
+              "description": "Someone takes it up — what was offered is now being met"
+            },
+            {
+              "event": "QUESTION_ASKED",
+              "nextState": "CommunityInquiry",
+              "description": "NORTH→EAST — the offering is answered with a question; the wheel turns"
+            }
+          ]
+        },
+        {
+          "name": "Playback",
+          "kind": "normal",
+          "description": "NORTH · Wisdom shared through story. The audience is inside the work — listening, reading, watching, moving through it in time",
+          "transitions": [
+            {
+              "event": "PASSAGE_TURNS",
+              "description": "INTERNAL — the work advances, the story holds its shape"
+            },
+            {
+              "event": "QUESTION_ASKED",
+              "nextState": "CommunityInquiry",
+              "description": "NORTH→EAST — the audience becomes the community; what they met leaves them with a question"
+            },
+            {
+              "event": "AUDIENCE_FORKS",
+              "nextState": "ConsentGate",
+              "description": "FORK — a fork carries voices pre-production never spoke for, so it always meets the threshold"
+            }
+          ]
+        },
+        {
+          "name": "OnTheLand",
+          "kind": "normal",
+          "description": "SOUTH, and arguably EAST · The circle goes on the land — knowledge received through presence, place, and relations, not through the screen. Which direction owns this is genuinely unsettled: south holds land-based observation, east holds the vision quest",
+          "transitions": [
+            {
+              "event": "KNOWLEDGE_RECEIVED",
+              "nextState": "Gathering",
+              "description": "LOOP — the land's teaching re-enters as a new gathering and earns its own artefact"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "settings": {
+    "namespace": "City.Signals",
+    "name": "TrafficLight",
+    "asynchronous": false
+  },
+  "events": [
+    {
+      "name": "SignalEvents",
+      "feeder": "SignalFeeder",
+      "events": [
+        { "id": "TimerElapsed", "description": "Phase timer fired" },
+        {
+          "id": "PedestrianCall",
+          "description": "Button pressed at the crossing",
+          "parameters": [{ "name": "crossingId", "type": "string" }]
+        },
+        { "id": "PowerLost", "description": "Mains supply dropped" }
+      ]
+    }
+  ],
+  "state": {
+    "name": "Root",
+    "states": [
+      {
+        "name": "Operating",
+        "description": "Normal signalling cycle",
+        "transitions": [{ "event": "PowerLost", "nextState": "Dark" }],
+        "states": [
+          {
+            "name": "Red",
+            "description": "Stop",
+            "transitions": [{ "event": "TimerElapsed", "nextState": "Green" }]
+          },
+          {
+            "name": "Green",
+            "description": "Go",
+            "transitions": [
+              { "event": "TimerElapsed", "nextState": "Amber" },
+              {
+                "event": "PedestrianCall",
+                "nextState": "Amber",
+                "condition": "green_elapsed > 10",
+                "description": "A call cuts the green short, but never before ten seconds"
+              }
+            ]
+          },
+          {
+            "name": "Amber",
+            "description": "Clear the junction",
+            "transitions": [{ "event": "TimerElapsed", "nextState": "Red" }]
+          }
+        ]
+      },
+      {
+        "name": "Dark",
+        "kind": "final",
+        "description": "Power failure — the signal is off and stays off"
+      }
+    ]
+  }
+}

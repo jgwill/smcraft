@@ -4,9 +4,10 @@
 > References: CAISHEN Spec 63 (State Machine Designer), MCP SDK
 
 **Spec ID**: 73
-**Version**: 1.0
+**Version**: 2.0
 **Source**: Extracted from `smcraft/mcp/src/server.ts`
 **Implementation**: TypeScript (`mcp/src/server.ts`), Node.js MCP server on stdio
+**Revised**: Issue #10 / PR #11 (2026-04-16) — in-memory state replaced by file-backed store; `generate_rispec` added
 
 ## Creative Intent
 
@@ -47,6 +48,13 @@ A conversational state machine design workflow where LLM agents create, modify, 
 |------|-----------|---------|
 | `validate_definition` | — | Run validation rules, return errors |
 | `generate_code` | language? | Generate executable code (python/typescript) |
+| `generate_rispec` | intent? | Emit RISE framework rispec markdown from current SMDF (see Spec 76) |
+
+### Document Tools (2026-07-26)
+| Tool | Parameters | Purpose |
+|------|-----------|---------|
+| `set_project_file` | path | Choose which `.smdf.json` path is the active document — disk persistence and the live bridge room both re-point |
+| `get_project_file` | — | Report active document path, disk presence, bridge status |
 
 ## Design Session Protocol
 
@@ -57,8 +65,16 @@ A conversational state machine design workflow where LLM agents create, modify, 
 4. **Generate**: `generate_code` → production-ready output
 5. **Export**: `get_definition` → save `.smdf.json` for version control
 
-### In-Memory State
-Current implementation holds one definition in server memory. Lost on restart.
+### File-Backed State (2026-04-16)
+Every tool handler reads the current definition from `SMCRAFT_PROJECT_FILE` (absolute path, default `./statemachine.smdf.json`) via `readDef()`, mutates, and writes back via `writeDef()`. There is no in-memory definition; the file *is* the session. The same file is observed by the web designer via `fs.watch` + SSE — see Spec 75.
+
+### Env Alias (2026-07-27)
+Every `SMCRAFT_*` env read has a `STATELOOM_*` twin: code reads `STATELOOM_*` first and falls back to `SMCRAFT_*` (`envAlias` in `@miadi/stateloom-protocol`, tested in `bridge-protocol/src/tests/env.test.ts`). Existing registrations that bake `SMCRAFT_PROJECT_FILE` / `SMCRAFT_BRIDGE_URL` keep working unchanged.
+
+### Path Power (2026-07-26)
+`STATELOOM_PROJECT_FILE` (legacy twin `SMCRAFT_PROJECT_FILE`) is only the *initial* document. `set_project_file` re-points the active path mid-session: subsequent reads/writes hit the new file, and the bridge client disconnects and re-joins the hub room keyed by the new absolute path (the hub already serves one room per docId — Spec 77). A missing file is a legitimate switch target: `create_state_machine` or `load_definition` writes it next, and the hub room seeds from disk on first join. This is what lets one agent weave state-machines that live inside miadi-chronicle episodes (e.g. `/srv/miadi/episodes/miadi-chronicle/<episode>/diagrams/*.smdf.json`) without respawning the MCP. Switching resolves relative paths against the MCP process cwd and refuses non-`.json` paths (`mcp/src/projectSwitch.ts`, tested in `mcp/src/tests/projectSwitch.test.ts`).
+
+Caveat: the web canvas binds its docId per server process (`/api/file` resolves the web's own `SMCRAFT_PROJECT_FILE`); pointing the *canvas* at another document currently means restarting the web server with that env — UI-side document choice is future work (see the forgewright rendering plan).
 
 ## Structural Tensions
 
@@ -73,10 +89,10 @@ const result = execSync(`smcg ${tmpFile} -l ${language} -o /tmp/output`);
 return readGeneratedFile('/tmp/output/');
 ```
 
-### Session Persistence
-**Current Reality**: In-memory only — design lost on server restart
+### Session Persistence — **resolved**
+~~**Current Reality**: In-memory only — design lost on server restart~~
 **Desired Outcome**: Sessions auto-save to filesystem, recoverable
-**Resolution Path**: Write definition to `.smcraft-session.json` after each mutation, load on startup
+**Resolution**: File-backed store (`SMCRAFT_PROJECT_FILE`) — mutations are written synchronously to disk, recovery is `readDef()` on first tool call. The web designer watches the same file via SSE.
 
 ### Hierarchical Tool Support
 **Current Reality**: Tools operate on flat state list — `add_state` defaults to Root parent

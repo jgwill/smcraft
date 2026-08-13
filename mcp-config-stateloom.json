@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "stateloom": {
+      "command": "node",
+      "args": ["/workspace/repos/jgwill/smcraft/mcp/dist/server.js"],
+      "env": {
+        "STATELOOM_PROJECT_FILE": "/workspace/repos/jgwill/smcraft/statemachine.smdf.json",
+        "STATELOOM_BRIDGE_URL": "http://127.0.0.1:4599"
+      }
+    }
+  }
+}

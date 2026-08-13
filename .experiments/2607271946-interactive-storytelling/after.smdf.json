@@ -1,0 +1,225 @@
+{
+  "stateMachine": {
+    "settings": {
+      "namespace": "Film",
+      "name": "InteractiveProduction",
+      "asynchronous": false
+    },
+    "events": [
+      {
+        "name": "Internal",
+        "events": [
+          {
+            "id": "MEDIA_VERIFIED",
+            "description": "Clips, transcripts and images checksummed and addressable — story work can begin"
+          },
+          {
+            "id": "SCENES_ASSEMBLED",
+            "description": "Scenes hang on the spine in story order"
+          },
+          {
+            "id": "CUT_READY",
+            "description": "Rough cut complete with temp sound — ready to screen"
+          },
+          {
+            "id": "CHANGES_REQUESTED",
+            "description": "Director/producers request editorial changes — back to the bench"
+          },
+          {
+            "id": "CUT_APPROVED",
+            "description": "Picture lock — no further editorial changes"
+          },
+          {
+            "id": "GRADE_LOCKED",
+            "description": "Color grade approved shot by shot"
+          },
+          {
+            "id": "MIX_LOCKED",
+            "description": "Dialogue, music and effects mixed to final levels"
+          },
+          {
+            "id": "QC_PASSED",
+            "description": "Delivery master passes technical quality control"
+          },
+          {
+            "id": "QC_FAILED_PICTURE",
+            "description": "QC found a picture defect — regrade required"
+          },
+          {
+            "id": "QC_FAILED_SOUND",
+            "description": "QC found an audio defect — remix required"
+          },
+          {
+            "id": "LAND_CALLS",
+            "description": "The screening room is not enough — the work needs to be carried onto the land"
+          },
+          {
+            "id": "KNOWLEDGE_RECEIVED",
+            "description": "What presence on the land taught returns as feedback into the cut"
+          },
+          {
+            "id": "LISTENER_ARRIVES",
+            "description": "Someone presses play — the master finds an audience"
+          },
+          {
+            "id": "PASSAGE_TURNS",
+            "description": "The listener moves on — the media advances, the story holds"
+          },
+          {
+            "id": "AUDIENCE_FORKS",
+            "description": "A listener leaves the master line to author their own narrative"
+          }
+        ]
+      }
+    ],
+    "state": {
+      "name": "Root",
+      "states": [
+        {
+          "name": "Composition",
+          "kind": "normal",
+          "description": "Where the recording lands — voice clips, transcripts, images and takes gathered and made addressable",
+          "transitions": [
+            {
+              "event": "MEDIA_VERIFIED",
+              "nextState": "StorySpine",
+              "description": "Material safe and addressable — story work begins"
+            }
+          ]
+        },
+        {
+          "name": "StorySpine",
+          "kind": "normal",
+          "description": "The thematic spine every rib attaches to and every fork branches from — scenes laid in story order",
+          "transitions": [
+            {
+              "event": "SCENES_ASSEMBLED",
+              "nextState": "RoughCut",
+              "description": "Spine holds — refine into a full cut"
+            }
+          ]
+        },
+        {
+          "name": "RoughCut",
+          "kind": "normal",
+          "description": "Full-length cut with temp sound and placeholder VFX",
+          "transitions": [
+            {
+              "event": "CUT_READY",
+              "nextState": "Review",
+              "description": "Cut screens for director and producers"
+            }
+          ]
+        },
+        {
+          "name": "Review",
+          "kind": "normal",
+          "description": "Director and producers screen the cut — verdict branches here",
+          "transitions": [
+            {
+              "event": "CHANGES_REQUESTED",
+              "nextState": "StorySpine",
+              "description": "LOOP — notes go back to the spine"
+            },
+            {
+              "event": "CUT_APPROVED",
+              "nextState": "ColorGrade",
+              "description": "BRANCH — picture lock, finishing begins"
+            },
+            {
+              "event": "LAND_CALLS",
+              "nextState": "OnTheLand",
+              "description": "The verdict is neither approve nor revise — the work goes to the land first"
+            }
+          ]
+        },
+        {
+          "name": "ColorGrade",
+          "kind": "normal",
+          "description": "Picture-locked footage graded shot by shot",
+          "transitions": [
+            {
+              "event": "GRADE_LOCKED",
+              "nextState": "SoundMix",
+              "description": "Graded picture hands off to the mix stage"
+            }
+          ]
+        },
+        {
+          "name": "SoundMix",
+          "kind": "normal",
+          "description": "Dialogue, music and effects mixed against the graded picture",
+          "transitions": [
+            {
+              "event": "MIX_LOCKED",
+              "nextState": "Master",
+              "description": "Final mix conforms into the delivery master"
+            }
+          ]
+        },
+        {
+          "name": "Master",
+          "kind": "normal",
+          "description": "Grade and mix conformed into the delivery master — QC gate",
+          "transitions": [
+            {
+              "event": "QC_PASSED",
+              "nextState": "Released",
+              "description": "QC clean — the film ships"
+            },
+            {
+              "event": "QC_FAILED_PICTURE",
+              "nextState": "ColorGrade",
+              "description": "BRANCH — picture defect routes back to the grade"
+            },
+            {
+              "event": "QC_FAILED_SOUND",
+              "nextState": "SoundMix",
+              "description": "BRANCH — audio defect routes back to the mix"
+            }
+          ]
+        },
+        {
+          "name": "Released",
+          "kind": "normal",
+          "description": "Master delivered — no longer an ending, but the door an audience walks in through",
+          "transitions": [
+            {
+              "event": "LISTENER_ARRIVES",
+              "nextState": "Playback",
+              "description": "ENTRY — someone presses play and the traversal begins"
+            }
+          ]
+        },
+        {
+          "name": "Playback",
+          "kind": "normal",
+          "description": "The audience is inside the media — listening, moving through it in time",
+          "transitions": [
+            {
+              "event": "PASSAGE_TURNS",
+              "description": "INTERNAL — the media advances, the story holds its shape"
+            },
+            {
+              "event": "AUDIENCE_FORKS",
+              "nextState": "StorySpine",
+              "description": "FORK — the listener becomes an author and comes home to the spine"
+            }
+          ]
+        },
+        {
+          "name": "OnTheLand",
+          "kind": "normal",
+          "description": "The circle goes on the land — knowledge received through presence, place, and relations, not through the screen",
+          "transitions": [
+            {
+              "event": "KNOWLEDGE_RECEIVED",
+              "nextState": "StorySpine",
+              "description": "LOOP — land-given knowledge feeds back into the spine as lived feedback"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

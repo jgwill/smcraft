@@ -55,11 +55,13 @@ export default function SettingsPanel() {
         <span className="text-xs text-gray-500">Context Class</span>
         <input
           className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200"
-          value={context?.className ?? ""}
+          value={context?.class ?? ""}
           placeholder="e.g. MyStateMachineContext"
           onChange={(e) =>
             updateSettings({
-              context: { ...context, className: e.target.value || undefined },
+              // `class`, not `className`: the generator names the context from
+              // `settings.context?.class`, and nothing has ever read the other.
+              context: { ...context, class: e.target.value || undefined },
             })
           }
         />
@@ -97,15 +99,18 @@ export default function SettingsPanel() {
       <h4 className="text-xs font-semibold text-gray-500">Object References</h4>
       <textarea
         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 h-12 font-mono"
-        value={(settings.objects ?? []).map((o) => `${o.name}: ${o.type}`).join("\n")}
-        placeholder="name: type (one per line)"
+        value={(settings.objects ?? []).map((o) => `${o.instance}: ${o.class}`).join("\n")}
+        placeholder="instance: Class (one per line)"
         onChange={(e) => {
+          // `instance: Class` — the pair the generator constructs the context
+          // with. Written as `{ name, type }` until now, which is a shape
+          // `codegen.ts` has never read.
           const objects = e.target.value
             .split("\n")
             .filter((l) => l.includes(":"))
             .map((l) => {
-              const [name, type] = l.split(":").map((s) => s.trim());
-              return { name, type };
+              const [instance, cls] = l.split(":").map((s) => s.trim());
+              return { instance, class: cls };
             });
           updateSettings({ objects });
         }}

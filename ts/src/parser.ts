@@ -31,14 +31,40 @@ export interface EnrichedModel {
   compositeStates: StateDef[];
 }
 
+/**
+ * Accept both shapes a `.smdf.json` is written in.
+ *
+ * The design surfaces — `smcx`, the MCP server, the hub — persist canonically
+ * as `{ "stateMachine": { … } }`, while `examples/` and hand-authored files
+ * carry the bare `{ settings, events, state }`. Both are real documents in the
+ * wild, and an engine that reads only one of them breaks the workflow the whole
+ * system is for: design through the loom, then generate code from what you
+ * designed. The failure was silent in the worst way — V001 "No root state
+ * defined" against a file whose root state is plainly there, one level down.
+ *
+ * `StateMachine` is honored too; the C# StateForge lineage capitalized it.
+ */
+export function unwrapDefinition(parsed: unknown): StateMachineDefinition {
+  const doc = parsed as Record<string, unknown> | null;
+  if (doc && typeof doc === "object") {
+    const inner = doc.stateMachine ?? doc.StateMachine;
+    if (inner && typeof inner === "object") return inner as StateMachineDefinition;
+  }
+  return parsed as StateMachineDefinition;
+}
+
 export function parseJson(content: string): StateMachineDefinition {
-  return JSON.parse(content) as StateMachineDefinition;
+  return unwrapDefinition(JSON.parse(content));
 }
 
 export function parseFile(filePath: string): StateMachineDefinition {
-  // For Node.js: import fs and read file
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const fs = require("fs");
+  // Lazy built-in lookup: keeps this module loadable in browsers and ESM
+  // (a top-level `require` crashes under "type": "module").
+  const fs =
+    typeof process !== "undefined" ? process.getBuiltinModule?.("node:fs") : undefined;
+  if (!fs) {
+    throw new Error("parseFile requires a Node.js runtime (>= 22.3); use parseJson instead");
+  }
   const content = fs.readFileSync(filePath, "utf-8");
   return parseJson(content);
 }

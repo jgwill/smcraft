@@ -1,0 +1,1604 @@
+"use client";
+
+/**
+ * The design surface, as a component anyone can mount.
+ *
+ * This is the smcraft designer's canvas with its store taken out. Everything
+ * it knows arrives as props — the definition, where the boxes sit, which way
+ * the view is pointed — and everything it wants arrives back as a callback.
+ * Nothing here reaches for a zustand store, a Next.js route, a stylesheet
+ * framework, or a socket, which is the whole reason a second application can
+ * mount the same board and get the same navigation.
+ *
+ * What it still owns, because none of it is application state:
+ *
+ *   · the gesture layer — wheel, ⌃wheel, middle-drag, Space+drag, one-finger
+ *     pan, two-finger pinch, held-press menu — with the pointer bookkeeping
+ *     that keeps a second finger from being read as a rival drag;
+ *   · the drawing — edges routed so they leave a box through the gap that is
+ *     actually there, labels settled so two chips never print through each
+ *     other, both from `@miadi/stateloom-protocol`;
+ *   · the enter/exit animation of nodes and edges as a definition changes.
+ *
+ * Colour is CSS, never an attribute (see theme.ts): a host re-skins the whole
+ * board by declaring `--slc-*` variables, and the same component is at home on
+ * slate and on warm coal.
+ */
+
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import {
+  GLYPH_SIZE,
+  IDENTITY_VIEWPORT,
+  SELF_LOOP_BULGE,
+  VIEWPORT_LIMITS,
+  eventGlyph,
+  fitToBoxes,
+  glyphAt,
+  guardText,
+  panBy,
+  placeLabels,
+  routeEdges,
+  viewportTransform,
+  zoomAt,
+  zoomTo,
+} from "@miadi/stateloom-protocol";
+import type {
+  Glyph,
+  LayoutBox,
+  StateDef,
+  StateMachineDefinition,
+  Viewport,
+} from "@miadi/stateloom-protocol";
+import { childStatesAt, definedEvents, livePath } from "./drill.js";
+import { themeStyle, type CanvasTheme } from "./theme.js";
+
+// ─── Public shapes ───────────────────────────────────────────────────────────
+
+export type DrawMode = "select" | "transition";
+
+/** What a context menu was asked for. */
+export interface CanvasTarget {
+  kind: "state" | "transition" | "canvas";
+  id?: string;
+}
+
+export interface CanvasSelection {
+  kind: "state" | "transition" | null;
+  id: string | null;
+}
+
+/** Imperative navigation, for a host whose toolbar lives outside the canvas. */
+export interface StateMachineCanvasHandle {
+  /** Frame every box of the level currently drawn. */
+  fit(): void;
+  zoomIn(): void;
+  zoomOut(): void;
+  resetZoom(): void;
+  /** The rendered `<svg>` — what an exporter serializes. */
+  element(): SVGSVGElement | null;
+}
+
+export interface StateMachineCanvasProps {
+  definition: StateMachineDefinition;
+  /** Where every box sits, in world units. Derive with `autoLayout`. */
+  positions: Record<string, LayoutBox>;
+  /** Names below the root state — the drill path. `[]` draws the top level. */
+  path?: readonly string[];
+  /** What the breadcrumb calls the root. Defaults to the root state's name. */
+  rootLabel?: string;
+
+  viewport: Viewport;
+  onViewportChange: (viewport: Viewport) => void;
+
+  selection?: CanvasSelection;
+  /** States the runtime is currently in — drawn with the active glow. */
+  activeStates?: readonly string[];
+  /** Names that failed validation — drawn with the danger outline. */
+  errorElements?: readonly string[];
+
+  drawMode?: DrawMode;
+  drawSource?: string | null;
+
+  /** No dragging, no drawing, no menu. Pan, zoom, select and drill remain. */
+  readOnly?: boolean;
+  showBreadcrumb?: boolean;
+  showHud?: boolean;
+  /**
+   * Frame the board whenever this value changes — a document id, a load
+   * counter. Left undefined, the view is never moved on the host's behalf.
+   */
+  fitKey?: string | number;
+
+  onSelect?: (kind: "state" | "transition", id: string) => void;
+  onClearSelection?: () => void;
+  onStateMove?: (name: string, box: LayoutBox) => void;
+  onNavigateInto?: (name: string) => void;
+  /** Breadcrumb click. `depth` is 0 for the root, 1 for its child, and so on. */
+  onNavigateTo?: (depth: number) => void;
+  onContextMenu?: (clientX: number, clientY: number, target: CanvasTarget) => void;
+  onCreateTransition?: (from: string, to: string, event: string) => void;
+  /** Escape, or the picker's Cancel — the host clears its own draw mode. */
+  onCancelDraw?: () => void;
+  onDeleteState?: (name: string) => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+
+  /** Extra controls appended inside the HUD pill. */
+  hudExtras?: ReactNode;
+  /** What an empty level says. */
+  emptyHint?: ReactNode;
+
+  theme?: Partial<CanvasTheme>;
+  className?: string;
+  style?: CSSProperties;
+  /** DOM id of the `<svg>`, so an exporter can find it without a ref. */
+  svgId?: string;
+  /**
+   * Marks the pane for a host that runs its own two-finger gesture elsewhere
+   * in the chrome and must disqualify itself while a finger is on the board.
+   */
+  pinchOwner?: string;
+}
+
+// ─── Gesture bookkeeping ─────────────────────────────────────────────────────
+
+interface DragState {
+  name: string;
+  /** Which pointer owns this drag — a second finger must not end it. */
+  pointerId: number;
+  startX: number;
+  startY: number;
+  origX: number;
+  origY: number;
+}
+
+/** A pan in progress: where the pointer went down and where the view was then. */
+interface PanState {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  origX: number;
+  origY: number;
+}
+
+/**
+ * Two fingers steering the view at once. Everything is measured against the
+ * frame the gesture *started* in — the distance, the midpoint, the viewport —
+ * so the transform is recomputed from scratch on every move instead of
+ * accumulating, and a pinch can never drift away from the fingers holding it.
+ */
+interface PinchState {
+  a: number;
+  b: number;
+  /** Screen distance between the fingers when the pinch began. Never zero. */
+  startDist: number;
+  /** Canvas-relative midpoint when it began — the point the zoom is anchored to. */
+  startMidX: number;
+  startMidY: number;
+  start: Viewport;
+}
+
+/** A finger resting still, on its way to becoming the context menu. */
+interface LongPressState {
+  pointerId: number;
+  x: number;
+  y: number;
+  target: CanvasTarget;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+/** Wheel notches arrive in three units; normalise them to pixels. */
+const WHEEL_LINE_HEIGHT = 16;
+const WHEEL_PAGE_HEIGHT = 400;
+
+/** How long a finger must rest in place before the press becomes a menu. */
+const LONG_PRESS_MS = 500;
+/**
+ * How far a finger may wander and still count as resting. It doubles as the
+ * line between a pan and a tap: a fingertip never lands perfectly still, and a
+ * one-pixel tremor must not swallow the tap that clears the selection.
+ */
+const TOUCH_SLOP_PX = 8;
+/** Screen-space cuff added around a box so a fingertip (~9mm) can find it. */
+const TOUCH_TARGET_PAD_PX = 10;
+/** Screen-space width of the invisible ribbon that catches a tap on an edge. */
+const TOUCH_EDGE_STROKE_PX = 28;
+
+const FALLBACK_BOX: LayoutBox = { x: 100, y: 100, width: 160, height: 60 };
+
+function wheelPixels(delta: number, mode: number): number {
+  if (mode === 1) return delta * WHEEL_LINE_HEIGHT;
+  if (mode === 2) return delta * WHEEL_PAGE_HEIGHT;
+  return delta;
+}
+
+/**
+ * Space is a pan modifier on the canvas and a plain space bar everywhere else —
+ * a name being typed in a panel, or a focused button waiting to be pressed,
+ * must never make the board slide.
+ */
+function isTypingTarget(node: EventTarget | null): boolean {
+  const el = node as HTMLElement | null;
+  if (!el || typeof el.tagName !== "string") return false;
+  if (el.isContentEditable) return true;
+  return ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "OPTION"].includes(el.tagName);
+}
+
+function isComposite(state: StateDef): boolean {
+  return (state.states?.length ?? 0) > 0 || (state.parallel?.states.length ?? 0) > 0;
+}
+
+function childCount(state: StateDef): number {
+  return (state.states?.length ?? 0) + (state.parallel?.states.length ?? 0);
+}
+
+/**
+ * The trigger mark on an event chip: a check for a confirmation, chevrons for
+ * an advance, two bars for a pause. Six chips reading `advance_context` are six
+ * identical words until something in front of them differs.
+ *
+ * Drawn from the protocol's glyph data in a 24-unit box, scaled where it
+ * stands — the same paths a headless renderer writes, so a picture taken of
+ * the board carries the marks the board showed.
+ */
+function TriggerGlyph({ mark, x, y, selected }: { mark: Glyph; x: number; y: number; selected: boolean }) {
+  return (
+    <g
+      transform={`translate(${x} ${y}) scale(${GLYPH_SIZE / 24})`}
+      strokeWidth={mark.strokeWidth}
+      className={`slc-glyph${selected ? " slc-glyph--selected" : ""}`}
+    >
+      {(mark.circles ?? []).map((c, i) => (
+        <circle key={`c${i}`} cx={c.cx} cy={c.cy} r={c.r} className={c.filled ? "slc-glyph-dot" : undefined} />
+      ))}
+      {mark.paths.map((d, i) => (
+        <path key={`p${i}`} d={d} />
+      ))}
+    </g>
+  );
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
+const NO_SELECTION: CanvasSelection = { kind: null, id: null };
+
+export const StateMachineCanvas = forwardRef<StateMachineCanvasHandle, StateMachineCanvasProps>(
+  function StateMachineCanvas(props, ref) {
+    const {
+      definition,
+      positions,
+      path = [],
+      rootLabel,
+      viewport,
+      onViewportChange,
+      selection = NO_SELECTION,
+      activeStates,
+      errorElements,
+      drawMode = "select",
+      drawSource = null,
+      readOnly = false,
+      showBreadcrumb = true,
+      showHud = true,
+      fitKey,
+      onSelect,
+      onClearSelection,
+      onStateMove,
+      onNavigateInto,
+      onNavigateTo,
+      onContextMenu,
+      onCreateTransition,
+      onCancelDraw,
+      onDeleteState,
+      onUndo,
+      onRedo,
+      hudExtras,
+      emptyHint,
+      theme,
+      className,
+      style,
+      svgId,
+      pinchOwner = "canvas",
+    } = props;
+
+    const svgRef = useRef<SVGSVGElement>(null);
+    const markerId = useId().replace(/:/g, "");
+
+    // Every handler that reads "the viewport right now" reads it here, not from
+    // the closure: a wheel event and a pointer move can both land inside the
+    // frame that produced the last render, and either one working from a stale
+    // transform makes the board jump.
+    const viewportRef = useRef(viewport);
+    viewportRef.current = viewport;
+
+    const [drag, setDrag] = useState<DragState | null>(null);
+    // The same truth as `drag`, readable by a handler that may run before the
+    // render carrying it — a second finger, or a lift, can arrive inside the
+    // frame the press started in, and must still know which pointer owns the box.
+    const dragRef = useRef<DragState | null>(null);
+    const applyDrag = useCallback((next: DragState | null) => {
+      dragRef.current = next;
+      setDrag(next);
+    }, []);
+    const [eventPicker, setEventPicker] = useState<{
+      stateName: string;
+      targetName: string;
+      x: number;
+      y: number;
+    } | null>(null);
+
+    // Navigation. `spaceHeld` / `panning` drive the cursor (they must re-render);
+    // the refs carry the same truth into native listeners and pointer handlers
+    // that would otherwise close over a stale value.
+    const spaceRef = useRef(false);
+    const [spaceHeld, setSpaceHeld] = useState(false);
+    const panRef = useRef<PanState | null>(null);
+    const [panning, setPanning] = useState(false);
+    // A pan that actually moved must not end as a click that clears the selection.
+    const panMovedRef = useRef(false);
+    // Who holds each live pointer, keyed by id, so it can be released again. A
+    // map rather than a single slot: with two fingers down, one box can be
+    // holding the first while the surface holds the second, and releasing the
+    // wrong one strands the gesture.
+    const capturesRef = useRef<Map<number, Element>>(new Map());
+
+    // Touch. Every finger currently on the canvas, in the order it landed — the
+    // map is what makes a *second* finger legible as a pinch rather than as a
+    // second, competing drag.
+    const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+    const pinchRef = useRef<PinchState | null>(null);
+    const [pinching, setPinching] = useState(false);
+    const longPressRef = useRef<LongPressState | null>(null);
+    // A press that became a menu must not also read as a click: a host shell
+    // hides its menu on any click that reaches it, closing it on the way back up.
+    const suppressClickRef = useRef(false);
+    // Coarse pointer: hit areas grow for a fingertip, and only then, so a mouse
+    // keeps the precision the visual design was drawn for. Resolved in an effect
+    // (never during render) so the server's HTML and the first client paint agree.
+    const [coarsePointer, setCoarsePointer] = useState(false);
+
+    // While the view is being steered — dragged by a finger, pinched, or panned
+    // with the middle button — the board underneath stops answering the pointer,
+    // so a box never fights the gesture that is moving the whole world.
+    const navigating = panning || pinching;
+
+    const root = definition.state;
+    const crumbs = useMemo(() => {
+      const live = livePath(root, path);
+      return [rootLabel ?? root?.name ?? "Root", ...live];
+    }, [root, path, rootLabel]);
+    const currentChildren = useMemo(() => (root ? childStatesAt(root, path) : []), [root, path]);
+    const currentParent = crumbs[crumbs.length - 1];
+    const allEvents = useMemo(() => definedEvents(definition), [definition]);
+    const activeSet = useMemo(() => new Set(activeStates ?? []), [activeStates]);
+    const errorSet = useMemo(() => new Set(errorElements ?? []), [errorElements]);
+
+    /** Pointer position relative to the canvas element — the space zoom anchors in. */
+    const toCanvasPoint = useCallback((clientX: number, clientY: number) => {
+      const rect = svgRef.current?.getBoundingClientRect();
+      return { x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) };
+    }, []);
+
+    /** Hand the pointer back to whoever was holding it, and forget the holder. */
+    const releaseCapture = useCallback((pointerId: number) => {
+      const held = capturesRef.current.get(pointerId) as
+        | (Element & {
+            hasPointerCapture?: (id: number) => boolean;
+            releasePointerCapture?: (id: number) => void;
+          })
+        | undefined;
+      capturesRef.current.delete(pointerId);
+      if (held?.hasPointerCapture?.(pointerId)) held.releasePointerCapture?.(pointerId);
+    }, []);
+
+    /** Disarm the pending menu — for one pointer, or for whichever is armed. */
+    const cancelLongPress = useCallback((pointerId?: number) => {
+      const held = longPressRef.current;
+      if (!held) return;
+      if (pointerId !== undefined && held.pointerId !== pointerId) return;
+      clearTimeout(held.timer);
+      longPressRef.current = null;
+    }, []);
+
+    /**
+     * Arm the hold that stands in for a right-click. The finger keeps whatever
+     * it already started — a drag, a pan — until the timer fires; only then does
+     * the gesture let go, so the board cannot slide out from under the menu.
+     */
+    const armLongPress = useCallback(
+      (e: React.PointerEvent, target: CanvasTarget) => {
+        if (e.pointerType !== "touch" || !onContextMenu) return;
+        cancelLongPress();
+        const { pointerId, clientX: x, clientY: y } = e;
+        const timer = setTimeout(() => {
+          longPressRef.current = null;
+          applyDrag(null);
+          panRef.current = null;
+          setPanning(false);
+          // The capture stays where it is: the finger now steers nothing, but the
+          // element holding it is still guaranteed to receive the eventual lift.
+          suppressClickRef.current = true;
+          navigator.vibrate?.(10);
+          onContextMenu(x, y, target);
+        }, LONG_PRESS_MS);
+        longPressRef.current = { pointerId, x, y, target, timer };
+      },
+      [cancelLongPress, onContextMenu, applyDrag]
+    );
+
+    // A fingertip asks for room a cursor does not. Detected once, watched for
+    // change (a tablet docking to a mouse flips this), and never read in render
+    // before the effect has run — so hydration matches the server's `false`.
+    useEffect(() => {
+      if (typeof window === "undefined" || !window.matchMedia) return;
+      const mq = window.matchMedia("(pointer: coarse)");
+      const apply = () => setCoarsePointer(mq.matches);
+      apply();
+      mq.addEventListener("change", apply);
+      return () => mq.removeEventListener("change", apply);
+    }, []);
+
+    // Safety net. Pointer capture makes the canvas's own `pointerup` reliable, but
+    // a gesture torn away by the OS — a call arriving, the app backgrounded — can
+    // still leave a finger recorded that is no longer on the glass. A stale entry
+    // would make the *next* single touch look like the second half of a pinch, so
+    // every pointer that ends anywhere is forgotten here too.
+    useEffect(() => {
+      const forget = (e: PointerEvent) => {
+        pointersRef.current.delete(e.pointerId);
+      };
+      window.addEventListener("pointerup", forget);
+      window.addEventListener("pointercancel", forget);
+      return () => {
+        window.removeEventListener("pointerup", forget);
+        window.removeEventListener("pointercancel", forget);
+      };
+    }, []);
+
+    // Unmounting mid-hold must not leave a timer alive to open a menu over a
+    // canvas that no longer exists.
+    useEffect(() => () => cancelLongPress(), [cancelLongPress]);
+
+    // Live-animation tracking. The prev* refs are read/written ONLY inside the
+    // commit effect (never during render). The rendered classes are driven by
+    // state (enteringNames / enteringEdges), so the render stays a pure function
+    // of props+state. `exitingNodes` holds nodes that vanished from the current
+    // drill level so they outlive React's unmount and animate out.
+    const prevNamesRef = useRef<Set<string>>(new Set());
+    const prevNodeDataRef = useRef<Map<string, { state: StateDef; pos: LayoutBox }>>(new Map());
+    const prevParentRef = useRef<string>(currentParent);
+    const prevEdgeKeysRef = useRef<Set<string>>(new Set());
+    const [enteringNames, setEnteringNames] = useState<Set<string>>(new Set());
+    const [enteringEdges, setEnteringEdges] = useState<Set<string>>(new Set());
+    const [exitingNodes, setExitingNodes] = useState<Map<string, { state: StateDef; pos: LayoutBox }>>(
+      new Map()
+    );
+
+    // Touch hit areas. Both live in world units — everything inside the navigated
+    // group does — so each is a screen-pixel budget divided by the scale: the cuff
+    // around a box and the ribbon along an edge stay the same size *in the hand*
+    // whether the board is zoomed in or pushed away. Zero for a mouse, which means
+    // the extra geometry is never rendered at all and the cursor keeps hitting
+    // exactly what it is pointed at.
+    const touchPad = coarsePointer ? TOUCH_TARGET_PAD_PX / viewport.scale : 0;
+    const touchEdgeStroke = coarsePointer ? TOUCH_EDGE_STROKE_PX / viewport.scale : 0;
+
+    const getPos = useCallback(
+      (name: string): LayoutBox => positions[name] ?? FALLBACK_BOX,
+      [positions]
+    );
+
+    // Keyboard shortcuts. Undo, redo and delete belong to the host — the canvas
+    // only says that they were asked for.
+    useEffect(() => {
+      const handler = (e: KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "z" && onUndo) {
+          e.preventDefault();
+          onUndo();
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.shiftKey && e.key === "z")) && onRedo) {
+          e.preventDefault();
+          onRedo();
+        }
+        if (e.key === "Escape") {
+          setEventPicker(null);
+          onCancelDraw?.();
+        }
+        if (e.key === "Delete" && selection.kind === "state" && selection.id && onDeleteState) {
+          onDeleteState(selection.id);
+        }
+      };
+      window.addEventListener("keydown", handler);
+      return () => window.removeEventListener("keydown", handler);
+    }, [onUndo, onRedo, onCancelDraw, onDeleteState, selection]);
+
+    /** Begin sliding the whole board with one pointer. Shared by mouse and finger. */
+    const beginPan = useCallback((e: React.PointerEvent) => {
+      const vp = viewportRef.current;
+      panRef.current = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: vp.x,
+        origY: vp.y,
+      };
+      panMovedRef.current = false;
+      setPanning(true);
+      const svg = svgRef.current;
+      if (!svg) return;
+      capturesRef.current.set(e.pointerId, svg);
+      svg.setPointerCapture(e.pointerId);
+    }, []);
+
+    /**
+     * Promote whatever is happening to a two-finger gesture. Everything the
+     * single pointer had claimed — a box mid-drag, a pan mid-slide, a hold on its
+     * way to a menu — is given up here: with both fingers on the glass the user
+     * is steering the view, not editing the machine.
+     */
+    const beginPinch = useCallback(() => {
+      const live = [...pointersRef.current.entries()];
+      if (live.length < 2) return;
+      const [[idA, a], [idB, b]] = live;
+
+      cancelLongPress();
+      applyDrag(null);
+      panRef.current = null;
+
+      // Fingers landing on the same pixel would divide by zero; a floor of one
+      // pixel makes the first frame a no-op instead of an infinity.
+      const startDist = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
+      const mid = toCanvasPoint((a.x + b.x) / 2, (a.y + b.y) / 2);
+      pinchRef.current = {
+        a: idA,
+        b: idB,
+        startDist,
+        startMidX: mid.x,
+        startMidY: mid.y,
+        start: viewportRef.current,
+      };
+      // A pinch has plainly travelled; its lift is never a tap on empty space.
+      panMovedRef.current = true;
+      setPinching(true);
+
+      // A finger that arrived while the capture phase was swallowing the event was
+      // never captured by anyone. Take it on the surface so the gesture survives it
+      // sliding off the canvas; fingers already held by a box keep that holder,
+      // since their moves bubble here regardless.
+      const svg = svgRef.current;
+      if (!svg) return;
+      for (const id of [idA, idB]) {
+        if (capturesRef.current.has(id)) continue;
+        try {
+          svg.setPointerCapture(id);
+          capturesRef.current.set(id, svg);
+        } catch {
+          // The pointer ended between the event and this line. Nothing to hold.
+        }
+      }
+    }, [cancelLongPress, toCanvasPoint, applyDrag]);
+
+    /**
+     * Runs before any box or the surface sees the press, so it can count fingers
+     * that a node's `stopPropagation` would otherwise hide. Bookkeeping only —
+     * except for the one decision that has to be made this early: a second finger
+     * turns the gesture into a pinch, and nothing below may start a rival one.
+     */
+    const handlePointerDownCapture = useCallback(
+      (e: React.PointerEvent) => {
+        // The click that closes out the previous gesture has been and gone (or was
+        // never sent, as on iOS after a hold). Either way, stop swallowing.
+        suppressClickRef.current = false;
+        if (e.pointerType !== "touch") return;
+        setCoarsePointer(true);
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const count = pointersRef.current.size;
+        if (count < 2) return;
+        e.stopPropagation();
+        if (count === 2) beginPinch();
+        // A third finger is noise: recorded so its lift is accounted for, but the
+        // pinch keeps the two fingers it started with.
+      },
+      [beginPinch]
+    );
+
+    const handleNodePointerDown = useCallback(
+      (e: React.PointerEvent, name: string) => {
+        // Middle button, or space held: this gesture belongs to the surface. Let
+        // it bubble un-stopped so the pan handler below picks it up.
+        if (e.button !== 0 || spaceRef.current) return;
+        e.stopPropagation();
+        // A finger on a box may still be asking for the menu rather than a drag.
+        // Arm the hold either way; travel past the slop disarms it.
+        armLongPress(e, { kind: "state", id: name });
+        if (!readOnly && drawMode === "transition") {
+          if (!drawSource) {
+            onSelect?.("state", name);
+          } else if (drawSource !== name) {
+            setEventPicker({ stateName: drawSource, targetName: name, x: e.clientX, y: e.clientY });
+          }
+          return;
+        }
+        onSelect?.("state", name);
+        if (readOnly || !onStateMove) return;
+        const pos = getPos(name);
+        applyDrag({
+          name,
+          pointerId: e.pointerId,
+          startX: e.clientX,
+          startY: e.clientY,
+          origX: pos.x,
+          origY: pos.y,
+        });
+        // Capture on the node's own group, so the gesture survives the pointer
+        // outrunning the box or leaving the canvas. It must be *this* element and
+        // not the surface: a capture retargets the click and dblclick that follow,
+        // and retargeting them to the <svg> would read as a click on empty space —
+        // clearing the selection the press just made, and stealing the
+        // double-click that drills into a composite.
+        const node = e.currentTarget as Element;
+        capturesRef.current.set(e.pointerId, node);
+        node.setPointerCapture?.(e.pointerId);
+      },
+      [onSelect, getPos, drawMode, drawSource, armLongPress, applyDrag, readOnly, onStateMove]
+    );
+
+    const handleSurfacePointerDown = useCallback(
+      (e: React.PointerEvent) => {
+        if (e.pointerType === "touch") {
+          // A phone has no middle button and no space bar, so the plainest gesture
+          // has to be the one that moves the board: one finger on bare canvas pans.
+          // No `preventDefault` — the click and double-click synthesised from this
+          // touch are what still clear the selection and drill into a composite.
+          armLongPress(e, { kind: "canvas" });
+          beginPan(e);
+          return;
+        }
+        const wantsPan = e.button === 1 || (e.button === 0 && spaceRef.current);
+        if (!wantsPan) return;
+        // Suppresses the compatibility mouse events, and with them Chrome's
+        // middle-click autoscroll.
+        e.preventDefault();
+        beginPan(e);
+      },
+      [armLongPress, beginPan]
+    );
+
+    const handleSurfacePointerMove = useCallback(
+      (e: React.PointerEvent) => {
+        if (pointersRef.current.has(e.pointerId)) {
+          pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        }
+
+        // A hold that wanders is a drag changing its mind.
+        const hold = longPressRef.current;
+        if (hold && hold.pointerId === e.pointerId) {
+          if (Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > TOUCH_SLOP_PX) {
+            cancelLongPress(e.pointerId);
+          }
+        }
+
+        const pinch = pinchRef.current;
+        if (pinch) {
+          if (e.pointerId !== pinch.a && e.pointerId !== pinch.b) return;
+          const a = pointersRef.current.get(pinch.a);
+          const b = pointersRef.current.get(pinch.b);
+          if (!a || !b) return;
+          // Two fingers say two things at once, and the viewport has room for
+          // both. The spread says how much to magnify: scale is the starting
+          // scale times how much further apart the fingers are now. The midpoint
+          // says where: `zoomTo` re-anchors the board so the world point that sat
+          // under the *starting* midpoint is still under it after the rescale —
+          // the same invariant Ctrl+wheel uses, with the midpoint standing in for
+          // the cursor. Whatever the midpoint itself has travelled since is then
+          // a plain screen-space slide, which is exactly a pan. Both are measured
+          // from the gesture's opening frame, never from the previous move, so
+          // rounding cannot accumulate under a long pinch.
+          const dist = Math.hypot(b.x - a.x, b.y - a.y);
+          const mid = toCanvasPoint((a.x + b.x) / 2, (a.y + b.y) / 2);
+          const zoomed = zoomTo(pinch.start, pinch.start.scale * (dist / pinch.startDist), {
+            x: pinch.startMidX,
+            y: pinch.startMidY,
+          });
+          onViewportChange(panBy(zoomed, mid.x - pinch.startMidX, mid.y - pinch.startMidY));
+          return;
+        }
+
+        const pan = panRef.current;
+        if (pan) {
+          if (pan.pointerId !== e.pointerId) return;
+          const dx = e.clientX - pan.startX;
+          const dy = e.clientY - pan.startY;
+          // A mouse that moved at all was dragged. A fingertip is never that
+          // still, so a touch has to clear the slop before its lift stops
+          // counting as a tap.
+          const slop = e.pointerType === "touch" ? TOUCH_SLOP_PX : 0;
+          if (Math.abs(dx) > slop || Math.abs(dy) > slop) panMovedRef.current = true;
+          onViewportChange({
+            x: pan.origX + dx,
+            y: pan.origY + dy,
+            scale: viewportRef.current.scale,
+          });
+          return;
+        }
+        if (!drag || drag.pointerId !== e.pointerId || !onStateMove) return;
+        // The pointer moves in screen pixels; the box lives in world units. At
+        // scale k a screen pixel is 1/k world units, which is what keeps a
+        // dragged state pinned under the cursor at any zoom. Pan cancels out of a
+        // delta, so only the scale appears here.
+        const scale = viewportRef.current.scale;
+        const dx = (e.clientX - drag.startX) / scale;
+        const dy = (e.clientY - drag.startY) / scale;
+        const pos = getPos(drag.name);
+        onStateMove(drag.name, {
+          ...pos,
+          x: Math.max(0, drag.origX + dx),
+          y: Math.max(0, drag.origY + dy),
+        });
+      },
+      [drag, getPos, onStateMove, onViewportChange, cancelLongPress, toCanvasPoint]
+    );
+
+    const handleSurfacePointerUp = useCallback(
+      (e: React.PointerEvent) => {
+        pointersRef.current.delete(e.pointerId);
+        cancelLongPress(e.pointerId);
+        releaseCapture(e.pointerId);
+
+        const pinch = pinchRef.current;
+        if (pinch && (pinch.a === e.pointerId || pinch.b === e.pointerId)) {
+          pinchRef.current = null;
+          setPinching(false);
+          // One finger lifting out of a pinch leaves the other still on the glass,
+          // and a hand that is still touching the board expects it to keep
+          // following. Re-open a pan from where that finger is *now*, against the
+          // viewport the pinch just left behind — measuring from where it first
+          // landed would snap the board across the screen.
+          const survivorId = pinch.a === e.pointerId ? pinch.b : pinch.a;
+          const survivor = pointersRef.current.get(survivorId);
+          if (survivor) {
+            const vp = viewportRef.current;
+            panRef.current = {
+              pointerId: survivorId,
+              startX: survivor.x,
+              startY: survivor.y,
+              origX: vp.x,
+              origY: vp.y,
+            };
+            panMovedRef.current = true;
+            setPanning(true);
+          }
+        }
+
+        if (panRef.current?.pointerId === e.pointerId) panRef.current = null;
+        if (dragRef.current?.pointerId === e.pointerId) applyDrag(null);
+
+        // Sweep. Whether the view is being steered is asked of the refs, not of
+        // which pointer just ended — a finger the OS reclaimed, or one whose lift
+        // never reached us, would otherwise leave the board inert for good, every
+        // box deaf to the pointer with nothing left to explain why.
+        if (!panRef.current) setPanning(false);
+        if (!pinchRef.current) setPinching(false);
+      },
+      [cancelLongPress, releaseCapture, applyDrag]
+    );
+
+    // Wheel: pan by default, zoom under Ctrl/⌘ (which is also how a browser
+    // delivers a trackpad pinch). Registered natively with `passive: false` —
+    // React's own wheel listener is passive, so `preventDefault` there cannot stop
+    // the page from zooming out from under the canvas.
+    useEffect(() => {
+      const svg = svgRef.current;
+      if (!svg) return;
+      const onWheel = (e: WheelEvent) => {
+        e.preventDefault();
+        const vp = viewportRef.current;
+        const dx = wheelPixels(e.deltaX, e.deltaMode);
+        const dy = wheelPixels(e.deltaY, e.deltaMode);
+
+        if (e.ctrlKey || e.metaKey) {
+          const anchor = toCanvasPoint(e.clientX, e.clientY);
+          const next = zoomAt(vp, Math.exp(-dy * 0.0025), anchor);
+          if (next !== vp) onViewportChange(next);
+          return;
+        }
+        // Shift turns the wheel sideways; a trackpad already reports deltaX.
+        const moveX = e.shiftKey ? -(dx || dy) : -dx;
+        const moveY = e.shiftKey ? 0 : -dy;
+        if (moveX === 0 && moveY === 0) return;
+        onViewportChange(panBy(vp, moveX, moveY));
+      };
+      svg.addEventListener("wheel", onWheel, { passive: false });
+      return () => svg.removeEventListener("wheel", onWheel);
+    }, [onViewportChange, toCanvasPoint]);
+
+    // Space arms the pan grip. Held down it must not scroll the page, and it must
+    // stay inert while the user is typing into a panel.
+    useEffect(() => {
+      const down = (e: KeyboardEvent) => {
+        if (e.code !== "Space" || e.repeat) return;
+        if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
+        e.preventDefault();
+        spaceRef.current = true;
+        setSpaceHeld(true);
+      };
+      const up = (e: KeyboardEvent) => {
+        if (e.code !== "Space") return;
+        spaceRef.current = false;
+        setSpaceHeld(false);
+      };
+      // Losing the window mid-hold would otherwise leave the grip stuck on.
+      const release = () => {
+        spaceRef.current = false;
+        setSpaceHeld(false);
+      };
+      window.addEventListener("keydown", down);
+      window.addEventListener("keyup", up);
+      window.addEventListener("blur", release);
+      return () => {
+        window.removeEventListener("keydown", down);
+        window.removeEventListener("keyup", up);
+        window.removeEventListener("blur", release);
+      };
+    }, []);
+
+    /** Zoom from the buttons: anchored at the middle of the canvas. */
+    const zoomFromCentre = useCallback(
+      (factor: number) => {
+        const rect = svgRef.current?.getBoundingClientRect();
+        const anchor = { x: (rect?.width ?? 0) / 2, y: (rect?.height ?? 0) / 2 };
+        const vp = viewportRef.current;
+        const next = zoomAt(vp, factor, anchor);
+        if (next !== vp) onViewportChange(next);
+      },
+      [onViewportChange]
+    );
+
+    const resetZoom = useCallback(() => {
+      const rect = svgRef.current?.getBoundingClientRect();
+      const anchor = { x: (rect?.width ?? 0) / 2, y: (rect?.height ?? 0) / 2 };
+      onViewportChange(zoomTo(viewportRef.current, 1, anchor));
+    }, [onViewportChange]);
+
+    /** Frame every box of the current drill level — the answer to "where did it go". */
+    const fitToView = useCallback(() => {
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const boxes = currentChildren.map((s) => getPos(s.name));
+      onViewportChange(
+        boxes.length ? fitToBoxes(boxes, rect.width, rect.height) : { ...IDENTITY_VIEWPORT }
+      );
+    }, [currentChildren, getPos, onViewportChange]);
+
+    useImperativeHandle(
+      ref,
+      (): StateMachineCanvasHandle => ({
+        fit: fitToView,
+        zoomIn: () => zoomFromCentre(1.25),
+        zoomOut: () => zoomFromCentre(1 / 1.25),
+        resetZoom,
+        element: () => svgRef.current,
+      }),
+      [fitToView, zoomFromCentre, resetZoom]
+    );
+
+    // A board the host says is new gets framed once. Waiting a frame lets the
+    // pane finish laying out, so `getBoundingClientRect` is not measuring zero.
+    const fitRef = useRef(fitToView);
+    fitRef.current = fitToView;
+    useEffect(() => {
+      if (fitKey === undefined) return;
+      const raf = requestAnimationFrame(() => fitRef.current());
+      return () => cancelAnimationFrame(raf);
+    }, [fitKey]);
+
+    const handleContextMenu = useCallback(
+      (e: React.MouseEvent, stateName?: string) => {
+        if (!onContextMenu) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu(
+          e.clientX,
+          e.clientY,
+          stateName ? { kind: "state", id: stateName } : { kind: "canvas" }
+        );
+      },
+      [onContextMenu]
+    );
+
+    const handleEventPick = (eventId: string) => {
+      if (!eventPicker) return;
+      onCreateTransition?.(eventPicker.stateName, eventPicker.targetName, eventId);
+      setEventPicker(null);
+      onCancelDraw?.();
+    };
+
+    // Collect transitions for arrows (within current navigation level). Memoized
+    // so its identity is stable across renders (drag/selection) — the commit
+    // effect below lists it as a dependency.
+    const arrows = useMemo(() => {
+      const childNames = new Set(currentChildren.map((s) => s.name));
+      const result: {
+        from: string;
+        to: string;
+        event: string;
+        stateName: string;
+        index: number;
+        condition?: string;
+      }[] = [];
+      for (const state of currentChildren) {
+        for (const [i, t] of (state.transitions ?? []).entries()) {
+          if (t.nextState && childNames.has(t.nextState)) {
+            result.push({
+              from: state.name,
+              to: t.nextState,
+              event: t.event,
+              stateName: state.name,
+              index: i,
+              condition: t.condition,
+            });
+          }
+        }
+      }
+      return result;
+    }, [currentChildren]);
+
+    /**
+     * The drawable form of those transitions: a routed curve each, and a settled
+     * spot for each event chip.
+     *
+     * Both halves are level-wide on purpose. Every edge used to leave the
+     * bottom-centre of its source and enter the top-centre of its target, so the
+     * three transitions out of `draft` and the three `advance_context` edges
+     * coming back ran as one rope, and their chips — pinned to midpoints a few
+     * pixels apart — printed through each other.
+     *
+     * `routeEdges` hands every edge its own spot on each box it touches and sends
+     * it through the gap that is actually there (an edge to a state above leaves
+     * the top, not the bottom). `placeLabels` then nudges any chip that still has
+     * a neighbour. The curve and the walker the chip rides come from the same
+     * control points, so a label can never be settled against a line other than
+     * the one drawn.
+     *
+     * Recomputed while a box is being dragged, which is what makes the arrows and
+     * their labels re-settle under the hand instead of after it.
+     */
+    const edges = useMemo(() => {
+      const curves = routeEdges(arrows, getPos);
+      const spots = placeLabels(
+        arrows.map((arrow, i) => {
+          const box = getPos(arrow.from);
+          return {
+            id: `${arrow.stateName}:${arrow.index}`,
+            event: arrow.event,
+            condition: arrow.condition,
+            glyph: true,
+            // A self-loop's arc is a short bulge with no room to carry a word on
+            // it; its chip sits just beyond the bulge instead.
+            at:
+              arrow.from === arrow.to
+                ? () => ({
+                    x: box.x + box.width + SELF_LOOP_BULGE + 30,
+                    y: box.y + box.height / 2 + 4,
+                  })
+                : curves[i].at,
+          };
+        }),
+        currentChildren.map((s) => getPos(s.name))
+      );
+      const byId = new Map(spots.map((spot) => [spot.label.id, spot]));
+      return arrows.flatMap((arrow, i) => {
+        const id = `${arrow.stateName}:${arrow.index}`;
+        const spot = byId.get(id);
+        return spot ? [{ arrow, id, curve: curves[i], spot }] : [];
+      });
+    }, [arrows, currentChildren, getPos]);
+
+    // After each commit, diff the freshly-rendered nodes/edges against the
+    // previous render (held in refs, touched only here). Newly-present names/edges
+    // are flagged as "entering" (drives slc-node-enter / slc-edge-enter on the NEXT
+    // render's fresh element); names that vanished from the current drill level are
+    // captured with their last def + position into `exitingNodes` so they animate
+    // out. Drill-level changes are NOT add/remove: the new level just blooms in and
+    // stale exit nodes are cleared.
+    useEffect(() => {
+      const currentNames = new Set(currentChildren.map((s) => s.name));
+      const currentEdgeKeys = new Set(arrows.map((a) => `${a.stateName}:${a.index}`));
+      const sameLevel = prevParentRef.current === currentParent;
+
+      const newNames = [...currentNames].filter((n) => !prevNamesRef.current.has(n));
+      if (newNames.length) {
+        setEnteringNames((prev) => {
+          const next = new Set(prev);
+          newNames.forEach((n) => next.add(n));
+          return next;
+        });
+      }
+
+      const newEdges = [...currentEdgeKeys].filter((k) => !prevEdgeKeysRef.current.has(k));
+      if (newEdges.length) {
+        setEnteringEdges((prev) => {
+          const next = new Set(prev);
+          newEdges.forEach((k) => next.add(k));
+          return next;
+        });
+      }
+
+      // Prune enter markers for nodes/edges that no longer exist (keeps the sets
+      // bounded to what is currently on-canvas).
+      setEnteringNames((prev) => {
+        let changed = false;
+        const next = new Set(prev);
+        prev.forEach((n) => {
+          if (!currentNames.has(n)) {
+            next.delete(n);
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+      setEnteringEdges((prev) => {
+        let changed = false;
+        const next = new Set(prev);
+        prev.forEach((k) => {
+          if (!currentEdgeKeys.has(k)) {
+            next.delete(k);
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+
+      if (sameLevel) {
+        setExitingNodes((prev) => {
+          const next = new Map(prev);
+          let changed = false;
+          prevNodeDataRef.current.forEach((data, name) => {
+            if (!currentNames.has(name) && !next.has(name)) {
+              next.set(name, data);
+              changed = true;
+            }
+          });
+          // A node that reappeared must never linger in the exiting layer.
+          currentNames.forEach((name) => {
+            if (next.delete(name)) changed = true;
+          });
+          return changed ? next : prev;
+        });
+      } else {
+        setExitingNodes((prev) => (prev.size ? new Map() : prev));
+      }
+
+      prevNamesRef.current = currentNames;
+      prevNodeDataRef.current = new Map(
+        currentChildren.map((s) => [s.name, { state: s, pos: getPos(s.name) }])
+      );
+      prevEdgeKeysRef.current = currentEdgeKeys;
+      prevParentRef.current = currentParent;
+    }, [currentChildren, currentParent, arrows, getPos]);
+
+    const paneStyle: CSSProperties = { ...themeStyle(theme), ...style };
+    const hudScale = coarsePointer ? " slc-hud--coarse" : "";
+
+    return (
+      // The canvas *pane*, not just the SVG. Two things hang off this element.
+      //
+      // `data-pinch-owner` is what a host's own chrome pinch reads to disqualify
+      // itself: a finger anywhere in here — the board, the breadcrumb, the zoom
+      // HUD — means this gesture is about the machine, never about the chrome.
+      //
+      // `touch-action: none` extends the SVG's own refusal to the overlays sitting
+      // on top of it. The SVG had it; the HUD and the breadcrumb did not, so a
+      // pinch that happened to open with a finger on the zoom bar was still a
+      // browser page zoom. Nothing in this pane scrolls, so denying everything
+      // costs nothing.
+      <div
+        className={`slc-pane${className ? ` ${className}` : ""}`}
+        style={paneStyle}
+        data-pinch-owner={pinchOwner}
+      >
+        {showBreadcrumb && crumbs.length > 1 && (
+          <div className="slc-crumbs">
+            {crumbs.map((name, i) => (
+              <span key={`${name}-${i}`} className="slc-crumb-item">
+                {i > 0 && <span className="slc-crumb-sep">›</span>}
+                <button
+                  type="button"
+                  className={`slc-crumb${i === crumbs.length - 1 ? " slc-crumb--current" : ""}`}
+                  onClick={() => onNavigateTo?.(i)}
+                >
+                  {name}
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <svg
+          ref={svgRef}
+          // Named so an export can find the board without a ref threaded through
+          // the host's toolbar — the picture it writes is this element, serialized.
+          id={svgId}
+          className="slc-surface"
+          style={{
+            cursor: panning ? "grabbing" : spaceHeld ? "grab" : undefined,
+            // The browser's own gestures are all suppressed here, so every one of
+            // them has to be answered below: one finger pans, two pinch, and a
+            // held finger opens the menu.
+            touchAction: "none",
+            // On a touch device a resting finger would otherwise raise the system
+            // selection callout on top of our own held-press menu.
+            ...(coarsePointer
+              ? {
+                  WebkitUserSelect: "none" as const,
+                  userSelect: "none" as const,
+                  WebkitTouchCallout: "none" as const,
+                }
+              : {}),
+          }}
+          onPointerDownCapture={handlePointerDownCapture}
+          onPointerDown={handleSurfacePointerDown}
+          onPointerMove={handleSurfacePointerMove}
+          onPointerUp={handleSurfacePointerUp}
+          onPointerCancel={handleSurfacePointerUp}
+          // Middle-click on Linux/Windows would otherwise paste or autoscroll.
+          onAuxClick={(e) => e.preventDefault()}
+          onClick={(e) => {
+            // A hold that opened the menu still ends in a click on most touch
+            // browsers. It must not reach the host shell, which closes the menu on
+            // any click that arrives — the menu would flash and vanish on the lift.
+            if (suppressClickRef.current) {
+              suppressClickRef.current = false;
+              e.stopPropagation();
+              return;
+            }
+            // A pan that travelled is not a click on empty space.
+            if (panMovedRef.current) {
+              panMovedRef.current = false;
+              return;
+            }
+            if ((e.target as SVGElement)?.tagName === "svg") {
+              onClearSelection?.();
+              setEventPicker(null);
+            }
+          }}
+          onContextMenu={(e) => handleContextMenu(e)}
+        >
+          <defs>
+            <marker
+              id={`slc-arrow-${markerId}`}
+              markerWidth="10"
+              markerHeight="7"
+              refX="10"
+              refY="3.5"
+              orient="auto"
+            >
+              <polygon points="0 0, 10 3.5, 0 7" className="slc-arrowhead" />
+            </marker>
+            <marker
+              id={`slc-arrow-sel-${markerId}`}
+              markerWidth="10"
+              markerHeight="7"
+              refX="10"
+              refY="3.5"
+              orient="auto"
+            >
+              <polygon points="0 0, 10 3.5, 0 7" className="slc-arrowhead slc-arrowhead--selected" />
+            </marker>
+          </defs>
+
+          {/* Draw mode indicator line */}
+          {drawMode === "transition" && drawSource && (
+            <text x="50%" y="30" textAnchor="middle" className="slc-draw-hint">
+              Click target state to create transition from &quot;{drawSource}&quot;
+            </text>
+          )}
+
+          {/* The navigated world. One transform on one group: every arrow, box and
+              label below inherits the pan and the zoom without knowing they exist.
+              While the view is being steered — panned or pinched — the content
+              stops answering the pointer, so the grabbing cursor is not fought
+              over by the boxes underneath, and a finger that drifts onto a box
+              mid-pinch does not start dragging it. */}
+          <g
+            transform={viewportTransform(viewport)}
+            style={navigating ? { pointerEvents: "none" } : undefined}
+          >
+            {/* Transition arrows */}
+            {edges.map(({ arrow, id: edgeId, curve, spot }) => {
+              const isSelected = selection.kind === "transition" && selection.id === edgeId;
+              // A new edge (flagged in the commit effect) draws itself on.
+              const edgeEntering = enteringEdges.has(edgeId);
+              // A chip that had to move is drawn back to its own curve with a hair
+              // line, so a displaced label still says which transition it names.
+              const anchor = curve.at(0.5);
+              const strayed = Math.hypot(anchor.x - spot.cx, anchor.y - spot.cy) > 4;
+
+              return (
+                <g key={`arrow-${edgeId}`}>
+                  {/* A 1.5px thread is a fair target for a cursor and none at all
+                      for a fingertip. This traces the same curve with a wide
+                      invisible stroke underneath it — same selection, same path,
+                      just a band a finger can actually land on. */}
+                  {coarsePointer && (
+                    <path
+                      d={curve.path}
+                      fill="none"
+                      stroke="transparent"
+                      strokeWidth={touchEdgeStroke}
+                      strokeLinecap="round"
+                      pointerEvents="stroke"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelect?.("transition", edgeId);
+                      }}
+                    />
+                  )}
+                  <path
+                    d={curve.path}
+                    pathLength={1}
+                    markerEnd={`url(#slc-arrow${isSelected ? "-sel" : ""}-${markerId})`}
+                    className={`slc-edge${isSelected ? " slc-edge--selected" : ""}${
+                      edgeEntering ? " slc-edge-enter" : ""
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect?.("transition", edgeId);
+                    }}
+                  />
+                  {/* Event label on edge — at the spot settled for it above, on a
+                      plate wide enough to hold its own text. */}
+                  <g
+                    className="slc-chip"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelect?.("transition", edgeId);
+                    }}
+                  >
+                    {strayed && (
+                      <line
+                        x1={anchor.x}
+                        y1={anchor.y}
+                        x2={spot.cx}
+                        y2={spot.cy - 5}
+                        className={`slc-chip-leader${isSelected ? " slc-chip-leader--selected" : ""}`}
+                      />
+                    )}
+                    {/* The same cuff the boxes get, so the event chip is reachable
+                        without the label itself being redrawn any larger. */}
+                    {coarsePointer && (
+                      <rect
+                        x={spot.x - touchPad}
+                        y={spot.y - touchPad}
+                        width={spot.width + touchPad * 2}
+                        height={spot.height + touchPad * 2}
+                        fill="transparent"
+                        pointerEvents="all"
+                      />
+                    )}
+                    <rect
+                      x={spot.x}
+                      y={spot.y}
+                      width={spot.width}
+                      height={spot.height}
+                      rx={4}
+                      className={`slc-chip-plate${isSelected ? " slc-chip-plate--selected" : ""}`}
+                    />
+                    <TriggerGlyph
+                      mark={eventGlyph(arrow.event)}
+                      x={glyphAt(spot).x}
+                      y={glyphAt(spot).y}
+                      selected={isSelected}
+                    />
+                    <text
+                      x={spot.cx}
+                      y={spot.cy - 5}
+                      textAnchor="middle"
+                      className={`slc-chip-text${isSelected ? " slc-chip-text--selected" : ""}`}
+                    >
+                      {arrow.event}
+                    </text>
+                    {arrow.condition && (
+                      // Elided to the width the chip was measured for. A guard is
+                      // prose and can run to a paragraph; the whole of it is on the
+                      // tooltip here, and in the host's properties panel.
+                      <text x={spot.cx} y={spot.cy + 7} textAnchor="middle" className="slc-chip-guard">
+                        <title>{arrow.condition}</title>
+                        {guardText(arrow.condition)}
+                      </text>
+                    )}
+                  </g>
+                </g>
+              );
+            })}
+
+            {/* State nodes */}
+            {currentChildren.map((state) => {
+              const pos = getPos(state.name);
+              const isSelected = selection.kind === "state" && selection.id === state.name;
+              const isFinal = state.kind === "final";
+              const isHistory = state.kind === "history";
+              const composite = isComposite(state);
+              const isDrawSource = drawSource === state.name;
+              const errored = errorSet.has(state.name);
+              const hasEntry = (state.onEntry?.actions?.length ?? 0) > 0;
+              const hasExit = (state.onExit?.actions?.length ?? 0) > 0;
+              const isActive = activeSet.has(state.name);
+              // A node first seen this session (flagged in the commit effect)
+              // carries slc-node-enter; the bloom only fires on the freshly-mounted
+              // element, so the marker staying set for existing nodes is inert.
+              const entering = enteringNames.has(state.name);
+
+              const cursor =
+                spaceHeld
+                  ? undefined // the surface owns the cursor while the pan grip is armed
+                  : drawMode === "transition" && !readOnly
+                    ? "slc-node--drawing"
+                    : composite
+                      ? "slc-node--drillable"
+                      : readOnly || !onStateMove
+                        ? "slc-node--static"
+                        : "slc-node--draggable";
+
+              return (
+                <g
+                  key={state.name}
+                  className={cursor}
+                  onPointerDown={(e) => handleNodePointerDown(e, state.name)}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    if (composite) onNavigateInto?.(state.name);
+                  }}
+                  onContextMenu={(e) => handleContextMenu(e, state.name)}
+                >
+                  {/* An invisible cuff, drawn first so it sits behind everything and
+                      changes nothing you can see. It widens the box's answer to a
+                      fingertip without widening the box. Outside the entering group
+                      on purpose: the bloom animation is a visual, and the target
+                      must be live from the first frame. */}
+                  {coarsePointer && (
+                    <rect
+                      x={pos.x - touchPad}
+                      y={pos.y - touchPad}
+                      width={pos.width + touchPad * 2}
+                      height={pos.height + touchPad * 2}
+                      rx={12}
+                      fill="transparent"
+                      pointerEvents="all"
+                    />
+                  )}
+                  <g className={entering ? "slc-node-enter" : undefined}>
+                    <rect
+                      x={pos.x}
+                      y={pos.y}
+                      width={pos.width}
+                      height={pos.height}
+                      rx={isHistory ? 30 : isFinal ? 4 : 8}
+                      strokeDasharray={isFinal ? "6 3" : composite ? "4 2" : undefined}
+                      className={[
+                        "slc-node",
+                        isFinal ? "slc-node--final" : composite ? "slc-node--composite" : "",
+                        isDrawSource ? "slc-node--source" : "",
+                        errored ? "slc-node--error" : "",
+                        isSelected ? "slc-node--selected" : "",
+                        isActive ? "slc-node--active" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    />
+                    <text
+                      x={pos.x + pos.width / 2}
+                      y={pos.y + (hasEntry || hasExit ? pos.height / 2 : pos.height / 2 + 5)}
+                      textAnchor="middle"
+                      className="slc-node-name"
+                    >
+                      {state.name}
+                    </text>
+                    {state.kind && state.kind !== "normal" && (
+                      <text x={pos.x + pos.width - 8} y={pos.y + 14} textAnchor="end" className="slc-node-kind">
+                        {state.kind}
+                      </text>
+                    )}
+                    {hasEntry && (
+                      <text x={pos.x + 6} y={pos.y + pos.height - 6} className="slc-node-entry">
+                        ▸entry
+                      </text>
+                    )}
+                    {hasExit && (
+                      <text
+                        x={pos.x + pos.width - 6}
+                        y={pos.y + pos.height - 6}
+                        textAnchor="end"
+                        className="slc-node-exit"
+                      >
+                        exit◂
+                      </text>
+                    )}
+                    {errored && (
+                      <text x={pos.x + 6} y={pos.y + 14} className="slc-node-warn">
+                        ⚠
+                      </text>
+                    )}
+                    {composite && (
+                      <text
+                        x={pos.x + pos.width / 2}
+                        y={pos.y + pos.height - 6}
+                        textAnchor="middle"
+                        className="slc-node-drill"
+                      >
+                        ▼ {childCount(state)} children — {coarsePointer ? "double-tap" : "double-click"} to enter
+                      </text>
+                    )}
+                  </g>
+                </g>
+              );
+            })}
+
+            {/* Exiting nodes — outlive React's unmount to animate out. Rendered
+                from captured def + last position; non-interactive; removed on end. */}
+            {Array.from(exitingNodes.entries()).map(([name, { state, pos }]) => {
+              const exFinal = state.kind === "final";
+              const exComposite = isComposite(state);
+              return (
+                <g
+                  key={`exit-${name}`}
+                  className="slc-node-exit-group"
+                  onAnimationEnd={(e) => {
+                    if (e.animationName !== "slc-node-out") return;
+                    setExitingNodes((prev) => {
+                      if (!prev.has(name)) return prev;
+                      const next = new Map(prev);
+                      next.delete(name);
+                      return next;
+                    });
+                  }}
+                >
+                  <rect
+                    x={pos.x}
+                    y={pos.y}
+                    width={pos.width}
+                    height={pos.height}
+                    rx={state.kind === "history" ? 30 : exFinal ? 4 : 8}
+                    strokeDasharray={exFinal ? "6 3" : exComposite ? "4 2" : undefined}
+                    className={`slc-node${exFinal ? " slc-node--final" : exComposite ? " slc-node--composite" : ""}`}
+                  />
+                  <text
+                    x={pos.x + pos.width / 2}
+                    y={pos.y + pos.height / 2 + 5}
+                    textAnchor="middle"
+                    className="slc-node-name"
+                  >
+                    {name}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+          {/* — end of the navigated world; everything below is screen space — */}
+
+          {currentChildren.length === 0 && (
+            <text x="50%" y="50%" textAnchor="middle" className="slc-empty">
+              {emptyHint ?? "This level has no states."}
+            </text>
+          )}
+        </svg>
+
+        {/* Navigation HUD — screen space, never transformed. The buttons grow for
+            a fingertip and only then; a cursor keeps the compact bar. */}
+        {showHud && (
+          <div className={`slc-hud${hudScale}`}>
+            <button
+              type="button"
+              className="slc-hud-btn"
+              title="Zoom out (Ctrl + wheel down, or pinch in)"
+              disabled={viewport.scale <= VIEWPORT_LIMITS.min}
+              onClick={() => zoomFromCentre(1 / 1.25)}
+            >
+              −
+            </button>
+            <button
+              type="button"
+              className="slc-hud-btn slc-hud-btn--scale"
+              title="Reset zoom to 100%"
+              onClick={resetZoom}
+            >
+              {Math.round(viewport.scale * 100)}%
+            </button>
+            <button
+              type="button"
+              className="slc-hud-btn"
+              title="Zoom in (Ctrl + wheel up, or pinch out)"
+              disabled={viewport.scale >= VIEWPORT_LIMITS.max}
+              onClick={() => zoomFromCentre(1.25)}
+            >
+              ＋
+            </button>
+            <span className="slc-hud-sep">|</span>
+            <button
+              type="button"
+              className="slc-hud-btn"
+              title="Fit the whole machine in view"
+              onClick={fitToView}
+            >
+              ⤢ Fit
+            </button>
+            {hudExtras && (
+              <>
+                <span className="slc-hud-sep">|</span>
+                {hudExtras}
+              </>
+            )}
+            <span className="slc-hud-sep">|</span>
+            <span
+              className="slc-hud-hint"
+              title={
+                coarsePointer
+                  ? "Drag to pan · pinch with two fingers to zoom · press and hold for the menu · double-tap a composite to enter it"
+                  : "Wheel scrolls · Shift+wheel scrolls sideways · Ctrl+wheel zooms at the cursor · middle-drag or Space+drag pans"
+              }
+            >
+              {pinching
+                ? "pinching"
+                : panning
+                  ? "panning"
+                  : coarsePointer
+                    ? "drag · pinch · hold"
+                    : spaceHeld
+                      ? "space to pan"
+                      : "wheel · ⌃wheel · space"}
+            </span>
+          </div>
+        )}
+
+        {/* Event picker popup */}
+        {eventPicker && (
+          <div
+            className="slc-picker"
+            style={{ left: eventPicker.x, top: eventPicker.y - 80 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="slc-picker-title">
+              {eventPicker.stateName} → {eventPicker.targetName}
+            </div>
+            <div className="slc-picker-sub">Select event:</div>
+            {allEvents.length === 0 ? (
+              <div className="slc-picker-empty">No events defined. Add events first.</div>
+            ) : (
+              allEvents.map((eventId) => (
+                <button
+                  key={eventId}
+                  type="button"
+                  className="slc-picker-item"
+                  onClick={() => handleEventPick(eventId)}
+                >
+                  {eventId}
+                </button>
+              ))
+            )}
+            <button
+              type="button"
+              className="slc-picker-cancel"
+              onClick={() => {
+                setEventPicker(null);
+                onCancelDraw?.();
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+);
+
+export default StateMachineCanvas;

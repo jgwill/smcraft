@@ -1,26 +1,45 @@
 {
-  "name": "smcraft",
-  "version": "0.1.2",
-  "description": "State Machine Craft — design, generate, and run hierarchical state machines",
+  "name": "@miadi/stateloom-engine",
+  "version": "0.4.4",
+  "description": "State machine engine for stateloom — SMDF parser, validator (V001–V014), hierarchical runtime, in-memory interpreter and Python/TypeScript code generators",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jgwill/smcraft.git",
+    "directory": "ts"
+  },
+  "homepage": "https://github.com/jgwill/smcraft#readme",
+  "bugs": {
+    "url": "https://github.com/jgwill/smcraft/issues"
+  },
+  "author": "Guillaume Isabelle <jgi@jgwill.com>",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "default": "./dist/index.js"
     },
     "./runtime": {
+      "types": "./dist/runtime.d.ts",
       "import": "./dist/runtime.js",
-      "types": "./dist/runtime.d.ts"
+      "default": "./dist/runtime.js"
+    },
+    "./machine": {
+      "types": "./dist/machine.d.ts",
+      "import": "./dist/machine.js",
+      "default": "./dist/machine.js"
     },
     "./parser": {
+      "types": "./dist/parser.d.ts",
       "import": "./dist/parser.js",
-      "types": "./dist/parser.d.ts"
+      "default": "./dist/parser.js"
     },
     "./codegen": {
+      "types": "./dist/codegen.d.ts",
       "import": "./dist/codegen.js",
-      "types": "./dist/codegen.d.ts"
+      "default": "./dist/codegen.js"
     }
   },
   "scripts": {
@@ -32,15 +51,21 @@
     "state-machine",
     "code-generator",
     "fsm",
-    "hierarchical"
+    "hierarchical",
+    "stateloom",
+    "smdf"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "devDependencies": {
     "@types/node": "^25.3.0",
     "typescript": "^5.4.0"
   },
   "files": [
     "dist/**/*.js",
-    "dist/**/*.d.ts"
+    "dist/**/*.d.ts",
+    "!dist/tests/"
   ]
 }
