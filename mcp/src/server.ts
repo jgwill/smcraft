@@ -45,6 +45,7 @@ import {
   realpathSync,
 } from "fs";
 import { basename, dirname, join, resolve } from "path";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "os";
 import { createBridgeClient, type BridgeClient } from "@miadi/stateloom-client";
 import { envAlias, type PatchOp, type StateMachineDefinition } from "@miadi/stateloom-protocol";
@@ -731,10 +732,27 @@ function glyph(direction: string): string {
  * Every tool closes over module-level state (PROJECT_FILE, the bridge client),
  * so instances are interchangeable — building one is registration, not state.
  */
+/**
+ * The version a client sees in `serverInfo`, read from the manifest that npm
+ * actually shipped rather than typed in beside it. The literal here said 0.2.0
+ * while the package on the registry was 0.2.2 — two releases during which every
+ * agent that asked this server who it was got a confident wrong answer, and no
+ * test could catch it because the two numbers had no relationship to compare.
+ * Reading the manifest gives them one.
+ */
+const PACKAGE_VERSION: string = (() => {
+  try {
+    const manifest = resolve(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+    return String(JSON.parse(readFileSync(manifest, "utf8")).version);
+  } catch {
+    return "0.0.0-unknown";
+  }
+})();
+
 function buildServer(): McpServer {
 const server = new McpServer({
   name: "stateloom-mcp",
-  version: "0.2.0",
+  version: PACKAGE_VERSION,
 });
 
 // Tools

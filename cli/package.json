@@ -1,7 +1,7 @@
 {
   "name": "@miadi/stateloom-cli",
-  "version": "0.1.2",
-  "description": "smcx \u2014 the smcraft design-surface CLI: drive the live real-time bridge (durable-first mutate + emit, watch, presence) from the terminal",
+  "version": "0.1.3",
+  "description": "smcx — the smcraft design-surface CLI: drive the live real-time bridge (durable-first mutate + emit, watch, presence) from the terminal",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jgwill/smcraft.git",

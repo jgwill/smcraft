@@ -1,7 +1,7 @@
 {
   "name": "@miadi/stateloom-engine",
-  "version": "0.4.3",
-  "description": "State machine engine for stateloom \u2014 SMDF parser, validator (V001\u2013V014), hierarchical runtime, in-memory interpreter and Python/TypeScript code generators",
+  "version": "0.4.4",
+  "description": "State machine engine for stateloom — SMDF parser, validator (V001–V014), hierarchical runtime, in-memory interpreter and Python/TypeScript code generators",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jgwill/smcraft.git",
