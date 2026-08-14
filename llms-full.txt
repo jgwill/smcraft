@@ -2,13 +2,14 @@
 
 > Design, validate, generate and run hierarchical state machines. One declarative format (SMDF) is read by an engine, a code generator, an MCP server, a terminal CLI, a socket.io hub and a browser canvas — so an agent, a person at a shell and a person at a canvas can edit the same document while it is open, and each sees the others' edits arrive.
 
-**Engine (npm):** `@miadi/stateloom-engine` 0.4.3 — renamed from `smcraft`, which is deprecated on npm — parser, validator, runtime, SMDF interpreter, Python + TypeScript codegen
+**Engine (npm):** `@miadi/stateloom-engine` 0.4.4 — renamed from `smcraft`, which is deprecated on npm — parser, validator, runtime, SMDF interpreter, Python + TypeScript codegen
 **Engine (PyPI):** `miadi-stateloom-engine` 0.2.1 — the Python twin, CLI `smcg`
-**Protocol:** `@miadi/stateloom-protocol` 0.1.3
-**Client:** `@miadi/stateloom-client` 0.1.1
-**Hub:** `@miadi/stateloom` 0.1.1 — bin `smcraft-bridge`
-**React:** `@miadi/stateloom-react` 0.1.4
-**CLI:** `@miadi/stateloom-cli` 0.1.2 — bin `smcx`
+**Protocol:** `@miadi/stateloom-protocol` 0.1.5
+**Client:** `@miadi/stateloom-client` 0.1.2
+**Hub:** `@miadi/stateloom` 0.1.3 — bin `smcraft-bridge`
+**React:** `@miadi/stateloom-react` 0.1.6
+**Canvas:** `@miadi/stateloom-canvas` 0.1.1 — `<StateMachineCanvas>`, the design surface as a mountable component
+**CLI:** `@miadi/stateloom-cli` 0.1.3 — bin `smcx`
 **MCP:** `@miadi/stateloom-mcp` 0.2.3 — bins `stateloom-mcp`, `smcraft-mcp`
 **Skills:** `@miadi/stateloom-skills` 0.2.2 — bin `stateloom`
 **Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.1.3, bin `stateloom-web`
@@ -65,26 +66,29 @@ Mutations are durable-first everywhere: write the file, then emit the patch. A s
 smcraft/
 ├── py/                    # PyPI: miadi-stateloom-engine 0.2.1
 │   └── stateloom/           # model.py, parser.py, runtime.py, codegen.py, cli.py (smcg)
-├── ts/                    # npm: @miadi/stateloom-engine 0.4.3  (was smcraft)
+├── ts/                    # npm: @miadi/stateloom-engine 0.4.4  (was smcraft)
 │   └── src/               # model.ts, parser.ts, runtime.ts, codegen.ts, index.ts,
 │                          # machine.ts — the SMDF interpreter (no codegen)
-├── bridge-protocol/       # npm: @miadi/stateloom-protocol 0.1.3
+├── bridge-protocol/       # npm: @miadi/stateloom-protocol 0.1.5
 │   └── src/               # definition, ops (PatchOp), apply, diff, seq, events (EV),
 │                          # tree, autoLayout, edgeRoutes, edgeLabels, glyphs,
 │                          # exportName, env (envAlias), render/{mermaid,ascii}
-├── bridge-client/         # npm: @miadi/stateloom-client 0.1.1
+├── bridge-client/         # npm: @miadi/stateloom-client 0.1.2
 │   └── src/client.ts      # createBridgeClient — join/patch/full/presence
-├── bridge/                # npm: @miadi/stateloom 0.1.1 — bin smcraft-bridge
+├── bridge/                # npm: @miadi/stateloom 0.1.3 — bin smcraft-bridge
 │   └── src/               # hub.ts (startBridge), docio.ts, watcher.ts, bin.js
-├── bridge-react/          # npm: @miadi/stateloom-react 0.1.4
+├── bridge-react/          # npm: @miadi/stateloom-react 0.1.6
 │   └── src/               # session.ts, useSmcraftBridge.ts, autoLayout.ts, viewport.ts
-├── cli/                   # npm: @miadi/stateloom-cli 0.1.2 — bin smcx
+├── bridge-canvas/         # npm: @miadi/stateloom-canvas 0.1.1
+│   └── src/               # StateMachineCanvas.tsx + styles.css — every colour a --slc-* var
+├── cli/                   # npm: @miadi/stateloom-cli 0.1.3 — bin smcx
 │   └── src/               # index.ts, docio.ts, mutate.ts, commands/, render/
-├── mcp/                   # npm: @miadi/stateloom-mcp 0.2.0
+├── mcp/                   # npm: @miadi/stateloom-mcp 0.2.3
 │   └── src/               # server.ts (15 tools, 1 resource, 1 prompt), projectSwitch.ts
-├── skills-cli/            # npm: @miadi/stateloom-skills 0.1.0 — bin stateloom
-├── skills/                # the six skill sources the CLI installs
-├── web/                   # PRIVATE — the designer app (Next.js)
+├── skills-cli/            # npm: @miadi/stateloom-skills 0.2.2 — bin stateloom
+├── skills/                # the eight skill sources the CLI installs
+├── web/                   # source PRIVATE — the designer app (Next.js)
+├── web-dist/              # npm: @miadi/stateloom-web 0.1.3 — web/'s prebuilt standalone build
 ├── scripts/live-loop.sh   # one absolute source of truth for the live loop
 ├── examples/              # Example SMDF definitions
 ├── rispecs/               # RISE specifications 70–79
@@ -250,6 +254,16 @@ A parallel block requires ≥2 regions, each with ≥1 child state. `nextState` 
 
 V002 is load-bearing beyond validation: because state names are unique, `name` is the stable key the bridge's PatchOp vocabulary uses to address a state.
 
+**Which implementation runs which rule.** The format specifies all fourteen; the three validators in this repo do not agree, and a caller that assumes they do will misread a clean result as a clean chart:
+
+| Validator | Rules | Note |
+|---|---|---|
+| Python engine — `stateloom.parser.validate` | V001–V014 | the complete set; `smcg` is the way to get all of them |
+| TypeScript engine — `parser.validate` | V001, V002, V003, V005, V006, V007, V013 | **V009, V011, V012 are not implemented** — an empty composite passes in JS and fails in Python |
+| MCP `validate_definition` | its own five reference/uniqueness checks | **rule IDs collide with different meanings**: its V001 is "no events defined", V004 an unknown transition target, V005 "root has no child state" |
+
+Read the message, never the number, unless you know which of the three answered.
+
 ---
 
 ## 3. Python Package Deep Dive (`miadi-stateloom-engine` 0.2.1, PyPI)
@@ -389,7 +403,7 @@ Output: `{output_dir}/{snake_case_name}_fsm.py`
 
 ---
 
-## 4. TypeScript Engine Deep Dive (`@miadi/stateloom-engine` 0.4.3, npm)
+## 4. TypeScript Engine Deep Dive (`@miadi/stateloom-engine` 0.4.4, npm)
 
 ### Installation
 ```bash
@@ -527,7 +541,7 @@ Generates the TypeScript equivalent of the Python output: state enum, base state
 
 Spec 77 is the contract; this section is what shipped.
 
-### 5.1 `@miadi/stateloom-protocol` 0.1.3
+### 5.1 `@miadi/stateloom-protocol` 0.1.5
 
 Zero runtime dependencies. Everything else in the loom depends on it, and it depends on nothing — which is why the same layout, the same edge routing and the same file names appear on every surface without any of them importing each other.
 
@@ -590,7 +604,7 @@ export const EV = {
 
 **Environment:** `envAlias(suffix, env?)` reads `STATELOOM_${suffix}` first, falls back to `SMCRAFT_${suffix}`. `NEXT_PUBLIC_*` client reads cannot use it — Next.js inlines only literal accesses — so those keep an explicit `??` chain.
 
-### 5.2 `@miadi/stateloom-client` 0.1.1
+### 5.2 `@miadi/stateloom-client` 0.1.2
 
 ```typescript
 import { createBridgeClient, type BridgeClient, type BridgeStatus } from "@miadi/stateloom-client";
@@ -598,7 +612,7 @@ import { createBridgeClient, type BridgeClient, type BridgeStatus } from "@miadi
 
 A framework-agnostic socket.io-client wrapper: join a room, send patches, send a full definition, receive both, track presence, and auto-resync when a sequence gap says this client missed something. No React, no DOM.
 
-### 5.3 `@miadi/stateloom` 0.1.1 — the hub
+### 5.3 `@miadi/stateloom` 0.1.3 — the hub
 
 ```bash
 npx -y @miadi/stateloom            # bin: smcraft-bridge
@@ -619,7 +633,7 @@ What it holds:
 
 **The hub never writes disk.** Durability belongs to whoever made the edit. This keeps a crashed hub from being able to corrupt a document.
 
-### 5.4 `@miadi/stateloom-react` 0.1.4
+### 5.4 `@miadi/stateloom-react` 0.1.6
 
 Peer dependency: `react ^19`.
 
@@ -639,7 +653,7 @@ The drawing helpers are re-exported here rather than re-implemented: the designe
 
 `viewport.ts` carries the pan/zoom math — `Viewport`, `Box`, `Point`, `ScaleLimits`, and the transforms between screen and world space.
 
-### 5.5 `@miadi/stateloom-cli` 0.1.2 — `smcx`
+### 5.5 `@miadi/stateloom-cli` 0.1.3 — `smcx`
 
 ```bash
 npm i -g @miadi/stateloom-cli
@@ -665,7 +679,23 @@ Every mutation is **durable-first**: persist to disk, then emit to the hub. The 
 
 `render` reads the durable `.smdf.json` straight off disk: no hub, no browser, no agent needed. It prints the absolute path it wrote.
 
-### 5.6 `@miadi/stateloom-mcp` 0.2.0 — see §6
+### 5.6 `@miadi/stateloom-canvas` 0.1.1 — the board as a component
+
+```typescript
+import { StateMachineCanvas } from "@miadi/stateloom-canvas";
+import "@miadi/stateloom-canvas/styles.css";
+```
+
+The design surface, lifted out of the app it was written in: wheel / ⌃wheel / middle-drag /
+Space+drag / pinch navigation, composite drill-down, box dragging, routed edges, settled event
+chips, the zoom HUD. Props in, callbacks out — it owns no store and no transport, which is what
+lets the designer and forgewright render the same board from different state. Every colour is a
+`--slc-*` CSS variable; ship the stylesheet with it or it renders unpainted.
+
+Peer dependency `react ^19`. Depends on `stateloom-protocol` for layout, edge routing and label
+placement, so a canvas and a `smcx render` of the same document agree on where the boxes are.
+
+### 5.7 `@miadi/stateloom-mcp` 0.2.3 — see §6
 
 The MCP server is a bridge client like any other. It depends on `stateloom-cli` (for the render path), `stateloom-client` and `stateloom-protocol`.
 
