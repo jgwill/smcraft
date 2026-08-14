@@ -43,6 +43,8 @@ unreachable at that exact moment.
 | `stateloom-render` | drawing the machine from the CLI, the MCP server or the web canvas — four formats, rasterizer fallback, stamped export names |
 | `stateloom-codegen` | SMDF → validated → generated Python / TypeScript, and running the result against the runtime |
 | `stateloom-rispec` | generating a RISE rispec from a machine, including the PDE-sourced path |
+| `stateloom-service` | the loom as supervised systemd user services — install from npm, pin versions, upgrade-and-restart onto a new release |
+| `stateloom-tailnet` | publishing the pair on a private Tailscale tailnet — one Service, two endpoints, and the bridge URL a remote browser dials |
 
 ```bash
 stateloom skills list                          # names and descriptions

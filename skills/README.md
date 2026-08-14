@@ -17,6 +17,8 @@ has never seen this repository can load one and act.
 | `stateloom-render` | Drawing the machine from all three surfaces (CLI, MCP, web), the four formats, the PNG rasterizer fallback chain, and `--stamp` export naming. | `stateloom skills install stateloom-render` |
 | `stateloom-codegen` | SMDF → validated → generated Python (or TypeScript), the runtime the generated code imports, and how to run the result. | `stateloom skills install stateloom-codegen` |
 | `stateloom-rispec` | Emitting a RISE rispec (markdown specification) from a machine with `generate_rispec`, including the PDE-sourced path. | `stateloom skills install stateloom-rispec` |
+| `stateloom-service` | Running the loom as supervised background services instead of terminals: systemd user units over the published packages, a stack env file, version pins, and the upgrade-and-restart that a bare `systemctl restart` cannot do. | `stateloom skills install stateloom-service` |
+| `stateloom-tailnet` | Publishing the pair on a private Tailscale tailnet — one named Service, two endpoints, TLS on both, and the runtime bridge URL a remote browser dials. | `stateloom skills install stateloom-tailnet` |
 
 Install every skill at once:
 
@@ -46,8 +48,14 @@ stateloom-setup
    ├── stateloom-design ──┬── stateloom-render
    │                      ├── stateloom-codegen
    │                      └── stateloom-rispec
-   └── stateloom-live-loop
+   ├── stateloom-live-loop
+   └── stateloom-service ──── stateloom-tailnet
 ```
+
+`stateloom-setup` runs the loom in two terminals, which is right for a session.
+`stateloom-service` is the same pair as supervised units for a machine that should still
+be serving tomorrow; `stateloom-tailnet` then lifts it off loopback onto a private
+network. Take those two only when the board must outlive the terminal.
 
 ## The one rule that saves the most time
 

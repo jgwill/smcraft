@@ -1,7 +1,7 @@
 {
   "name": "@miadi/stateloom-skills",
-  "version": "0.2.1",
-  "description": "stateloom \u2014 installable agent skills for the stateloom/smcraft state-machine design system: `stateloom skills install <name>` drops a ready-to-use SKILL.md into .claude/skills",
+  "version": "0.2.2",
+  "description": "stateloom — installable agent skills for the stateloom/smcraft state-machine design system: `stateloom skills install <name>` drops a ready-to-use SKILL.md into .claude/skills",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

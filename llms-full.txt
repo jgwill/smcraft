@@ -9,9 +9,9 @@
 **Hub:** `@miadi/stateloom` 0.1.1 — bin `smcraft-bridge`
 **React:** `@miadi/stateloom-react` 0.1.4
 **CLI:** `@miadi/stateloom-cli` 0.1.2 — bin `smcx`
-**MCP:** `@miadi/stateloom-mcp` 0.2.0 — bins `stateloom-mcp`, `smcraft-mcp`
-**Skills:** `@miadi/stateloom-skills` 0.1.0 — bin `stateloom`
-**Designer:** `web/` — `"private": true`, run from the repo, never published
+**MCP:** `@miadi/stateloom-mcp` 0.2.3 — bins `stateloom-mcp`, `smcraft-mcp`
+**Skills:** `@miadi/stateloom-skills` 0.2.2 — bin `stateloom`
+**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.1.3, bin `stateloom-web`
 **Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
 **RISE Specs:** 70–79
 **Repository:** https://github.com/jgwill/smcraft
@@ -781,7 +781,7 @@ free — one client, and the caller's own trust:
 
 ## 7. Agent Skills
 
-`@miadi/stateloom-skills` 0.1.0, bin `stateloom` (alias `stateloom-skills`).
+`@miadi/stateloom-skills` 0.2.2, bin `stateloom` (alias `stateloom-skills`).
 
 ```bash
 npx -y @miadi/stateloom-skills skills list
@@ -791,14 +791,16 @@ npx -y @miadi/stateloom-skills skills install --all
 
 `install` copies a ready-to-use `SKILL.md` into `.claude/skills/`, so an agent that has never seen this system arrives already knowing how to drive it. The sources live in `./skills/` in this repository and are synced into the package at build/pack time.
 
-Six skills, one per surface of the system:
+Eight skills, one per surface of the system:
 
-- `stateloom-setup`
-- `stateloom-design`
-- `stateloom-live-loop`
-- `stateloom-render`
-- `stateloom-codegen`
-- `stateloom-rispec`
+- `stateloom-setup` — stand it all up from nothing
+- `stateloom-design` — design a machine through the MCP tools
+- `stateloom-live-loop` — agent and human on one board
+- `stateloom-render` — draw it, from any of the three surfaces
+- `stateloom-codegen` — SMDF → Python / TypeScript
+- `stateloom-rispec` — SMDF → RISE specification
+- `stateloom-service` — keep it running: the hub and canvas as supervised `systemd --user` units over the published packages, a stack env file holding the ports, the document and the version pins, and the upgrade a bare `systemctl restart` cannot perform — the units execute globally installed binaries, so after a release a restart faithfully restarts the old version. Three records must move together: what npm has installed, the pins in the env file, and the running processes.
+- `stateloom-tailnet` — publish that pair on a private Tailscale tailnet as one named Service with **two** endpoints (canvas on 443, hub on 4599). Both are needed: the bridge URL is dialled by the *visitor's* browser, so a canvas-only Service gives a remote viewer a board that renders and never moves, with no error on either side. Both must be TLS (an HTTPS canvas cannot open a plain-HTTP socket), and Services route by **port only** — `--set-path` is accepted and silently dropped.
 
 The package also exports `@miadi/stateloom-skills/catalog` for programmatic access to the skill list.
 
@@ -1022,12 +1024,22 @@ Two ways to run a definition, and they are not competitors:
 
 ## 12. Web Designer (`web/`, private)
 
-`"private": true` — it is not published. Run it from the repo.
+`"private": true` — the SOURCE is not published. Its prebuilt standalone build ships as
+`@miadi/stateloom-web`, so a host with no repository and no Next.js toolchain still gets
+the canvas.
 
 ```bash
-cd web && npm install && npm run dev
+cd web && npm install && npm run dev            # from the repo, for developing it
 # http://localhost:4598  (4598 canvas / 4599 hub are the loom's pair)
+
+npx -y @miadi/stateloom-web \
+  --doc /abs/path/board.smdf.json --bridge http://127.0.0.1:4599   # anywhere else
 ```
+
+The published bundle carries no bridge URL: the browser asks `GET /api/config`, which the
+serving process answers from its own environment. Changing which hub visitors dial is a
+restart, not a rebuild — see the `stateloom-service` and `stateloom-tailnet` skills for
+running it supervised and publishing it on a private network.
 
 ### Stack
 Next.js 16 (App Router), React 19 with the React Compiler, Zustand 5, SVG canvas, Tailwind CSS 4, and `@miadi/stateloom-react` for the live document.
