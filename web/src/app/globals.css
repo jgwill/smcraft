@@ -108,15 +108,10 @@ body {
   }
 }
 
-/* Presence chips ride the top-right corner. Under `viewport-fit=cover` that
-   corner can be beneath a notch or the status bar, so the offset is measured
-   from the safe area rather than the raw viewport edge. */
-.presence-dock {
-  position: fixed;
-  top: calc(env(safe-area-inset-top) + 0.5rem);
-  right: calc(env(safe-area-inset-right) + 1rem);
-  z-index: 50;
-}
+/* `.presence-dock` lived here: a fixed top-right rail of one pill per peer.
+   It grew with the room and painted itself across the toolbar's own controls,
+   so presence moved into the toolbar flow as a single fixed-width control —
+   see components/PresenceChips.tsx. Nothing floats over the navigation now. */
 
 /* The way back. A pinch on the chrome moves the root font size, and every length
    in this stylesheet is a multiple of it — so at 175% the app is legible but the

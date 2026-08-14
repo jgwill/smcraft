@@ -7,7 +7,6 @@ import {
 } from "@miadi/stateloom-react";
 import {
   diffDefinition,
-  colorFor,
   type StateMachineDefinition,
 } from "@miadi/stateloom-protocol";
 import { useDesignerStore } from "@/store/useDesignerStore";
@@ -24,9 +23,13 @@ const OUTBOUND_DEBOUNCE_MS = 60;
  * Rendered only once a bridge URL is known — see DesignBridge, which resolves
  * it from the serving process at runtime so a published build carries nobody's
  * URL baked in.
+ *
+ * Transport only — it paints nothing. Presence lands in the store and the
+ * toolbar draws it (PresenceChips); the floating corner dock this used to
+ * render grew one pill per peer and ended up covering the toolbar it hovered
+ * over.
  */
 export default function SocketBridgeProvider({ url }: { url: string }) {
-  const presence = useDesignerStore((s) => s.presence);
   // The requested `?doc=` (step 2): passed through to the file API, which
   // resolves and guards it; the join below keys the room by the RESOLVED path.
   const requested = useRequestedDoc();
@@ -126,24 +129,5 @@ export default function SocketBridgeProvider({ url }: { url: string }) {
     // an arbitrary definition, so the arriving full-def repaints the canvas.
   }, [url, requested]);
 
-  if (presence.length === 0) return null;
-
-  return (
-    // `presence-dock` replaces the raw `top-2 right-4`: with viewport-fit=cover
-    // that corner can sit under a notch or the status bar, so the offset is
-    // measured from the safe-area inset instead. Still pointer-events-none, so
-    // it never competes with the toolbar it floats over.
-    <div className="presence-dock flex gap-1 pointer-events-none">
-      {presence.map((p) => (
-        <span
-          key={p.clientId}
-          title={`${p.role}${p.name ? ` · ${p.name}` : ""}`}
-          className="text-[10px] leading-none px-2 py-1 rounded-full text-white/95 shadow font-medium"
-          style={{ backgroundColor: p.color ?? colorFor(p.clientId) }}
-        >
-          {p.role}
-        </span>
-      ))}
-    </div>
-  );
+  return null;
 }

@@ -10,6 +10,7 @@ import {
 } from "@/lib/exportImage";
 import type { StateDef } from "@/types/definition";
 import DocSwitcher from "./DocSwitcher";
+import PresenceChips from "./PresenceChips";
 import { docQuery, useRequestedDoc } from "@/lib/docParam";
 
 export default function Toolbar() {
@@ -223,6 +224,10 @@ export default function Toolbar() {
         {remoteStatus === "idle" && (
           <span className="text-[10px] text-gray-600" title={remoteMessage ?? "No file bound"}>○ no disk</span>
         )}
+
+        {/* Who else is on the board. In the flow, next to the document it
+            describes — it used to float over this toolbar and cover it. */}
+        <PresenceChips />
 
         <div className="flex-1" />
       </div>
