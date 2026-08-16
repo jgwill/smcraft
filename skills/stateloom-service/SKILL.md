@@ -20,6 +20,12 @@ background services**, installed from npm with no repository on the host at all.
                             and the version pins
 ```
 
+There is a third shape, and on a host with Docker it is usually the right one: the four
+containers of the **`stateloom-docker`** skill, with `restart: unless-stopped` doing what
+these units do and one published port instead of two. Choose systemd when the host has no
+Docker, when the loom must start before any container runtime does, or when you want the
+processes native. Everything below assumes that choice has been made.
+
 Two facts shape everything below:
 
 1. **The units run installed binaries, not a checkout.** Which is why upgrading is an npm

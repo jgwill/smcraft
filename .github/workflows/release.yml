@@ -3,16 +3,17 @@
 # Two jobs, and the split is the whole point:
 #
 #   verify   no environment, no secrets, nothing irreversible. Cold-installs and
-#            builds all seven packages in dependency order, tests them, and
-#            packs every one of them with the `file:` → range rewrite applied,
-#            so the pack proves the exact manifests publish would ship.
+#            builds every package in dependency order, tests them, and packs
+#            every one with the `file:` → range rewrite applied, so the pack
+#            proves the exact manifests publish would ship — then builds the
+#            container image and smoke-tests it.
 #   release  environment: release (one required reviewer), needs: verify. The
 #            human is asked to approve AFTER the evidence exists, not before.
 #
 # Adapted from jgwill/medicine-wheel's release.yml, which carries five prior
 # release defects in its header. Four of them apply here, and this workflow
 # answers each in the shape smcraft actually has — a FLAT multi-package repo
-# with NO root package.json, NO npm workspaces, seven independent version
+# with NO root package.json, NO npm workspaces, ten independent version
 # lines, and intra-repo deps written as `file:../<dir>`:
 #
 #   1. `environment: release` on a single job paused before step 1 — the
@@ -22,8 +23,9 @@
 #
 #   2. A credential step (docker login) ran AFTER `npm publish`, so a bad token
 #      failed with npm already irreversibly published.
-#      → Here: every fallible reversible step — cold install, build of all
-#        seven, the re-asked registry guard — runs before the first publish,
+#      → Here: every fallible reversible step — cold install, build of every
+#        package, the image build and its smoke test, the re-asked registry
+#        guard, and the Docker Hub login — runs before the first publish,
 #        and publishing itself walks the dependency order fail-fast so a
 #        dependent is never published against a version that failed to land.
 #
@@ -39,9 +41,9 @@
 #   4. The pack check dry-ran only the root package, so the packages whose
 #      `files` glob pointed at a gitignored dist/ — the actual empty-glob
 #      hazard — were never packed.
-#      → smcraft is ENTIRELY that hazard: six of seven declare
+#      → smcraft is ENTIRELY that hazard: most packages declare
 #        `files: ["dist/**/*.js", "dist/**/*.d.ts"]` over a gitignored dist/,
-#        and `mcp` declares no `files` at all. The pack check packs all seven
+#        and `mcp` declares no `files` at all. The pack check packs every one
 #        and asserts every path `main`, `types`, `bin` and `exports` point at
 #        is really inside the tarball.
 #
@@ -92,10 +94,24 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # TOPOLOGICAL ORDER — do not alphabetize. Mirrors PACKAGES in
-  # scripts/publish-workspaces.mjs. `web` is absent on purpose: it is
-  # "private": true and must never be published.
-  PKG_ORDER: 'ts bridge-protocol bridge-client bridge bridge-react cli mcp skills-cli'
+  # TOPOLOGICAL ORDER — do not alphabetize.
+  #
+  # BUILD_ORDER is everything that must be built, PKG_ORDER everything that must
+  # be published, and they differ by exactly one entry: `web`, which is
+  # "private": true and must never be published, but whose `next build` output
+  # IS `web-dist` (@miadi/stateloom-web). Build web-dist without building web
+  # first and its sync script falls back to whatever `server/` happens to be on
+  # disk — on a cold runner, nothing.
+  #
+  # Both lists mirror PACKAGES in scripts/publish-workspaces.mjs. Until
+  # 2026-08-16 this workflow's list was missing `bridge-canvas` and `web-dist`,
+  # so two published packages were released by hand from a laptop: never cold
+  # built here, never pack-checked, never in the registry scan. Adding a
+  # package to the publish script and not to this file is exactly how that
+  # happened again.
+  BUILD_ORDER: 'ts bridge-protocol bridge-client bridge bridge-react bridge-canvas cli mcp skills-cli web web-dist'
+  PKG_ORDER: 'ts bridge-protocol bridge-client bridge bridge-react bridge-canvas cli mcp skills-cli web-dist'
+  IMAGE: 'jgwill/stateloom'
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────
@@ -123,8 +139,8 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       # Read before building — the release job's gate depends on this answer,
-      # and asking npm costs nothing. Seven independent version lines means
-      # seven separate questions; there is no single repo version to ask about.
+      # and asking npm costs nothing. Ten independent version lines means one
+      # question per package; there is no single repo version to ask about.
       - name: Registry state — which versions are already published
         id: scan
         run: |
@@ -148,7 +164,7 @@ jobs:
           echo "$TO_PUBLISH package(s) would be published."
           cat /tmp/scan-table.md
 
-      # A tag is a repo-wide marker over seven independent version lines, so it
+      # A tag is a repo-wide marker over ten independent version lines, so it
       # cannot be checked for equality — only for plausibility. A tag matching
       # nothing usually means the bump commit never made it in.
       - name: Tag sanity
@@ -175,9 +191,17 @@ jobs:
         id: build
         run: |
           set -euo pipefail
-          for pkg in $PKG_ORDER; do
-            echo "::group::$pkg — npm ci && npm run build"
-            ( cd "$pkg" && npm ci && npm run build )
+          for pkg in $BUILD_ORDER; do
+            echo "::group::$pkg — install && build"
+            (
+              cd "$pkg"
+              # `npm ci` requires a lockfile. web-dist has no dependencies and
+              # therefore no lockfile, and `npm ci` there fails with EUSAGE —
+              # which reads exactly like a broken package rather than like a
+              # package that needs nothing installed.
+              if [ -f package-lock.json ]; then npm ci; else echo "no lockfile — nothing to install"; fi
+              npm run build
+            )
             echo "::endgroup::"
           done
 
@@ -196,11 +220,11 @@ jobs:
           done
 
       # Local only — no registry, no credentials. Applies the same `file:` →
-      # range rewrite that publish applies, packs all seven, and asserts each
+      # range rewrite that publish applies, packs every one, and asserts each
       # tarball really contains what main/types/bin/exports point at, then
       # restores every manifest. This is the step that would have caught
       # medicine-wheel's defect 4, in the shape smcraft has it.
-      - name: 'Pack check — rewrite file: deps, pack all seven, assert contents'
+      - name: 'Pack check — rewrite file: deps, pack every package, assert contents'
         id: pack
         run: node scripts/publish-workspaces.mjs --pack-check
 
@@ -213,6 +237,23 @@ jobs:
         if: steps.scan.outputs.to_publish != '0'
         run: node scripts/publish-workspaces.mjs --dry-run
 
+      # No push, no credentials. Built against npm's `latest` rather than this
+      # tree's versions, because those are not published yet — this proves the
+      # Dockerfile and the compose wiring, not this release's tarballs. The
+      # pinned image is built in `release`, after publish, where the versions
+      # it names exist.
+      - name: Build image (no push)
+        id: image
+        run: ./docker-build-push.sh --latest --tag ci --no-smoke
+
+      # The step that would have caught every containerisation defect worth
+      # catching: it starts the image and asserts an MCP tool call reaches a
+      # document on the host filesystem. A built image that never came up is
+      # not evidence of anything.
+      - name: Smoke test the image
+        id: smoke
+        run: scripts/docker-smoke.sh "${IMAGE}:ci"
+
       - name: Summary
         if: always()
         run: |
@@ -224,8 +265,10 @@ jobs:
             echo "| registry scan | ${{ steps.scan.outcome || 'did not run' }} |"
             echo "| cold install + build (dep order) | ${{ steps.build.outcome || 'did not run' }} |"
             echo "| tests | ${{ steps.test.outcome || 'did not run' }} |"
-            echo "| pack check (all 7, rewritten manifests) | ${{ steps.pack.outcome || 'did not run' }} |"
+            echo "| pack check (all packages, rewritten manifests) | ${{ steps.pack.outcome || 'did not run' }} |"
             echo "| registry dry-run | ${{ steps.publish_dry.outcome || 'did not run' }} |"
+            echo "| image build (no push) | ${{ steps.image.outcome || 'did not run' }} |"
+            echo "| image smoke test | ${{ steps.smoke.outcome || 'did not run' }} |"
             echo ""
             cat /tmp/scan-table.md 2>/dev/null || echo "_registry scan did not complete._"
             echo ""
@@ -294,7 +337,7 @@ jobs:
           echo "to_publish=$TO_PUBLISH" >> "$GITHUB_OUTPUT"
           if [ "$TO_PUBLISH" = "0" ]; then
             if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-              echo "::warning::Every declared version is already on npm. The publish step will skip all seven."
+              echo "::warning::Every declared version is already on npm. The publish step will skip every package."
             else
               echo "::error::Every declared version is already on npm — another run published during the approval window, or no version was bumped."
               exit 1
@@ -309,11 +352,27 @@ jobs:
         id: build
         run: |
           set -euo pipefail
-          for pkg in $PKG_ORDER; do
-            echo "::group::$pkg — npm ci && npm run build"
-            ( cd "$pkg" && npm ci && npm run build )
+          for pkg in $BUILD_ORDER; do
+            echo "::group::$pkg — install && build"
+            (
+              cd "$pkg"
+              if [ -f package-lock.json ]; then npm ci; else echo "no lockfile — nothing to install"; fi
+              npm run build
+            )
             echo "::endgroup::"
           done
+
+      # BEFORE npm publish, and this placement is the whole point. Logging in
+      # costs nothing and is fully reversible; a bad DOCKERHUB_TOKEN must fail
+      # here, not after a set of permanent npm versions has already gone out.
+      # (medicine-wheel shipped that defect once; this is the same fix in this
+      # repository's shape.)
+      - name: Log in to Docker Hub
+        id: docker_login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME || 'jgwill' }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # ── from here on, nothing is reversible ──────────────────────────────
       #
@@ -342,6 +401,45 @@ jobs:
             node scripts/publish-workspaces.mjs
           fi
 
+      # ── the image, which is the release's integration test ───────────────
+      #
+      # Built AFTER publish and pinned to the versions this run just pushed,
+      # because that is what the image installs. So it is not a second build of
+      # the same source — it is the first time those tarballs are asked to run
+      # together. Verify already proved the Dockerfile itself against `latest`,
+      # which is why a failure here can only mean the newly published packages
+      # do not work together, and says so.
+      #
+      # A failure at this point leaves npm published with no image. That is the
+      # right way round: npm is the artifact, the image is derived from it, and
+      # re-running `./docker-build-push.sh --push` fixes it without republishing
+      # anything.
+      - name: Build the pinned image
+        id: image_build
+        run: |
+          echo "version=$(tr -d '[:space:]' < docker/VERSION)" >> "$GITHUB_OUTPUT"
+          ./docker-build-push.sh --no-smoke
+
+      - name: Smoke test the pinned image
+        id: image_smoke
+        run: scripts/docker-smoke.sh "${IMAGE}:${{ steps.image_build.outputs.version }}"
+
+      # A docker push OVERWRITES a tag, permanently and without asking. npm
+      # refuses to republish a version; the registry has no such protection, so
+      # the refusal lives here. `:latest` is expected to move — that is what it
+      # is for — but a numbered tag pointing at two different images is a lie
+      # anybody debugging will believe.
+      - name: Push the image
+        id: image_push
+        run: |
+          VERSION="${{ steps.image_build.outputs.version }}"
+          if docker manifest inspect "${IMAGE}:${VERSION}" >/dev/null 2>&1; then
+            echo "::error::${IMAGE}:${VERSION} already exists on Docker Hub. Pushing would overwrite an image somebody may be running. Bump docker/VERSION and re-run — npm is already published and does not need to be touched."
+            exit 1
+          fi
+          docker push "${IMAGE}:${VERSION}"
+          docker push "${IMAGE}:latest"
+
       # Reports what happened, not what was intended. A step that did not run
       # says so, and a partial publish is named as a partial publish.
       - name: Summary
@@ -354,7 +452,11 @@ jobs:
             echo "|---|---|"
             echo "| guard (something left to publish) | ${{ steps.guard.outcome || 'did not run' }} |"
             echo "| cold install + build (dep order) | ${{ steps.build.outcome || 'did not run' }} |"
+            echo "| docker hub login (before publish) | ${{ steps.docker_login.outcome || 'did not run' }} |"
             echo "| **npm publish** | ${{ steps.npm_publish.outcome || 'did not run' }} |"
+            echo "| image build (pinned to what just published) | ${{ steps.image_build.outcome || 'did not run' }} |"
+            echo "| image smoke test | ${{ steps.image_smoke.outcome || 'did not run' }} |"
+            echo "| **image push** | ${{ steps.image_push.outcome || 'did not run' }} |"
             echo ""
             if [ "${{ steps.npm_publish.outcome }}" = "success" ]; then
               echo "${{ steps.guard.outputs.to_publish }} package(s) published — see the publish step's result table for the per-package outcome."
@@ -362,6 +464,10 @@ jobs:
               echo "> ⚠ **PARTIAL PUBLISH.** The script stops at the first failure, so packages earlier in the dependency order (\`$PKG_ORDER\`) may already be permanently on npm. Read the result table in the publish step, then re-run with \`only\` set to the remaining dirs — published versions are skipped, not overwritten."
             else
               echo "**Nothing published.**"
+            fi
+            if [ "${{ steps.npm_publish.outcome }}" = "success" ] && [ "${{ steps.image_push.outcome }}" != "success" ]; then
+              echo ""
+              echo "> ⚠ **npm published, image did NOT.** Nothing is broken and nothing needs republishing — the image is derived from what is already on npm. Rebuild and push it from the released commit: \`./docker-build-push.sh --push\`."
             fi
             if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
               echo ""

@@ -1,6 +1,6 @@
 ---
 name: stateloom-setup
-description: Install and wire the whole stateloom / smcraft state-machine system from nothing. Use when setting up stateloom or smcraft from scratch, installing the @miadi/stateloom npm packages or the `miadi-stateloom-engine` PyPI package, registering the stateloom MCP server with Claude Code or another MCP client, choosing or creating a .smdf.json project document, starting the design bridge hub on port 4599, wiring the web designer on port 4598, setting STATELOOM_PROJECT_FILE / STATELOOM_BRIDGE_URL, or verifying that the hub, the MCP server and the canvas are all live and pointing at the same file.
+description: Install and wire the whole stateloom / smcraft state-machine system from nothing, as native processes. Use when setting up stateloom or smcraft from scratch, installing the @miadi/stateloom npm packages or the `miadi-stateloom-engine` PyPI package, building the packages from a checkout in dependency order, registering the stateloom MCP server with Claude Code or another MCP client, choosing or creating a .smdf.json project document, starting the design bridge hub on port 4599, wiring the web designer on port 4598, setting STATELOOM_PROJECT_FILE / STATELOOM_BRIDGE_URL, or verifying that the hub, the MCP server and the canvas are all live and pointing at the same file. For the containerised route — one command, one port — load `stateloom-docker` instead.
 ---
 
 # Standing up stateloom
@@ -29,6 +29,25 @@ Work the steps in order. Each ends with a check — do not continue past a faile
 
 ---
 
+## Before you start: is Docker available?
+
+If it is, the entire rest of this skill collapses into one command, and the class of failure
+it exists to prevent — surfaces disagreeing about a path or a URL — cannot happen, because
+nothing is configured by hand:
+
+```bash
+npx -y @miadi/stateloom-skills docker up
+```
+
+That prints a URL for your human and an MCP registration for you. Load the
+**`stateloom-docker`** skill for the whole story.
+
+Everything below is the same loom assembled by hand. Choose it when there is no Docker, when
+you are developing the packages themselves, or when the surfaces must run as native
+processes on the host.
+
+---
+
 ## Step 0 — Preconditions
 
 ```bash
@@ -50,8 +69,14 @@ Decide now which of the two modes you are in, because every later command differ
 ### Mode A — from the registries
 
 ```bash
-# CLI (bin: smcx) + hub (bin: smcraft-bridge) + MCP server (bins: stateloom-mcp, smcraft-mcp)
-npm install -g @miadi/stateloom-cli @miadi/stateloom @miadi/stateloom-mcp
+# The four binaries the loop needs, plus the skills front door.
+#   @miadi/stateloom-cli     → smcx
+#   @miadi/stateloom         → smcraft-bridge   (the hub)
+#   @miadi/stateloom-mcp     → stateloom-mcp, smcraft-mcp
+#   @miadi/stateloom-web     → stateloom-web    (the canvas, prebuilt — no toolchain)
+#   @miadi/stateloom-skills  → stateloom        (skills + `stateloom docker`)
+npm install -g @miadi/stateloom-cli @miadi/stateloom @miadi/stateloom-mcp \
+               @miadi/stateloom-web @miadi/stateloom-skills
 
 # Python engine + code generator (bin: smcg) — only for Python codegen
 pip install miadi-stateloom-engine
@@ -83,18 +108,34 @@ smcg --help | head -3          # only if you installed the Python package
 
 ### Mode B — from the repository
 
-Build in dependency order — the packages link to each other with `file:` paths:
+Build in dependency order — the packages link to each other with `file:` paths, and a
+package cannot typecheck until the `dist/` of everything it imports already exists. **This
+list is topological, not alphabetical.** Reordering it, or dropping an entry, fails with
+`TS2307: Cannot find module` in whichever package you skipped a dependency of.
 
 ```bash
 cd /path/to/smcraft
-for p in bridge-protocol bridge-client bridge bridge-react cli mcp; do
+for p in ts bridge-protocol bridge-client bridge bridge-react bridge-canvas cli mcp skills-cli; do
   (cd "$p" && npm install && npm run build) || { echo "FAILED: $p"; break; }
 done
 (cd py && pip install -e .)     # gives you smcg
-(cd web && npm install)         # the designer, if you want the canvas
+(cd web && npm install)         # the designer — needs bridge-canvas built, above
 ```
 
-**Check:** `ls bridge/dist/bin.js cli/dist/index.js mcp/dist/server.js` lists three files.
+`bridge-canvas` is the one most easily missed: nothing in the terminal loop needs it, so a
+shorter list looks like it worked — until `web/` fails to resolve
+`@miadi/stateloom-canvas`. `ts` (`@miadi/stateloom-engine`) is likewise independent of the
+bridge packages but is what codegen and the runtime come from.
+
+**Check:**
+
+```bash
+ls ts/dist/index.js bridge/dist/bin.js bridge-canvas/dist/index.js \
+   cli/dist/index.js mcp/dist/server.js skills-cli/dist/bin.js
+```
+
+lists six files. Anything missing means that package's build did not run — scroll back for
+the `FAILED:` line.
 
 ---
 
@@ -221,19 +262,25 @@ The hub is a pure sequencer and broadcaster. It never writes to disk; each clien
 through its own channel and then emits.
 
 ```bash
-# Mode A
-smcraft-bridge                       # reads STATELOOM_BRIDGE_PORT / _HOST / _PROJECT_FILE
+# Mode A — flags, or the environment, or both (flags win)
+smcraft-bridge                                          # reads STATELOOM_BRIDGE_PORT / _HOST / _PROJECT_FILE
+smcraft-bridge --port 4599 --host 127.0.0.1 --doc "$STATELOOM_PROJECT_FILE"
 
-# either mode, flag-driven
+# the same hub through the CLI, if you prefer one binary
 smcx serve --port 4599 --host 127.0.0.1 --file "$STATELOOM_PROJECT_FILE"
 
 # Mode B, from source
-node bridge/dist/bin.js              # env-driven
+node bridge/dist/bin.js --port 4599 --doc "$STATELOOM_PROJECT_FILE"
 scripts/live-loop.sh hub             # env-driven, absolute paths precomputed
 ```
 
-`smcraft-bridge` takes **no command-line flags** — it is configured entirely by environment.
-Use `smcx serve` when you want flags.
+`smcraft-bridge` takes `--port`, `--host`, `--doc` and `--token`; each falls back to its
+`STATELOOM_*` variable. **Before 0.1.3 it read the environment only** — a `--port` on the
+command line was accepted, silently ignored, and the hub came up on 4599 regardless. If a
+flag appears to do nothing, check `smcraft-bridge --help`: an old binary has no help output.
+
+Note the flag names differ between the two binaries: the hub says `--doc`, `smcx serve` says
+`--file`. They mean the same thing.
 
 Run it in its own terminal or under a process manager; it stays in the foreground until
 SIGINT.
@@ -304,11 +351,12 @@ reach the MCP process — edits will persist to disk but no canvas will update.
 
 ## Step 6 — Start the web designer
 
-The designer is a Next.js app served on `STATELOOM_WEB_PORT` (4598). Its browser bundle reads
-`NEXT_PUBLIC_STATELOOM_BRIDGE_URL`, and **`NEXT_PUBLIC_*` is inlined at build time** — a
-running server cannot be re-pointed by exporting a new value.
+The designer is a Next.js app served on `STATELOOM_WEB_PORT` (4598).
 
-Mode B, from the repository:
+**The published designer learns its bridge URL at runtime**, from `GET /api/config` — so one
+prebuilt bundle serves any hub and `--bridge` on the command line is enough. Only a copy you
+build yourself from `web/` inlines `NEXT_PUBLIC_STATELOOM_BRIDGE_URL` at build time; that one
+cannot be re-pointed without rebuilding.
 
 ```bash
 # Mode A — nothing checked out. The designer ships prebuilt.
@@ -325,8 +373,7 @@ scripts/live-loop.sh web            # serves on $STATELOOM_WEB_PORT
 cd web && PORT=4598 npm run dev
 ```
 
-The published designer learns its bridge URL at runtime from `GET /api/config`,
-so one prebuilt bundle serves any hub — nothing is baked in. Verify with:
+Verify what the browser will be told:
 
 ```bash
 curl -s http://127.0.0.1:4598/api/config
@@ -387,7 +434,7 @@ mutation is never lost — but the live surfaces did not hear it.
 | Web toolbar reads `○ no disk` | The web process and the MCP process resolved a **relative** `STATELOOM_PROJECT_FILE` against different working directories | Export an absolute path everywhere; restart both. In Mode B use `scripts/live-loop.sh`, which computes absolute paths once. |
 | MCP logs `STATELOOM_BRIDGE_URL is not set — edits persist to disk but are NOT broadcast` | The MCP registration has no bridge env | Re-register with `--env STATELOOM_BRIDGE_URL=…` |
 | `smcx` prints `· bridge unreachable at …` | Hub not running, or wrong port | Start the hub (Step 4); confirm with the curl check |
-| Canvas does not animate but the file changes on disk | Browser bundle built without `NEXT_PUBLIC_STATELOOM_BRIDGE_URL` | Rebuild the web app with the variable set, then restart it |
+| Canvas does not animate but the file changes on disk | The browser was handed no bridge URL, or one it cannot reach | `curl $WEB/api/config` — an empty `bridgeUrl` means the web process has no `STATELOOM_BRIDGE_URL`; a URL naming a host the *browser* cannot resolve (a container name, an internal address) means the value is right for the server and wrong for the page |
 | MCP `set_project_file` errors "must be a .json document" | Path does not end in `.json` | Use `.smdf.json` |
 | Port 4599 already in use | Another hub is live | Reuse it — a hub serves one room per document, so several documents share one hub |
 

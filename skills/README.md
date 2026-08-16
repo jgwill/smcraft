@@ -12,6 +12,7 @@ has never seen this repository can load one and act.
 | Skill | What it covers | Install |
 |---|---|---|
 | `stateloom-setup` | Standing the whole system up from nothing: npm/PyPI packages, MCP registration, the `.smdf.json` project document, the hub on 4599, the web designer on 4598, the `STATELOOM_*` env contract, and a verification checklist that proves each piece is live. | `stateloom skills install stateloom-setup` |
+| `stateloom-docker` | The whole loom in containers: one image, four roles, **one published port**. `stateloom docker up`, the `jgwill/stateloom` image, compose, the same-origin gateway that makes a containerised canvas connect without being told the network, MCP over HTTP with a bearer token, and the document mount. | `stateloom skills install stateloom-docker` |
 | `stateloom-design` | Designing a machine conversationally through the 15 MCP tools — tool order, building a hierarchy, reading validation output, and the mistakes that produce V003/V004 errors. | `stateloom skills install stateloom-design` |
 | `stateloom-live-loop` | The real-time bridge: agent and human editing one board at once. Hub, rooms keyed by absolute path, presence, `smcx watch`, the web canvas, persist-then-emit, external-edit detection, and diagnosing `○ no disk`. | `stateloom skills install stateloom-live-loop` |
 | `stateloom-render` | Drawing the machine from all three surfaces (CLI, MCP, web), the four formats, the PNG rasterizer fallback chain, and `--stamp` export naming. | `stateloom skills install stateloom-render` |
@@ -44,7 +45,9 @@ stateloom skills install stateloom-setup --dir /path/to/project/.claude/skills
 live surfaces, that the hub is running. After setup, the skills are independent:
 
 ```
-stateloom-setup
+stateloom-docker ─── or ─── stateloom-setup
+                                │
+   ┌────────────────────────────┤
    ├── stateloom-design ──┬── stateloom-render
    │                      ├── stateloom-codegen
    │                      └── stateloom-rispec
@@ -52,10 +55,15 @@ stateloom-setup
    └── stateloom-service ──── stateloom-tailnet
 ```
 
-`stateloom-setup` runs the loom in two terminals, which is right for a session.
-`stateloom-service` is the same pair as supervised units for a machine that should still
-be serving tomorrow; `stateloom-tailnet` then lifts it off loopback onto a private
-network. Take those two only when the board must outlive the terminal.
+**Standing it up is a fork, not a sequence.** `stateloom-docker` is one command and one
+port and needs nothing installed but Docker; `stateloom-setup` assembles the same loom as
+native processes, for a host without Docker or for developing the packages themselves.
+Take one. Everything downstream is identical either way.
+
+`stateloom-service` is the native pair as supervised systemd units, for a machine that
+should still be serving tomorrow; `stateloom-tailnet` then lifts it off loopback onto a
+private network. Take those two only when the board must outlive the terminal and you did
+not take the container route, which already restarts itself.
 
 ## The one rule that saves the most time
 
