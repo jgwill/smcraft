@@ -1,7 +1,21 @@
 {
-  "name": "stateloom-web",
-  "version": "0.1.3",
+  "name": "@miadi/stateloom-web-source",
+  "version": "0.1.5",
   "private": true,
+  "//": [
+    "This is the designer's SOURCE and is never published — hence private: true.",
+    "What ships is its BUILD: `next build` (output: standalone) produces",
+    ".next/standalone, which web-dist/scripts/sync-web.mjs assembles into",
+    "web-dist/server/ and publishes as @miadi/stateloom-web. So `npx -y",
+    "@miadi/stateloom-web` runs this app without a Next.js toolchain anywhere.",
+    "",
+    "Until 2026-08-16 this package was also called `stateloom-web`, and two",
+    "different things answering to one name is why it kept looking as though the",
+    "designer was the one package nobody had published.",
+    "",
+    "The version here is the DESIGNER's version, reported by `stateloom-web",
+    "--version` as `designer`. Bump it with web-dist's when the canvas changes."
+  ],
   "scripts": {
     "dev": "next dev -p ${PORT:-4598}",
     "build": "next build",

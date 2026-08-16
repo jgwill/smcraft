@@ -127,8 +127,14 @@ Other endings, all non-fatal:
 
 ### The canvas (web, :4598)
 
-The browser bundle reads `NEXT_PUBLIC_STATELOOM_BRIDGE_URL`, **inlined at build time**.
-Setting it on a running server changes nothing — rebuild, then restart.
+The browser asks the server it was loaded from, `GET /api/config`, and gets back that
+process's own `STATELOOM_BRIDGE_URL`. So a **published** canvas (`@miadi/stateloom-web`,
+`stateloom-web --bridge …`) is re-pointed by restarting it with a different value — no
+rebuild. Only a copy built from `web/` inlines `NEXT_PUBLIC_STATELOOM_BRIDGE_URL` at build
+time, and that one does need rebuilding.
+
+The value must be reachable **from the browser**, not from the server. Behind the container
+gateway it is `/` — same origin — and then it is right by construction.
 
 ---
 
@@ -264,7 +270,7 @@ read exactly what each process was handed.
 | `presence` shows only your CLI | Other peers are in a different room (different path) or not connected | Compare `get_project_file` against `echo $STATELOOM_PROJECT_FILE` |
 | Canvas animates for the CLI but not the agent | Two different documents | `set_project_file` to the canvas's path |
 | Hand-edited JSON does not reach the canvas | The hub is not watching that path | The watcher lives per room — make sure a peer has joined that `docId` |
-| Everything works, nothing animates | Web bundle built without `NEXT_PUBLIC_STATELOOM_BRIDGE_URL` | Rebuild the web app, then restart it |
+| Everything works, nothing animates | The browser was handed no bridge URL, or one only the server can reach | `curl $WEB/api/config`. Empty → restart the canvas with `STATELOOM_BRIDGE_URL` set. A host the browser cannot resolve → use an address the browser can, or put the loom behind the container gateway where it is `/` |
 | Duplicate `agent mcp-agent` rows in `presence` | Several MCP processes joined over the session | Harmless; they clear as processes exit |
 
 ---

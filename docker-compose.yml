@@ -1,0 +1,118 @@
+# =============================================================================
+# stateloom — the loom as four services behind one front door.
+#
+#   cp .env.docker.example .env
+#   docker compose up -d
+#   open http://localhost:${STATELOOM_PORT:-4598}
+#
+# The single-container form (`docker run -p 4598:8080 jgwill/stateloom`) runs
+# exactly these four processes with exactly this wiring. Use this file when you
+# want them separately restartable, separately logged, or supervised on a
+# machine somebody administers.
+#
+# ── the one thing worth understanding ───────────────────────────────────────
+# Only `gateway` publishes a port. The canvas's bridge URL is "/" — the SAME
+# ORIGIN as the page — so the browser's socket follows the human wherever they
+# came from: localhost, a LAN address, a tailnet name, a TLS reverse proxy.
+# Publish the hub directly instead and you inherit the classic failure: the page
+# loads, the socket dials a hostname only the container network can resolve, and
+# the board sits there looking perfectly fine.
+# =============================================================================
+
+x-stateloom-env: &stateloom-env
+  STATELOOM_PROJECT_FILE: /data/${STATELOOM_DOC:-statemachine.smdf.json}
+  # Every document under the mount is listed by GET /api/docs, offered in the
+  # canvas's ⇄ switcher, and reachable by the MCP's set_project_file — by its
+  # path INSIDE the container, which is /data/<name>. Nothing above it is.
+  STATELOOM_DOC_ROOTS: /data
+  STATELOOM_MCP_ROOT: /data
+  STATELOOM_BRIDGE_PORT: "4599"
+  STATELOOM_WEB_PORT: "4598"
+  STATELOOM_MCP_HTTP_PORT: "4600"
+  STATELOOM_GATEWAY_PORT: "8080"
+
+x-stateloom: &stateloom
+  image: ${STATELOOM_IMAGE:-jgwill/stateloom:latest}
+  restart: unless-stopped
+  # The documents are written from inside the container. Running as your own
+  # uid is what keeps them editable on the host afterwards.
+  user: "${STATELOOM_UID:-1000}:${STATELOOM_GID:-1000}"
+  volumes:
+    - ${STATELOOM_DOC_DIR:-./looms}:/data
+
+x-healthcheck: &healthcheck
+  test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+  interval: 15s
+  timeout: 6s
+  start_period: 25s
+  retries: 4
+
+services:
+  # ── the sequencer ─────────────────────────────────────────────────────────
+  # Broadcasts every change to every peer and never writes to disk, so it is
+  # safe to restart at any moment: no edit can be lost by bouncing it.
+  hub:
+    <<: *stateloom
+    environment:
+      <<: *stateloom-env
+      STATELOOM_ROLE: hub
+    healthcheck: *healthcheck
+
+  # ── the agent's door ──────────────────────────────────────────────────────
+  # MCP over HTTP, bearer-token guarded, reached at ${gateway}/mcp — no separate
+  # port and no separate hostname for the agent to be told about. Leave
+  # STATELOOM_MCP_TOKEN empty and the container mints one and prints it to its
+  # log; set it in .env to keep a registration working across restarts.
+  mcp:
+    <<: *stateloom
+    environment:
+      <<: *stateloom-env
+      STATELOOM_ROLE: mcp
+      STATELOOM_MCP_TOKEN: ${STATELOOM_MCP_TOKEN:-}
+      # Server-side, inside the compose network — this one IS a service name,
+      # and correctly so: no browser ever resolves it.
+      STATELOOM_BRIDGE_URL: http://hub:4599
+      # The address the MCP puts in the canvas links it hands an agent for its
+      # human. This one is the opposite case: it is resolved by a BROWSER, so it
+      # must be the published origin. Left unset, the link names the container's
+      # internal 4598 — which on a host already running a loom is a live port
+      # belonging to somebody else's diagram. `stateloom docker up` writes it.
+      STATELOOM_CANVAS_URL: ${STATELOOM_CANVAS_URL:-http://127.0.0.1:${STATELOOM_PORT:-4598}}
+    depends_on:
+      hub:
+        condition: service_healthy
+    healthcheck: *healthcheck
+
+  # ── the human's board ─────────────────────────────────────────────────────
+  canvas:
+    <<: *stateloom
+    environment:
+      <<: *stateloom-env
+      STATELOOM_ROLE: canvas
+      # Same origin. Read the header of this file before changing it.
+      STATELOOM_BRIDGE_URL: "/"
+    depends_on:
+      hub:
+        condition: service_healthy
+    healthcheck: *healthcheck
+
+  # ── the front door ────────────────────────────────────────────────────────
+  gateway:
+    <<: *stateloom
+    environment:
+      <<: *stateloom-env
+      STATELOOM_ROLE: gateway
+      STATELOOM_GATEWAY_CANVAS: canvas:4598
+      STATELOOM_GATEWAY_HUB: hub:4599
+      STATELOOM_GATEWAY_MCP: mcp:4600
+    depends_on:
+      canvas:
+        condition: service_started
+      hub:
+        condition: service_healthy
+    ports:
+      # Pick any free host port. Bound to loopback by default — set
+      # STATELOOM_BIND=0.0.0.0 to serve the network, and put TLS in front of it
+      # before you do.
+      - "${STATELOOM_BIND:-127.0.0.1}:${STATELOOM_PORT:-4598}:8080"
+    healthcheck: *healthcheck

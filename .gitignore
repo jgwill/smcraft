@@ -5,6 +5,10 @@ dist/
 # skills-cli/skills is a build output — the canonical pack is /skills, mirrored
 # in by skills-cli/scripts/sync-skills.mjs on build and again on prepack
 /skills-cli/skills/
+
+# likewise skills-cli/docker — the canonical compose file is /docker-compose.yml,
+# mirrored in by skills-cli/scripts/sync-docker.mjs
+/skills-cli/docker/
 .pytest_cache/
 __pycache__/
 *.egg-info/

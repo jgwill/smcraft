@@ -22,10 +22,32 @@ and a person at a canvas can all edit the same document while it is open.
 | [`@miadi/stateloom-mcp`](https://www.npmjs.com/package/@miadi/stateloom-mcp) | `npx -y @miadi/stateloom-mcp` | `mcp/` | The MCP server. Bins `stateloom-mcp` and legacy `smcraft-mcp` |
 | [`@miadi/stateloom-skills`](https://www.npmjs.com/package/@miadi/stateloom-skills) | `npx -y @miadi/stateloom-skills` | `skills-cli/` | Bin `stateloom` — installs agent skills into `.claude/skills/` |
 | [`@miadi/stateloom-web`](https://www.npmjs.com/package/@miadi/stateloom-web) | `npx -y @miadi/stateloom-web` | `web/` → `web-dist/` | The visual designer (Next.js), prebuilt. `web/` stays private; `web-dist/` ships its standalone build |
+| [`jgwill/stateloom`](https://hub.docker.com/r/jgwill/stateloom) | `docker run -p 4598:8080 jgwill/stateloom` | `Dockerfile`, `docker/` | The whole loom as one image: hub, canvas, MCP and CLI behind a single port |
 
 Everything depends on `@miadi/stateloom-protocol`. Nothing depends back on it.
 
 ## Quick Start
+
+### Docker — the whole loom, one port
+
+```bash
+npx -y @miadi/stateloom-skills docker up
+```
+
+Writes a compose project, starts hub + canvas + MCP + gateway, waits until every part is
+healthy, and prints a URL for your human and an MCP registration for your agent. Pick the
+port with `--port`, the documents directory with `--dir`; `--json` gives an agent the whole
+answer as data. Or without any Node at all:
+
+```bash
+mkdir -p looms
+docker run --rm -p 4598:8080 -v "$PWD/looms:/data" --user "$(id -u):$(id -g)" jgwill/stateloom
+```
+
+Only one port is published, and the canvas is told its bridge is `/` — **the same origin as
+the page** — so the browser's live socket works over localhost, a LAN address, a tailnet
+name or a TLS proxy without anything being configured to match. `docs/DOCKER.md` has the
+whole design; `stateloom skills install stateloom-docker` hands it to an agent.
 
 ### MCP server (for LLM agents)
 
@@ -120,10 +142,16 @@ every resolved value and writes `.env.smcraft-live`.
 
 ### From source
 
+The packages link to each other with `file:` paths, so a package cannot typecheck until the
+`dist/` of everything it imports exists. **This order is topological, not alphabetical** —
+the same list the release workflow walks:
+
 ```bash
-cd ts   && npm install && npm run build && npm test
-cd web  && npm install && npm run dev
-cd py   && pip install -e .
+for p in ts bridge-protocol bridge-client bridge bridge-react bridge-canvas cli mcp skills-cli; do
+  (cd "$p" && npm ci && npm run build) || { echo "FAILED: $p"; break; }
+done
+cd web && npm ci && npm run dev      # the canvas; needs bridge-canvas built above
+cd py  && pip install -e .           # the Python engine and `smcg`
 ```
 
 ## Architecture

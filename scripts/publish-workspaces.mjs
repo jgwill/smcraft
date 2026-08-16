@@ -255,6 +255,31 @@ function entryPoints(pkg) {
 	return [...paths];
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYLOAD ASSERTIONS — content no manifest field points at.
+//
+// entryPoints() derives what to check from main/types/bin/exports, which covers
+// every package whose value IS its importable code. Three do not fit: their
+// real payload is a directory that nothing imports, mirrored in by a prepack
+// hook, and gitignored — so a hook that silently no-ops produces a tarball that
+// passes every other check and is useless on arrival.
+//
+// `@miadi/stateloom-web` is the worst of them: without `server/.next/static/`
+// the designer serves a 200 and a blank page, with no error in any log. That is
+// a permanent version nobody can tell is broken without opening a browser.
+// ─────────────────────────────────────────────────────────────────────────────
+const REQUIRED_PAYLOAD = {
+	'web-dist': [
+		{ path: 'server/server.js', why: 'the prebuilt Next.js standalone server' },
+		{ prefix: 'server/.next/static/', why: "the client bundle — without it the board renders blank" },
+	],
+	'skills-cli': [
+		{ prefix: 'skills/', why: 'the skill pack (sync-skills.mjs)' },
+		{ prefix: 'docker/', why: 'the compose file `stateloom docker up` runs (sync-docker.mjs)' },
+	],
+	ts: [{ prefix: 'dist/', why: 'the compiled engine' }],
+};
+
 /**
  * The defect this catches: every package here declares `files: ["dist/**\/*.js",
  * "dist/**\/*.d.ts"]` over a gitignored dist/, and `mcp` declares no `files` at
@@ -277,6 +302,19 @@ function packCheckOne(entry) {
 	for (const p of packed) {
 		if (p.startsWith('node_modules/')) throw new Error(`tarball contains ${p}`);
 	}
+
+	for (const need of REQUIRED_PAYLOAD[entry.dir] || []) {
+		const present = need.path
+			? packed.has(need.path)
+			: [...packed].some((p) => p.startsWith(need.prefix));
+		if (!present) {
+			throw new Error(
+				`tarball is missing ${need.path ?? `${need.prefix}*`} — ${need.why}. ` +
+					`Run \`npm run build\` in ${entry.dir} (and in web/ first, for web-dist) before packing.`,
+			);
+		}
+	}
+
 	return `${info.entryCount} files, ${Math.round((info.unpackedSize || 0) / 1024)} KiB unpacked`;
 }
 

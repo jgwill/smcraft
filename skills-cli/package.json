@@ -1,7 +1,7 @@
 {
   "name": "@miadi/stateloom-skills",
-  "version": "0.2.2",
-  "description": "stateloom — installable agent skills for the stateloom/smcraft state-machine design system: `stateloom skills install <name>` drops a ready-to-use SKILL.md into .claude/skills",
+  "version": "0.3.1",
+  "description": "stateloom — the front door for the stateloom/smcraft state-machine design system: `stateloom docker up` runs the whole loom in containers on one port, `stateloom skills install` drops ready-to-use SKILL.md files into .claude/skills",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,10 +22,10 @@
     }
   },
   "scripts": {
-    "build": "tsc && node scripts/sync-skills.mjs",
-    "prepack": "node scripts/sync-skills.mjs",
+    "build": "tsc && node scripts/sync-skills.mjs && node scripts/sync-docker.mjs",
+    "prepack": "node scripts/sync-skills.mjs && node scripts/sync-docker.mjs",
     "test": "node --test dist/tests/*.test.js",
-    "clean": "rm -rf dist skills"
+    "clean": "rm -rf dist skills docker"
   },
   "keywords": [
     "state-machine",
@@ -36,7 +36,10 @@
     "agent",
     "claude",
     "mcp",
-    "cli"
+    "cli",
+    "docker",
+    "compose",
+    "container"
   ],
   "license": "MIT",
   "author": "Guillaume Isabelle <jgi@jgwill.com>",
@@ -60,6 +63,7 @@
     "dist/**/*.js",
     "dist/**/*.d.ts",
     "!dist/tests/",
-    "skills/**/*"
+    "skills/**/*",
+    "docker/**/*"
   ]
 }

@@ -2,12 +2,39 @@
 
 [![npm](https://img.shields.io/npm/v/%40miadi%2Fstateloom-skills)](https://www.npmjs.com/package/@miadi/stateloom-skills)
 
-The front door. `stateloom skills install` drops ready-to-use agent skills for the
-stateloom / smcraft state-machine design system into `.claude/skills/`.
+The front door to the stateloom / smcraft state-machine design system. Two commands:
+`stateloom docker up` runs the whole loom in containers, and `stateloom skills install`
+drops ready-to-use agent skills into `.claude/skills/`.
 
 ```bash
-npx -y @miadi/stateloom-skills skills install --all
+npx -y @miadi/stateloom-skills docker up             # a live board, on one port
+npx -y @miadi/stateloom-skills skills install --all  # the knowledge to use it
 ```
+
+## `stateloom docker up`
+
+Starts hub + canvas + MCP + gateway, waits until every part reports healthy, and prints a
+URL for your human and an MCP registration for you:
+
+```
+🧵 stateloom is live
+
+   For your human   http://127.0.0.1:4598
+   For you (MCP)    http://127.0.0.1:4598/mcp
+   Bearer token     3f9c…
+   Documents        /abs/path/looms
+```
+
+```bash
+stateloom docker up --port 5599 --dir ~/machines   # your port, your documents
+stateloom docker up --json                         # the whole answer as data
+stateloom docker status | logs | down
+```
+
+Only one port is published. The canvas is told its bridge is `/` — the same origin as the
+page — so the browser's live socket works over localhost, a LAN address, a tailnet name or
+a TLS proxy with nothing configured to match. Needs Docker with the compose plugin; the
+compose file it runs ships inside this package.
 
 ## Why this exists
 
@@ -38,6 +65,7 @@ unreachable at that exact moment.
 | skill | covers |
 |---|---|
 | `stateloom-setup` | standing the whole system up from nothing: packages, MCP registration, the project document, the hub, the web designer, and a verification checklist |
+| `stateloom-docker` | the loom in containers: one image, four roles, one published port, MCP over HTTP, and the same-origin gateway that makes it work anywhere |
 | `stateloom-design` | designing a machine conversationally through the 15 MCP tools — call order, hierarchy, reading validation output |
 | `stateloom-live-loop` | the real-time bridge: agent and human on the same board, presence, persist-then-emit, diagnosing divergence |
 | `stateloom-render` | drawing the machine from the CLI, the MCP server or the web canvas — four formats, rasterizer fallback, stamped export names |

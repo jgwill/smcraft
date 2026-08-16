@@ -23,6 +23,7 @@ import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadCatalog, findSkill, skillsRoot } from "./catalog.js";
 import { defaultTargetDir, installSkills, type InstallResult } from "./install.js";
+import { runDocker } from "./docker.js";
 
 function version(): string {
   try {
@@ -37,19 +38,26 @@ function version(): string {
 const USAGE = `stateloom — agent skills for the stateloom / smcraft state-machine design system
 
 Usage
+  stateloom docker <command> [options]
   stateloom skills <command> [options]
   stateloom mcp-config [--project <file>]
   stateloom --version
 
 Commands
+  docker up                     run the whole loom in containers and print the URL
+  docker down | status | logs   stop it | check it | follow it
   skills list                   list every skill in the pack
   skills show <name>            print a skill's SKILL.md to stdout
   skills install <name>...      copy skills into .claude/skills/
   skills install --all          copy every skill
   skills path                   print where skills would be installed
-  mcp-config                    print an MCP client registration block
+  mcp-config                    print an MCP client registration block (stdio)
 
-Run 'stateloom skills --help' for the install options.
+Starting from nothing:
+  npx -y @miadi/stateloom-skills docker up          # a live board on one port
+  npx -y @miadi/stateloom-skills skills install --all
+
+Run 'stateloom docker --help' or 'stateloom skills --help' for the options.
 `;
 
 const SKILLS_USAGE = `stateloom skills — install the stateloom skill pack into an agent
@@ -272,7 +280,7 @@ function cmdMcpConfig(flags: Flags): number {
   return 0;
 }
 
-function main(argv: string[]): number {
+async function main(argv: string[]): Promise<number> {
   if (argv.includes("--version") || argv.includes("-v")) {
     console.log(version());
     return 0;
@@ -283,6 +291,12 @@ function main(argv: string[]): number {
   if (!group || group === "--help" || group === "-h" || group === "help") {
     console.log(USAGE);
     return group ? 0 : 1;
+  }
+
+  // Docker parses its own flags — it has a dozen this parser knows nothing
+  // about, and silently rejecting `--port` would be a poor first impression.
+  if (group === "docker") {
+    return runDocker(rest);
   }
 
   if (group === "mcp-config") {
@@ -323,9 +337,11 @@ function main(argv: string[]): number {
   }
 }
 
-try {
-  process.exitCode = main(process.argv.slice(2));
-} catch (err: unknown) {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exitCode = 1;
-}
+main(process.argv.slice(2))
+  .then((code) => {
+    process.exitCode = code;
+  })
+  .catch((err: unknown) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exitCode = 1;
+  });

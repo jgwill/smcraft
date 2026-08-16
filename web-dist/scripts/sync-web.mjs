@@ -17,7 +17,7 @@
  * Every line prints to stderr: as a `prepack` hook this runs inside
  * `npm pack --dry-run --json`, where stdout belongs to npm's JSON.
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -38,6 +38,51 @@ if (!existsSync(STANDALONE)) {
       `  run \`npm run build\` in web/ first (needs output: "standalone" in next.config.ts)`
   );
   process.exit(1);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STALENESS GUARD.
+//
+// This script copies whatever build happens to be on disk, and `prepack` runs
+// it during `npm publish` — so editing web/src and publishing without an
+// intervening `next build` ships the PREVIOUS designer under the new version
+// number, silently, permanently. That is not hypothetical: it happened while
+// preparing 0.1.4, and the only reason it was noticed was a screenshot.
+//
+// Set STATELOOM_ALLOW_STALE_WEB=1 to override deliberately (a hotfix that
+// touches nothing under web/src, say).
+// ─────────────────────────────────────────────────────────────────────────────
+function newestSourceMtime(dir) {
+  let newest = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    const full = join(dir, entry.name);
+    newest = Math.max(newest, entry.isDirectory() ? newestSourceMtime(full) : statSync(full).mtimeMs);
+  }
+  return newest;
+}
+
+if (!/^(1|true|yes)$/i.test(process.env.STATELOOM_ALLOW_STALE_WEB ?? '')) {
+  const builtAt = statSync(join(STANDALONE, 'server.js')).mtimeMs;
+  let newestSource = 0;
+  for (const dir of ['src', 'public']) {
+    const full = join(WEB, dir);
+    if (existsSync(full)) newestSource = Math.max(newestSource, newestSourceMtime(full));
+  }
+  for (const file of ['next.config.ts', 'package.json']) {
+    const full = join(WEB, file);
+    if (existsSync(full)) newestSource = Math.max(newestSource, statSync(full).mtimeMs);
+  }
+  if (newestSource > builtAt) {
+    console.error(
+      `sync-web: the build at ${STANDALONE} is OLDER than web/'s sources.\n` +
+        `  built:  ${new Date(builtAt).toISOString()}\n` +
+        `  source: ${new Date(newestSource).toISOString()}\n` +
+        `  Publishing now would ship the previous designer under this version number.\n` +
+        `  Run \`npm run build\` in web/ first (or set STATELOOM_ALLOW_STALE_WEB=1).`
+    );
+    process.exit(1);
+  }
 }
 
 rmSync(TARGET, { recursive: true, force: true });
