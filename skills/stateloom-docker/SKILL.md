@@ -1,6 +1,6 @@
 ---
 name: stateloom-docker
-description: Run the entire stateloom loom — hub, visual canvas, MCP server and CLI — as containers on one port. Use when installing stateloom with Docker instead of npm, running `stateloom docker up`, using the jgwill/stateloom image or docker-compose.yml, giving a human a board to open without installing Node on their machine, choosing a web port other than 4598, registering the containerised MCP server over HTTP with a bearer token, mounting a documents directory, or diagnosing a containerised loom whose canvas loads but never syncs.
+description: Run the entire stateloom loom — hub, visual canvas, MCP server and CLI — as containers on one port. Use when installing stateloom with Docker instead of npm, running `stateloom docker up`, using the jgwill/stateloom image or docker-compose.yml, giving a human a board to open without installing Node on their machine, choosing a web port other than 4598, registering the containerised MCP server over HTTP with a bearer token, mounting a documents directory, switching between diagrams in a container (GET /api/docs, the ⇄ switcher, why a host path is refused), setting STATELOOM_CANVAS_URL so the MCP's canvas links name the published port, or diagnosing a containerised loom whose canvas loads but never syncs.
 ---
 
 # The loom in containers
@@ -26,6 +26,18 @@ came from: `localhost`, a LAN address, a tailnet name, a TLS reverse proxy. Noth
 be configured to match the network, because nothing names the network.
 
 Two ways in. Both end at the same four processes.
+
+> ### ⚠ One loom per directory
+>
+> **Do not run a host-native loom and a containerised loom over the same documents
+> directory.** The hub keys its rooms by normalized absolute path, and the two see
+> different paths for one file — a host-native MCP says
+> `/b/trading/diagrams/x.smdf.json`, the containerised one says `/data/x.smdf.json`.
+> Two rooms, one file. Both write it, neither hears the other, and last-writer-wins
+> on a document two people believe they are co-editing.
+>
+> Pick one shape per directory. `stateloom-setup` is the native one; this is the
+> containerised one.
 
 ---
 
@@ -100,6 +112,13 @@ you cannot edit them afterwards. `/data` is also the **only** directory the canv
 MCP server can read or write — a `?doc=` parameter or a `set_project_file` call pointing
 anywhere else is refused, not followed.
 
+**Add `-e STATELOOM_CANVAS_URL=http://localhost:4598`** (matching your published port).
+Without it, the canvas links the MCP hands you for your human — from `set_project_file` and
+`get_project_file` — name port **4598 inside the container**, which is not the port they
+opened. On a host that already runs another loom, 4598 is live and belongs to somebody
+else's diagram, so the link works and shows the wrong board. The container warns on start
+when this is unset; `stateloom docker up` sets it for you.
+
 **Check:** open the URL. The toolbar shows the document name and `⌁ synced`.
 
 ---
@@ -131,9 +150,13 @@ unauthenticated read and write of every document under `/data`.
 
 - `stateloom docker up` generates one, writes it into `.stateloom/.env`, and reuses it on
   every later `up` — so a registration keeps working across restarts.
-- A bare `docker run` with no `STATELOOM_MCP_TOKEN` mints a fresh one per start and prints
-  it to the log. Fine for a session; it invalidates a registration on every restart. Pin it:
+- A bare `docker run` with no `STATELOOM_MCP_TOKEN` generates one, prints it, and keeps it
+  in `/data/.stateloom-token` (mode 600) so a restart reuses it rather than silently
+  invalidating your registration. Delete that file to roll the token; set
+  `STATELOOM_TOKEN_FILE` to move it; set `STATELOOM_MCP_TOKEN` to control it outright:
   `-e STATELOOM_MCP_TOKEN="$(openssl rand -hex 24)"`.
+- If `/data` is read-only the token cannot be kept, and the container says so — that is the
+  one case where a restart still changes it.
 
 **Check:**
 
@@ -148,6 +171,32 @@ curl -s -X POST http://127.0.0.1:4598/mcp \
 The second returns a `serverInfo` block naming `stateloom-mcp`.
 
 ---
+
+## Switching documents
+
+Every `.json` under `/data` is reachable, and the canvas's **⇄** button lists them: the
+panel is fed by `GET /api/docs`, which enumerates exactly what the server's allowlist
+admits, and it prints the roots as the server sees them. That last part matters in a
+container — your `~/diagrams` is the server's `/data`, and a path is only meaningful in
+one of those two vocabularies.
+
+```bash
+curl -s http://localhost:4598/api/docs      # {"roots":["/data"],"current":"…","docs":[…]}
+```
+
+Three forms of `?doc=`, and only one of them works:
+
+| `?doc=` | result |
+|---|---|
+| `/data/usd-cad.smdf.json` | **200** — the server's path, which is what the switcher lists |
+| `/b/trading/diagrams/usd-cad.smdf.json` | 403 — the *host* path; the server has never heard of it |
+| `usd-cad.smdf.json` | 403 — must be absolute |
+
+The refusal names the permitted root and, when that root is `/data`, says what to ask for
+instead. An agent switches with `set_project_file /data/<name>`; a human clicks.
+
+Documents are found up to four directories deep, dotfiles and `node_modules` skipped, up to
+300 of them.
 
 ## The four services, if you want them apart
 
@@ -197,6 +246,7 @@ argument or with `STATELOOM_ROLE`.
 | 3 | `curl -s "$URL/socket.io/?EIO=4&transport=polling"` | `0{"sid":…}` |
 | 4 | `curl -s -o /dev/null -w '%{http_code}' -X POST $URL/mcp` | `401` |
 | 5 | an MCP `add_state` call, then `grep` the host document | the state is on disk |
+| 6 | `curl -s $URL/api/docs` | `"roots":["/data"]` and your documents listed |
 
 (5) is the one that matters. The first four can all pass on a loom whose parts cannot
 actually see each other; only a write that lands on the host proves the loop is closed.
@@ -214,6 +264,9 @@ actually see each other; only a write that lands on the host proves the loop is 
 | MCP returns 401 with the right-looking token | The container restarted and minted a new one | Pin `STATELOOM_MCP_TOKEN`, or re-read it: `stateloom docker mcp-config` |
 | `port … is already in use` | Another loom, or another service, holds it | Omit `--port` to take the next free one. Do not evict a running loom — it is somebody's session. |
 | The canvas is blank, no errors anywhere | A build shipped without its client bundle | `curl -sI $URL/_next/static/...` for a script the page references; a 404 there is the whole story |
+| A canvas link from the MCP opens the wrong board | `STATELOOM_CANVAS_URL` unset, so the link names the container's internal 4598 | Set it to the published origin and restart the `mcp` role |
+| The board is empty and `add_state` says "no state machine" | The document file exists but is zero bytes | Delete it and restart — the container seeds an empty file, but only if it is empty on start |
+| Two people edit and neither sees the other | A host-native loom and this one share a directory | See the warning at the top: one loom per directory |
 | `docker compose is not available` | Only the docker CLI is installed | Install the compose plugin, or use the single-container `docker run` form |
 
 ---
@@ -224,8 +277,9 @@ actually see each other; only a write that lands on the host proves the loop is 
 |---|---|
 | `/data` | your documents — the only readable/writable directory |
 | `/data/statemachine.smdf.json` | the default document; seeded on first start if absent |
+| `/data/.stateloom-token` | the generated MCP token, kept so a restart does not invalidate it |
 | `./.stateloom/docker-compose.yml` | the project `stateloom docker up` writes |
-| `./.stateloom/.env` | its settings, including the MCP token |
+| `./.stateloom/.env` | its settings, including the MCP token and the canvas URL — read back on every command, and only overridden by a flag you actually pass |
 
 Related skills: `stateloom-setup` for the same loom without containers, `stateloom-service`
 for systemd units on a host, `stateloom-design` for using the board once it is live.

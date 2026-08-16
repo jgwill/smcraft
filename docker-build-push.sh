@@ -88,6 +88,18 @@ if [ "$SMOKE" = "1" ]; then
 fi
 
 if [ "$PUSH" = "1" ]; then
+  # The same refusal release.yml makes, made here too. A docker push OVERWRITES
+  # a tag, permanently and without asking, and the CI guard does nothing for a
+  # hand-run push — which is the one most likely to be typed twice. `:latest` is
+  # expected to move; a numbered tag pointing at two different images is a lie
+  # anybody debugging will believe.
+  if [ "$TAG" != "latest" ] && docker manifest inspect "${IMAGE}:${TAG}" >/dev/null 2>&1; then
+    echo "" >&2
+    echo "✋ ${IMAGE}:${TAG} already exists on the registry." >&2
+    echo "   Pushing would overwrite an image somebody may be running." >&2
+    echo "   Bump docker/VERSION, or pass --tag <something-else> deliberately." >&2
+    exit 1
+  fi
   echo ""
   echo "📤 pushing ${IMAGE}:${TAG} and ${IMAGE}:latest"
   docker push "${IMAGE}:${TAG}"

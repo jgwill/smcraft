@@ -105,10 +105,15 @@ const server = createServer((req, res) => {
       method: req.method,
       path: req.url,
       // X-Forwarded-* so anything downstream can reconstruct the public origin.
+      // The proto is PRESERVED when an outer proxy already set it: hard-coding
+      // 'http' told everything downstream the request was insecure even when a
+      // TLS terminator sat in front, which is exactly the deployment this design
+      // claims to support. Same-origin "/" means nothing breaks today; anything
+      // that reconstructs an absolute origin from the header would.
       headers: {
         ...req.headers,
-        'x-forwarded-host': req.headers.host ?? '',
-        'x-forwarded-proto': 'http',
+        'x-forwarded-host': req.headers['x-forwarded-host'] ?? req.headers.host ?? '',
+        'x-forwarded-proto': req.headers['x-forwarded-proto'] ?? 'http',
       },
     },
     (upstream) => {

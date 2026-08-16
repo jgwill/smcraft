@@ -21,8 +21,9 @@
 
 x-stateloom-env: &stateloom-env
   STATELOOM_PROJECT_FILE: /data/${STATELOOM_DOC:-statemachine.smdf.json}
-  # Every document under the mount is reachable by the canvas's document
-  # switcher and by the MCP's set_project_file. Nothing above it is.
+  # Every document under the mount is listed by GET /api/docs, offered in the
+  # canvas's ⇄ switcher, and reachable by the MCP's set_project_file — by its
+  # path INSIDE the container, which is /data/<name>. Nothing above it is.
   STATELOOM_DOC_ROOTS: /data
   STATELOOM_MCP_ROOT: /data
   STATELOOM_BRIDGE_PORT: "4599"
@@ -71,6 +72,12 @@ services:
       # Server-side, inside the compose network — this one IS a service name,
       # and correctly so: no browser ever resolves it.
       STATELOOM_BRIDGE_URL: http://hub:4599
+      # The address the MCP puts in the canvas links it hands an agent for its
+      # human. This one is the opposite case: it is resolved by a BROWSER, so it
+      # must be the published origin. Left unset, the link names the container's
+      # internal 4598 — which on a host already running a loom is a live port
+      # belonging to somebody else's diagram. `stateloom docker up` writes it.
+      STATELOOM_CANVAS_URL: ${STATELOOM_CANVAS_URL:-http://127.0.0.1:${STATELOOM_PORT:-4598}}
     depends_on:
       hub:
         condition: service_healthy

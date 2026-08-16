@@ -14,6 +14,7 @@
 #   4. does the MCP refuse an unauthenticated call, accept an
 #      authenticated one, and does a tool call REACH THE DOCUMENT
 #      on the host filesystem                                      /mcp
+#   5. can a human find their other documents at all                /api/docs
 #
 # (4) is the one that matters. Every other check can pass on an image whose
 # three processes cannot actually see each other; only a write that lands on the
@@ -139,5 +140,21 @@ done
 [ -n "$found" ] || die "add_state never landed in $DOC — the loop is not closed"
 ok
 
+# ── 5. can the human find their other documents ─────────────────────────────
+# The allowlist admitted them all along; the way to SEE them is what shipped
+# late. Without this the ⇄ switcher is a path prompt for paths only the server
+# knows. (Found in review.)
+step "the canvas lists the documents it will admit"
+printf '{}' > "$WORK/looms/second.smdf.json"
+docs="$(curl -sf "$BASE/api/docs" || die "GET /api/docs failed — an old canvas build?")"
+case "$docs" in *'"roots":["/data"]'*) : ;; *) die "roots should be [\"/data\"], got: $docs" ;; esac
+case "$docs" in *second.smdf.json*) ok ;; *) die "a document in the mount is not listed: $docs" ;; esac
+
+# The refusal a human meets when they paste the path they can actually see.
+step "a host path is refused in words that name /data"
+refusal="$(curl -s "$BASE/api/file?doc=/b/trading/diagrams/x.smdf.json")"
+case "$refusal" in *"/data"*) ok ;; *) die "refusal does not mention /data: $refusal" ;; esac
+
 echo ""
-echo "✅ $IMAGE — the loom is live on one port and an agent's edit reaches the disk."
+echo "✅ $IMAGE — the loom is live on one port, an agent's edit reaches the disk,"
+echo "   and a human can find the other documents."

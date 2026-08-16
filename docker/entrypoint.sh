@@ -51,9 +51,10 @@ export STATELOOM_ROLE="$ROLE"
 echo "$ROLE" > /tmp/stateloom-role 2>/dev/null || true
 
 # ── the document ────────────────────────────────────────────────────────────
-# Seeded when absent, never touched when present. An empty board that cannot be
-# rendered, validated or code-generated until somebody presses a button is a
-# worse first thirty seconds than a Root state waiting to be filled.
+# Seeded when absent OR empty; never touched when it holds anything. An empty
+# board that cannot be rendered, validated or code-generated until somebody
+# presses a button is a worse first thirty seconds than a Root state waiting to
+# be filled — and a zero-byte file is that empty board wearing a filename.
 seed_document() {
   dir=$(dirname "$DOC")
   mkdir -p "$dir" 2>/dev/null || true
@@ -64,7 +65,24 @@ seed_document() {
     echo "  Or run as yourself:  docker run --user \"\$(id -u):\$(id -g)\" …" >&2
     exit 1
   fi
-  [ -e "$DOC" ] && return 0
+
+  # `-s`, not `-e`. A ZERO-BYTE file exists and is not a document: it is what
+  # `touch` leaves, and what a crashed write leaves. Testing existence let it
+  # through, and the board then came up empty with `add_state` answering "no
+  # state machine — use create_state_machine first", which is exactly the dead
+  # first thirty seconds this function exists to prevent. (Found in review.)
+  if [ -s "$DOC" ]; then
+    # Non-empty but unparseable is a different case and must NOT be seeded over
+    # — that would destroy a document somebody is in the middle of repairing.
+    if ! node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$DOC" 2>/dev/null; then
+      echo "stateloom: $DOC exists but is not valid JSON." >&2
+      echo "  Refusing to overwrite it. Fix or move it, then start again." >&2
+      exit 1
+    fi
+    return 0
+  fi
+
+  [ -e "$DOC" ] && echo "stateloom: $DOC was empty — seeding it." >&2
   name=$(basename "$DOC" | sed 's/\.smdf\.json$//; s/\.json$//')
   cat > "$DOC" <<JSON
 {
@@ -82,20 +100,56 @@ JSON
 # The MCP server refuses HTTP mode without one, and it is right to: an open port
 # there is unauthenticated read and write of everything under /data. Generating
 # one keeps the zero-configuration path open; printing it is what makes the
-# generated one usable. A container restart mints a new token, so anything
-# long-lived should pin STATELOOM_MCP_TOKEN in its env file.
+# generated one usable; persisting it beside the documents is what keeps an MCP
+# registration valid across a restart. Set STATELOOM_MCP_TOKEN to take control
+# of it yourself, or STATELOOM_TOKEN_FILE to move where it is kept.
+TOKEN_FILE="${STATELOOM_TOKEN_FILE:-$(dirname "$DOC")/.stateloom-token}"
+
 ensure_mcp_token() {
   [ -n "$STATELOOM_MCP_TOKEN" ] && return 0
+
+  # A generated token that changes on every restart silently invalidates an MCP
+  # registration — and compose restarts `unless-stopped`, so that happens to
+  # people who did nothing wrong. Persisting it beside the documents keeps the
+  # zero-configuration path AND makes it survive a bounce. (Found in review.)
+  if [ -s "$TOKEN_FILE" ]; then
+    STATELOOM_MCP_TOKEN=$(cat "$TOKEN_FILE")
+    export STATELOOM_MCP_TOKEN
+    echo "stateloom: reusing the MCP token from $TOKEN_FILE" >&2
+    return 0
+  fi
+
   STATELOOM_MCP_TOKEN=$(node -e 'process.stdout.write(require("crypto").randomBytes(24).toString("hex"))')
   export STATELOOM_MCP_TOKEN
+
+  kept="it changes on every restart"
+  if (umask 077 && printf '%s' "$STATELOOM_MCP_TOKEN" > "$TOKEN_FILE") 2>/dev/null; then
+    kept="kept in $TOKEN_FILE, so a restart reuses it"
+  fi
+
   echo "" >&2
   echo "stateloom: no STATELOOM_MCP_TOKEN was set — generated one for this run:" >&2
   echo "" >&2
   echo "    $STATELOOM_MCP_TOKEN" >&2
   echo "" >&2
-  echo "  It changes on every restart. Pin it in your env file to keep an MCP" >&2
-  echo "  registration working across restarts." >&2
+  echo "  ($kept.)" >&2
+  echo "  Set STATELOOM_MCP_TOKEN explicitly to control it yourself." >&2
   echo "" >&2
+}
+
+# The MCP hands an agent canvas links for its human. It builds them from
+# STATELOOM_CANVAS_URL, falling back to the container-INTERNAL web port — which
+# is not the port the human's browser uses, and on a host already running a loom
+# is a live port belonging to somebody else's diagram. There is no way to infer
+# the published mapping from in here, so say so rather than hand out a link that
+# looks right. (`stateloom docker up` writes this value for you.)
+warn_canvas_url() {
+  if [ -n "$STATELOOM_CANVAS_URL" ] || [ -n "$SMCRAFT_CANVAS_URL" ]; then
+    return 0
+  fi
+  echo "stateloom: STATELOOM_CANVAS_URL is unset — canvas links from the MCP will name" >&2
+  echo "  port ${STATELOOM_WEB_PORT:-4598} inside this container, not the port you published." >&2
+  echo "  Pass -e STATELOOM_CANVAS_URL=http://<host>:<published-port> to fix the links." >&2
 }
 
 case "$ROLE" in
@@ -122,6 +176,7 @@ case "$ROLE" in
   mcp)
     seed_document
     ensure_mcp_token
+    warn_canvas_url
     export STATELOOM_MCP_HTTP_PORT="$MCP_PORT"
     export STATELOOM_MCP_HTTP_HOST="${STATELOOM_MCP_HTTP_HOST:-0.0.0.0}"
     exec stateloom-mcp
@@ -133,7 +188,7 @@ case "$ROLE" in
 
   all)
     seed_document
-    if [ "${STATELOOM_WITH_MCP:-1}" != "0" ]; then ensure_mcp_token; fi
+    if [ "${STATELOOM_WITH_MCP:-1}" != "0" ]; then ensure_mcp_token; warn_canvas_url; fi
     exec node /opt/stateloom/supervise.mjs
     ;;
 

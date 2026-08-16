@@ -10,7 +10,7 @@ README.
 
 ## What has to be true for a loom to work
 
-A loom is four agreements, and every one of them fails silently when broken:
+A loom is five agreements, and every one of them fails silently when broken:
 
 | Agreement | Broken looks like |
 |---|---|
@@ -18,6 +18,13 @@ A loom is four agreements, and every one of them fails silently when broken:
 | Every surface reaches the **same hub** | the board loads and never animates |
 | The **browser** can reach that hub *from where the browser is* | identical to the above, and the server-side config looks perfectly correct |
 | The document directory is **writable by the process** | the first save fails, long after setup "succeeded" |
+| Every surface agrees which **vocabulary** a path is in | the agent hands its human a link to somebody else's board |
+
+That last one is the container's own contribution and the review found three of it:
+`/data/x.smdf.json` and `/home/you/diagrams/x.smdf.json` are the same file under two names,
+and code that hands one across the boundary produces something that looks right and is not.
+`STATELOOM_CANVAS_URL`, `GET /api/docs` and the refusal wording in `resolveDocPath` are all
+the same fix — say which vocabulary you are speaking, to whoever is listening.
 
 Containers make the third one much worse. `STATELOOM_BRIDGE_URL=http://hub:4599` is correct
 inside a compose network and meaningless in a browser; `http://localhost:4599` is correct
@@ -130,7 +137,7 @@ silently and forever; the workflow refuses to push a numbered tag that already e
 ## The smoke test
 
 `scripts/docker-smoke.sh` starts the image on a kernel-chosen free port with a throwaway
-document directory and asks five questions:
+document directory and asks six questions:
 
 1. `/healthz` — does the gateway consider every upstream reachable
 2. `/` **and one of its `/_next/static/*.js`** — a standalone build assembled without
@@ -138,9 +145,12 @@ document directory and asks five questions:
 3. `/socket.io/?EIO=4` — does the hub's engine.io handshake come back through the proxy
 4. `POST /mcp` unauthenticated → `401`, then authenticated → `serverInfo`
 5. an MCP `add_state`, then `grep` the document **on the host filesystem**
+6. `GET /api/docs` lists a second document, and a host path is refused in words naming
+   `/data`
 
 (5) is the one that matters. The first four can all pass on a loom whose parts cannot see
-each other; only a write that lands on the host proves the loop is closed.
+each other; only a write that lands on the host proves the loop is closed. (6) is the one
+that decides whether switching diagrams is a feature or a path prompt.
 
 ---
 
@@ -153,8 +163,13 @@ each other; only a write that lands on the host proves the loop is closed.
   refuse rather than follow.
 - **The MCP requires a bearer token and will not start in HTTP mode without one** — an open
   port there is unauthenticated read and write of everything under `/data`. The entrypoint
-  generates one and prints it when none is set; `stateloom docker up` generates one *once*
-  and keeps it in `.stateloom/.env` so a registration survives restarts.
+  generates one, prints it, and persists it to `/data/.stateloom-token` (mode 600) so a
+  restart reuses it rather than silently invalidating a registration; `stateloom docker up`
+  keeps its own in `.stateloom/.env`. `STATELOOM_MCP_TOKEN` overrides both.
+- **`x-forwarded-proto` is passed through, not asserted.** The gateway forwards an outer
+  proxy's value when there is one. Same-origin `/` means the socket URL never depended on
+  it, but anything reconstructing an absolute origin behind TLS would have been told
+  `http`.
 - **Loopback by default.** Compose publishes on `127.0.0.1` unless `STATELOOM_BIND` says
   otherwise. Nothing in this stack terminates TLS.
 
@@ -171,6 +186,7 @@ each other; only a write that lands on the host proves the loop is closed.
 | `docker/gateway.mjs` | the one-port proxy, websockets included |
 | `docker/healthcheck.sh` | role-aware; asks each role the question only it can answer |
 | `docker/VERSION` | the image's own version line |
+| `web/src/app/api/docs/route.ts` | the listing the ⇄ switcher renders — bounded by `listDocuments()` to the same roots `resolveDocPath` enforces |
 | `docker-compose.yml` | the four-service form — **canonical**, mirrored into `@miadi/stateloom-skills` |
 | `.env.docker.example` | its settings |
 | `docker-build-push.sh` | build, smoke, optionally push |
