@@ -1,6 +1,8 @@
 # @miadi/stateloom-canvas
 
-The SMDF design surface, as a component anyone can mount.
+The stateloom design surfaces, as components anyone can mount: `<StateMachineCanvas>` for
+a `.smdf.json` state machine and `<EntityRelationshipCanvas>` for a `.erdf.json`
+entity-relationship diagram.
 
 This is the stateloom designer's board with its store taken out: pan, zoom,
 drill into composites, drag boxes, routed edges, settled event labels, touch
@@ -36,6 +38,35 @@ export function Board({ definition }) {
   );
 }
 ```
+
+## `<EntityRelationshipCanvas>`
+
+The ERD sibling, with the same contract — props in, callbacks out, the host owns the
+definition, the positions and the viewport — the same gestures, and the same `--slc-*` theme.
+
+```tsx
+import { EntityRelationshipCanvas, erdAutoLayout, IDENTITY_VIEWPORT } from "@miadi/stateloom-canvas";
+
+const [notation, setNotation] = useState<"crowsfoot" | "chen">("crowsfoot");
+const positions = useMemo(() => erdAutoLayout(definition, { notation }), [definition, notation]);
+
+<EntityRelationshipCanvas
+  definition={definition}
+  notation={notation}
+  positions={positions}
+  viewport={viewport}
+  onViewportChange={setViewport}
+  readOnly={locked}                       // a drag on a shape pans instead of moving it; a tap still selects
+  onEntityMove={(name, box) => …}
+  onOpenMachine={(machine) => …}          // an attribute with `stateOf` was activated
+/>
+```
+
+`notation` chooses the drawing, never the data: **crow's foot** lists attributes as rows in
+the entity box with `PK` / `UK` / `FK` badges; **Chen** draws a rectangle (double when
+`weak`), an oval per attribute with the primary key underlined, a diamond per relationship
+and `1` / `N` / `M` beside the line. A shape that carries `notes` shows a small tab on its
+top edge, in both canvases.
 
 ## Navigation
 

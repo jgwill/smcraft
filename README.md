@@ -13,13 +13,13 @@ and a person at a canvas can all edit the same document while it is open.
 |---|---|---|---|
 | [`@miadi/stateloom-engine`](https://www.npmjs.com/package/@miadi/stateloom-engine) | `npm i @miadi/stateloom-engine` | `ts/` | The engine: SMDF parser, validator V001–V014, hierarchical runtime, SMDF interpreter, TypeScript + Python codegen. Renamed from `smcraft`, which is deprecated on npm |
 | [`miadi-stateloom-engine`](https://pypi.org/project/miadi-stateloom-engine/) | `pip install miadi-stateloom-engine` | `py/` | The Python twin, plus the `smcg` generator CLI |
-| [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | `npm i @miadi/stateloom-protocol` | `bridge-protocol/` | Zero-dependency foundation: patch ops, diff/apply, envelopes, layout, edge routing, ASCII/Mermaid render, export naming |
+| [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | `npm i @miadi/stateloom-protocol` | `bridge-protocol/` | Zero-dependency foundation: patch ops, diff/apply, envelopes, layout, edge routing, ASCII/Mermaid render, export naming — and the ERD format: types, validator, link check, layout |
 | [`@miadi/stateloom-client`](https://www.npmjs.com/package/@miadi/stateloom-client) | `npm i @miadi/stateloom-client` | `bridge-client/` | Framework-agnostic socket.io-client wrapper: join / patch / full / presence with auto-resync |
 | [`@miadi/stateloom`](https://www.npmjs.com/package/@miadi/stateloom) | `npm i @miadi/stateloom` | `bridge/` | The socket.io hub. Bin `smcraft-bridge` |
 | [`@miadi/stateloom-react`](https://www.npmjs.com/package/@miadi/stateloom-react) | `npm i @miadi/stateloom-react` | `bridge-react/` | React 19 binding: `useSmcraftBridge`, session core |
-| [`@miadi/stateloom-canvas`](https://www.npmjs.com/package/@miadi/stateloom-canvas) | `npm i @miadi/stateloom-canvas` | `bridge-canvas/` | The design surface: `<StateMachineCanvas>` — pan, zoom, drill, drag, routed edges, touch gestures, HUD. Props in, callbacks out, CSS-variable themed |
+| [`@miadi/stateloom-canvas`](https://www.npmjs.com/package/@miadi/stateloom-canvas) | `npm i @miadi/stateloom-canvas` | `bridge-canvas/` | The design surfaces: `<StateMachineCanvas>` and `<EntityRelationshipCanvas>` (crow's foot or Chen) — pan, zoom, drag, routed edges, touch gestures. Props in, callbacks out, CSS-variable themed |
 | [`@miadi/stateloom-cli`](https://www.npmjs.com/package/@miadi/stateloom-cli) | `npm i -g @miadi/stateloom-cli` | `cli/` | Bin `smcx` — drive the loom from a terminal |
-| [`@miadi/stateloom-mcp`](https://www.npmjs.com/package/@miadi/stateloom-mcp) | `npx -y @miadi/stateloom-mcp` | `mcp/` | The MCP server. Bins `stateloom-mcp` and legacy `smcraft-mcp` |
+| [`@miadi/stateloom-mcp`](https://www.npmjs.com/package/@miadi/stateloom-mcp) | `npx -y @miadi/stateloom-mcp` | `mcp/` | The MCP server: 17 state-machine tools and 10 ERD tools. Bins `stateloom-mcp` and legacy `smcraft-mcp` |
 | [`@miadi/stateloom-skills`](https://www.npmjs.com/package/@miadi/stateloom-skills) | `npx -y @miadi/stateloom-skills` | `skills-cli/` | Bin `stateloom` — installs agent skills into `.claude/skills/` |
 | [`@miadi/stateloom-web`](https://www.npmjs.com/package/@miadi/stateloom-web) | `npx -y @miadi/stateloom-web` | `web/` → `web-dist/` | The visual designer (Next.js), prebuilt. `web/` stays private; `web-dist/` ships its standalone build |
 | [`jgwill/stateloom`](https://hub.docker.com/r/jgwill/stateloom) | `docker run -p 4598:8080 jgwill/stateloom` | `Dockerfile`, `docker/` | The whole loom as one image: hub, canvas, MCP and CLI behind a single port |
@@ -279,6 +279,21 @@ recommendation). Handoff history lives in `docs/handoffs/`.
   }
 }
 ```
+
+## Two diagram types, one loom
+
+A **state machine** (`.smdf.json`) describes one behaviour. An **entity-relationship
+diagram** (`.erdf.json`, [Spec 80](./rispecs/80-erdf-format.spec.md)) describes the data
+every behaviour acts on, once, for all of them. They are siblings, linked by name only: a
+machine's object class names an entity, a guard's `strategy.fractal_count` names an
+attribute, and an attribute's `stateOf` names the machine whose state it stores.
+`check_links` reports what a machine names that the data does not have — while both are
+still drawings.
+
+The same MCP server, hub and designer serve both; the document's type is its extension. An
+ERD is drawn in crow's foot or in Chen notation — the viewer's choice, never written to the
+file. Both diagram types carry **notes** on the diagram and on each shape (`get_notes`,
+`set_notes`), saved in the document for whoever opens it next.
 
 ## For agents
 

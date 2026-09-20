@@ -116,8 +116,28 @@ outside the root. `generate_code` writes only to a temporary directory. Note tha
 | `generate_code` | Emit Python or TypeScript from the definition |
 | `generate_rispec` | Emit a RISE rispec in markdown, folding in the source PDE's intent when the SMDF carries one |
 | `render_diagram` | Draw the machine as `png`, `svg`, `mermaid` or `ascii`, write it beside the document, and hand a `png` back inside the tool result so the agent sees what it designed |
-| `set_project_file` | Re-point the loom at another `.smdf.json` mid-session — disk target and live room both move |
+| `set_project_file` | Re-point the loom at another document mid-session — a `.smdf.json` or a `.erdf.json`; disk target and live room both move |
 | `get_project_file` | The active document path, whether it exists, and bridge status |
+| `get_notes` | Every note in the active document in one call — the diagram's own first, then each shape that has one |
+| `set_notes` | Save (or, with an empty string, clear) working notes on the diagram or on one state / entity. Kept in the document for whoever opens it next; ignored by engines and codegen |
+
+### Entity-relationship diagrams
+
+The same server designs the **data** beside the machines, in a sibling `.erdf.json`. The
+active document's type is its extension: while an ERD is active, `get_definition`,
+`load_definition` and `render_diagram` (mermaid `erDiagram`) answer for it, and the
+state-machine tools refuse to write a machine over it.
+
+| Tool | What it does |
+|---|---|
+| `create_erd` | Start an ERD beside the active document and make it the active one |
+| `add_entity` / `update_entity` / `remove_entity` | An entity, optionally `weak`; removing one takes its relationships with it |
+| `add_attribute` / `remove_attribute` | `type`, `key` (`pk` / `uk`), `references` (the foreign key), `nullable`, and `stateOf` — the state machine whose state this attribute stores |
+| `add_relationship` / `remove_relationship` | `1:1`, `1:N`, `N:1`, `N:M`, read left to right, with a verb as the label |
+| `validate_erd` | Rules E001–E005 |
+| `check_links` | Rules L001–L004: what a state machine names — an object's class, a field in a guard, a `stateOf` — that the ERD does not carry |
+
+Format and rules: [Spec 80 — ERDF](https://github.com/jgwill/smcraft/blob/main/rispecs/80-erdf-format.spec.md).
 
 Also exposed: the resource `smcraft://definition` (the current definition), and the prompt `design-state-machine` — a guided conversation for building one from a domain description.
 

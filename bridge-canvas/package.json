@@ -1,6 +1,6 @@
 {
   "name": "@miadi/stateloom-canvas",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "The reusable SMDF design surface: a pannable, zoomable, drillable React SVG canvas with routed edges, settled labels and a navigation HUD",
   "repository": {
     "type": "git",

@@ -1,6 +1,6 @@
 {
   "name": "@miadi/stateloom-skills",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "stateloom — the front door for the stateloom/smcraft state-machine design system: `stateloom docker up` runs the whole loom in containers on one port, `stateloom skills install` drops ready-to-use SKILL.md files into .claude/skills",
   "type": "module",
   "main": "dist/index.js",

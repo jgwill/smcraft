@@ -16,15 +16,15 @@ Ten published npm packages, plus the Python engine on PyPI. The designer source 
 |---|---|
 | `npm i @miadi/stateloom-engine` (0.4.4) | The engine. SMDF parser, validator V001–V014, hierarchical runtime, SMDF interpreter, Python + TypeScript code generators. |
 | `pip install miadi-stateloom-engine` (0.2.1) | The Python twin of the engine, plus the `smcg` generator CLI. |
-| `npm i @miadi/stateloom-protocol` (0.1.7) | Zero-runtime-dependency foundation: patch ops, diff/apply, wire envelopes, layout, edge routing, viewport math, ASCII/Mermaid render, export naming, env aliasing. |
+| `npm i @miadi/stateloom-protocol` (0.1.8) | Zero-runtime-dependency foundation: patch ops, diff/apply, wire envelopes, layout, edge routing, viewport math, ASCII/Mermaid render, export naming, env aliasing. |
 | `npm i @miadi/stateloom-client` (0.1.2) | Framework-agnostic socket.io-client wrapper: join / patch / full / presence with auto-resync. |
 | `npm i @miadi/stateloom` (0.1.4) | The socket.io hub. Bin `smcraft-bridge`. |
 | `npm i @miadi/stateloom-react` (0.1.6) | React 19 binding: `useSmcraftBridge`, session core. Re-exports the protocol's viewport helpers at the address the web designer has always imported them from. |
-| `npm i @miadi/stateloom-canvas` (0.1.3) | The design surface as a mountable component: `<StateMachineCanvas>` — wheel/⌃wheel/middle-drag/Space+drag/pinch navigation, composite drill-down, box dragging, routed edges, settled event chips, zoom HUD. Props in, callbacks out; every colour a `--slc-*` CSS variable. Ship `@miadi/stateloom-canvas/styles.css` with it. |
+| `npm i @miadi/stateloom-canvas` (0.1.4) | The design surface as a mountable component: `<StateMachineCanvas>` — wheel/⌃wheel/middle-drag/Space+drag/pinch navigation, composite drill-down, box dragging, routed edges, settled event chips, zoom HUD. Props in, callbacks out; every colour a `--slc-*` CSS variable. Ship `@miadi/stateloom-canvas/styles.css` with it. |
 | `npm i -g @miadi/stateloom-cli` (0.1.3) | Bin `smcx` — drive the loom from a terminal. |
-| `npx -y @miadi/stateloom-mcp` (0.2.5) | The MCP server. Bins `stateloom-mcp` and legacy `smcraft-mcp`. |
-| `npx -y @miadi/stateloom-skills` (0.2.2) | Bin `stateloom` — installs agent skills into `.claude/skills/`. |
-| `npx -y @miadi/stateloom-web` (0.1.8) | Bin `stateloom-web` — the visual designer, prebuilt. Serves on 4598; reads its bridge URL at runtime from `GET /api/config`, so a published build carries nobody's URL and a redeploy is a restart, never a rebuild. |
+| `npx -y @miadi/stateloom-mcp` (0.2.6) | The MCP server. Bins `stateloom-mcp` and legacy `smcraft-mcp`. |
+| `npx -y @miadi/stateloom-skills` (0.3.2) | Bin `stateloom` — installs agent skills into `.claude/skills/`. |
+| `npx -y @miadi/stateloom-web` (0.1.9) | Bin `stateloom-web` — the visual designer, prebuilt. Serves on 4598; reads its bridge URL at runtime from `GET /api/config`, so a published build carries nobody's URL and a redeploy is a restart, never a rebuild. |
 
 Dependency direction: everything points at `@miadi/stateloom-protocol`. Nothing points back.
 
@@ -64,7 +64,7 @@ State classification is derived from structure, not declared: leaf (no children)
 
 Full schema: [Spec 70 — SMDF Format](./rispecs/70-smdf-format.spec.md)
 
-## MCP server — 15 state-machine tools, 10 ERD tools
+## MCP server — 17 state-machine tools, 10 ERD tools
 
 `@miadi/stateloom-mcp`, stdio by default (Streamable HTTP optional — see Transport below). Registration:
 
@@ -90,6 +90,8 @@ Full schema: [Spec 70 — SMDF Format](./rispecs/70-smdf-format.spec.md)
 **Act** — `validate_definition()`, `generate_code(language)`, `generate_rispec(intent?)`, `render_diagram(format?, path?, scale?, theme?, stamp?, open?)`
 
 **Document** — `set_project_file(path)`, `get_project_file()`
+
+**Notes** (either document type) — `get_notes()`, `set_notes(target?, notes)`: working notes on the diagram or on one state / entity, saved in the document (`settings.notes`, `notes` on a shape) for whoever opens it next. Read them before changing a diagram someone else worked on. Engines and codegen ignore them
 
 Plus resource `smcraft://definition` and prompt `design-state-machine(domain?, name?)`.
 
@@ -147,9 +149,9 @@ npx -y @miadi/stateloom-skills skills install <name>
 npx -y @miadi/stateloom-skills skills install --all
 ```
 
-Installs a ready-to-use `SKILL.md` into `.claude/skills/`. Eight skills, sources in [`./skills/`](./skills/):
+Installs a ready-to-use `SKILL.md` into `.claude/skills/`. Ten skills, sources in [`./skills/`](./skills/):
 
-`stateloom-setup`, `stateloom-design`, `stateloom-live-loop`, `stateloom-render`, `stateloom-codegen`, `stateloom-rispec`, `stateloom-service`, `stateloom-tailnet`.
+`stateloom-setup`, `stateloom-docker`, `stateloom-design`, `stateloom-erd` (the entity-relationship diagram beside the machines: tools, rules, `check_links`, the two notations), `stateloom-live-loop`, `stateloom-render`, `stateloom-codegen`, `stateloom-rispec`, `stateloom-service`, `stateloom-tailnet`.
 
 The last two are the deployment pair: `stateloom-service` runs the hub and canvas as
 supervised systemd user units over the published packages — including the upgrade a bare
