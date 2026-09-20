@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import Canvas from "@/components/Canvas";
 import PropertiesPanel from "@/components/PropertiesPanel";
 import EventsPanel from "@/components/EventsPanel";
@@ -11,6 +11,10 @@ import CodePreview from "@/components/CodePreview";
 import DesignBridge from "@/components/DesignBridge";
 import UiScale from "@/components/UiScale";
 import { useDesignerStore } from "@/store/useDesignerStore";
+import ErdWorkspace from "@/components/erd/ErdWorkspace";
+import { isErdfPath } from "@miadi/stateloom-protocol";
+import { useRequestedDoc } from "@/lib/docParam";
+import { loadRuntimeConfig } from "@/lib/runtimeConfig";
 
 type Tab = "properties" | "events" | "settings" | "validation";
 
@@ -41,7 +45,33 @@ function contextMenuPlacement(x: number, y: number): CSSProperties {
   };
 }
 
+/**
+ * The document's type is its extension (Spec 80): a `.erdf.json` opens the ERD
+ * workspace, anything else the state designer. Decided before either mounts, so
+ * the state designer's store and bridge never see an ERD: `?doc=` answers by its
+ * extension, and without it the serving process names its default document.
+ */
 export default function Home() {
+  // `null` until its first effect has read the URL, and whenever there is no `?doc=`.
+  const requested = useRequestedDoc();
+  const [defaultKind, setDefaultKind] = useState<"machine" | "erd" | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    loadRuntimeConfig().then((c) => {
+      if (live) setDefaultKind(c.projectFile && isErdfPath(c.projectFile) ? "erd" : "machine");
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const kind = requested ? (isErdfPath(requested) ? "erd" : "machine") : defaultKind;
+  if (kind === null) return <div className="app-shell bg-gray-950" />;
+  return kind === "erd" ? <ErdWorkspace /> : <MachineDesigner />;
+}
+
+function MachineDesigner() {
   const [activeTab, setActiveTab] = useState<Tab>("properties");
   // Phone-only state. The panel column and the bottom sheet are the same
   // element: below `md` it is an overlay that starts closed so the canvas owns

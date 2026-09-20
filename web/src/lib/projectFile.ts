@@ -162,13 +162,11 @@ export function listDocuments(limit = 300, maxDepth = 4): { docs: DocEntry[]; tr
 
   for (const root of allowedDocRoots()) walk(root, 0);
 
-  // `.smdf.json` first — the rest are `.json` files the allowlist tolerates but
-  // nobody came here looking for — then most recently touched.
-  docs.sort((a, b) => {
-    const aSmdf = a.name.endsWith(".smdf.json") ? 0 : 1;
-    const bSmdf = b.name.endsWith(".smdf.json") ? 0 : 1;
-    return aSmdf - bSmdf || b.mtime - a.mtime || a.path.localeCompare(b.path);
-  });
+  // The loom's own documents first (`.smdf.json` machines, `.erdf.json` ERDs) —
+  // the rest are `.json` files the allowlist tolerates but nobody came here
+  // looking for — then most recently touched.
+  const rank = (name: string): number => (/\.(smdf|erdf)\.json$/i.test(name) ? 0 : 1);
+  docs.sort((a, b) => rank(a.name) - rank(b.name) || b.mtime - a.mtime || a.path.localeCompare(b.path));
 
   return { docs, truncated };
 }

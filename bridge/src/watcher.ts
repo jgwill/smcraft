@@ -17,6 +17,7 @@ import chokidar from "chokidar";
 import {
   diffDefinition,
   hashDef,
+  isErdDefinition,
   EV,
   type StateMachineDefinition,
 } from "@miadi/stateloom-protocol";
@@ -64,6 +65,10 @@ export function watchRoom(io: Server, room: Room): RoomWatcher {
 
     const roomId = room.docId;
     try {
+      // An ERD (.erdf.json, Spec 80) has no PatchOp vocabulary — it always
+      // travels whole. Said here rather than left to diffDefinition throwing on
+      // a document with no state tree.
+      if (isErdDefinition(fileDef)) throw new Error("erd documents travel whole");
       const ops = diffDefinition(room.def, fileDef);
       // An identical-content external write yields no ops — nothing to animate.
       if (ops.length > 0) {

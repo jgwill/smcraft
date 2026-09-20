@@ -82,5 +82,7 @@ export {
   summarizeErd,
 } from "./erd/edit.js";
 export { renderMermaidEr } from "./render/mermaidEr.js";
+export { erdAutoLayout, erdEntitySize, erdRowText, ERD_BOX, ERD_LAYOUT_DEFAULTS } from "./erd/layout.js";
+export type { ErdLayoutOptions } from "./erd/layout.js";
 export { diagramFileName, timeStamp, episodeOf } from "./exportName.js";
 export type { DiagramNameInput } from "./exportName.js";

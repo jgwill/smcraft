@@ -5,8 +5,8 @@
 
 **Spec ID**: 80
 **Version**: 1.0
-**Status**: format, validator, edits, Mermaid render and link check landed in `bridge-protocol/src/erd/`; MCP tools landed in `mcp/src/erd.ts`. The canvas follows (see Slices).
-**Implementation**: TypeScript (`bridge-protocol/src/erd/`, `mcp/src/erd.ts`)
+**Status**: all five slices landed on branch `feat/erdf-diagram-type-260919`. Not published: no package version was bumped.
+**Implementation**: TypeScript — `bridge-protocol/src/erd/`, `mcp/src/erd.ts`, `bridge-canvas/src/EntityRelationshipCanvas.tsx`, `web/src/components/erd/`
 
 ## Creative Intent
 
@@ -51,7 +51,7 @@ ERDF is a **sibling** of SMDF, never a section inside it. A machine is one behav
 | `key` | `"pk"` \| `"uk"` | Primary key or unique key. A foreign key is stated by `references`, so one attribute can be both |
 | `references` | string | `"Entity"` or `"Entity.attribute"` — makes this attribute a foreign key |
 | `nullable` | boolean | May be absent |
-| `stateOf` | string | The `settings.name` of the SMDF machine whose current state this attribute stores |
+| `stateOf` | string \| string[] | The `settings.name` of the SMDF machine whose current state this attribute stores. A list when one column serves several machines (a `state` column read by whichever strategy type the row carries) |
 | `description` | string | Human-readable purpose |
 
 ### ErdRelationship
@@ -114,7 +114,7 @@ Link rules, reported by `checkLinks`:
 | S1 | This spec | landed |
 | S2 | `bridge-protocol/src/erd/` — types, validator, Mermaid render, examples | landed |
 | S3 | MCP tools in `mcp/src/erd.ts`, document type by extension | landed |
-| S4 | `<EntityRelationshipCanvas>` in `bridge-canvas`, live over the hub's `full` envelope | pending |
+| S4 | `erdAutoLayout` in the protocol, `<EntityRelationshipCanvas>` in `bridge-canvas`, the ERD workspace in `web/`, live over the hub's `full` envelope | landed |
 | S5 | `checkLinks` in the protocol, `check_links` MCP tool | landed |
 
 ## MCP Tools
@@ -130,6 +130,18 @@ The loom weaves one active document, and its type is its extension. `set_project
 **By extension** — `get_definition`, `load_definition` and `render_diagram` answer for the ERD when the active document is one. An ERD renders as `mermaid` only, to `<name>.erd.mmd`.
 
 Every edit is written to disk, then mirrored to the bridge room as a whole document. The edits themselves are the pure functions in `bridge-protocol/src/erd/edit.ts`, which the canvas uses too.
+
+## Canvas and Designer
+
+**Layout** — `erdAutoLayout(def)` returns a box per entity. A box is as tall as its attribute list. The "one" side of a relationship sits above the "many" side; a parent drops to just above its nearest child; a line that spans several layers gets a lane of its own in each layer it crosses, so no box is placed where the line has to pass.
+
+**Canvas** — `<EntityRelationshipCanvas>` in `@miadi/stateloom-canvas` has the same contract as `<StateMachineCanvas>`: props in, callbacks out, the host owns definition, positions and viewport. Same gestures (wheel pans, ⌃/⌘ wheel zooms, drag pans or moves a box, two fingers pinch), same `--slc-*` theme variables. Relationship lines use the shared edge router and carry a bar ("one") or a crow's foot ("many") at each end; labels use the shared chip placer. An attribute with `stateOf` is drawn with a ◉ in the accent ink, and activating it calls `onOpenMachine(machine)`.
+
+**Designer** — `web/` opens the ERD workspace when the document ends in `.erdf.json` (by `?doc=`, or the serving process's default document) and the state designer otherwise; the choice is made before either mounts. The workspace loads through the same file API, joins the same hub room, and edits with the same pure functions the MCP tools call. Every edit is written to disk first and then pushed whole, because the agent's tools read the file before each edit. ◉ opens the `.smdf.json` beside the document whose `settings.name` matches. "Check links" runs L001–L004 against every machine beside the document. Dragged positions are kept in the browser, keyed by document path, and are not part of the ERDF.
+
+**Hub** — a room is keyed by document path and never validates what it holds, so an ERDF rides the existing hub. The file watcher sends an ERD whole (`def:full`), never as a patch.
+
+**Not drawn yet** — `render_diagram` gives an ERD as mermaid only; svg and png need an ERD renderer beside `cli/src/render/svg.ts`. `smcx` has no ERD commands.
 
 ## Creative Advancement Scenarios
 

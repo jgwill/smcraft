@@ -64,7 +64,7 @@ State classification is derived from structure, not declared: leaf (no children)
 
 Full schema: [Spec 70 — SMDF Format](./rispecs/70-smdf-format.spec.md)
 
-## MCP server — 15 tools
+## MCP server — 15 state-machine tools, 9 ERD tools
 
 `@miadi/stateloom-mcp`, stdio by default (Streamable HTTP optional — see Transport below). Registration:
 
@@ -102,6 +102,18 @@ Three of these carry more than their names say:
 - `set_project_file` re-points the active document mid-session — the disk target and the live bridge room both move, because the hub keys rooms by absolute project-file path.
 
 Details: [Spec 73 — MCP Server](./rispecs/73-mcp-server.spec.md), [Spec 76 — RISE Rispec Generator](./rispecs/76-rise-rispec-generator.spec.md)
+
+## ERDF — Entity-Relationship Definition Format
+
+The sibling of SMDF: a `.erdf.json` describes the data a system's machines act on — `settings`, `entities[]` (each with `attributes[]`: `name`, `type`, `key` pk|uk, `references`, `nullable`, `stateOf`), `relationships[]` (`from`, `to`, `cardinality` 1:1|1:N|N:1|N:M, `label`). One ERDF accompanies any number of SMDF documents; the link is by name only — an SMDF `settings.objects[].class` names an entity, a guard's `<instance>.<field>` names an attribute, and an attribute's `stateOf` names a machine.
+
+**The loom weaves one active document and its type is its extension.** `set_project_file` takes a `.smdf.json` or a `.erdf.json`; `get_definition`, `load_definition` and `render_diagram` (mermaid only for an ERD) answer for whichever is active; the state-machine tools refuse to write over an ERD.
+
+**ERD tools** — `create_erd(namespace, name, description?, path?, overwrite?)` (also makes it the active document), `add_entity`, `add_attribute`, `add_relationship`, `remove_entity`, `remove_attribute`, `remove_relationship`, `validate_erd()` (rules E001–E005), `check_links(erd_path?, smdf_paths?)` (rules L001–L004 — what a machine names that the ERD does not carry).
+
+From `@miadi/stateloom-protocol`: `validateErd`, `checkLinks`, `checkStateOf`, `renderMermaidEr`, `erdAutoLayout`, and the pure edits `addEntity` … `removeRelationship`. From `@miadi/stateloom-canvas`: `<EntityRelationshipCanvas>`. The web designer opens its ERD workspace for any `?doc=<path>.erdf.json`.
+
+Examples: `examples/library_lending.erdf.json`, `examples/trading_strategy.erdf.json`. Full spec: [Spec 80 — ERDF Format](./rispecs/80-erdf-format.spec.md)
 
 ## Terminal — `smcx`
 
@@ -180,6 +192,7 @@ A browser download always, and `--stamp` / `stamp: true` on demand, produce `[ep
 - [Spec 77 — Real-Time Design Bridge](./rispecs/77-realtime-design-bridge.spec.md): granular bidirectional sync
 - [Spec 78 — Forgewright Episode Rendering](./rispecs/78-forgewright-episode-rendering.plan.md): plan
 - [Spec 79 — Layout Persistence](./rispecs/79-layout-persistence.plan.md): plan
+- [Spec 80 — ERDF Format](./rispecs/80-erdf-format.spec.md): entity-relationship sibling of SMDF, rules E001–E005, link rules L001–L004, MCP tools, canvas
 
 ## Lineage / KINSHIP
 

@@ -21,6 +21,9 @@ export type {
   StateMachineCanvasProps,
 } from "./StateMachineCanvas.js";
 
+export { EntityRelationshipCanvas } from "./EntityRelationshipCanvas.js";
+export type { EntityRelationshipCanvasProps, ErdCanvasTarget } from "./EntityRelationshipCanvas.js";
+
 export { themeStyle, CANVAS_THEME_VARS } from "./theme.js";
 export type { CanvasTheme } from "./theme.js";
 
@@ -53,6 +56,8 @@ export {
   zoomAt,
   zoomTo,
   routeEdges,
+  erdAutoLayout,
+  erdEntitySize,
   placeLabels,
   eventGlyph,
   guardText,
@@ -60,6 +65,7 @@ export {
 export type {
   AutoLayoutOptions,
   Box,
+  EntityRelationshipDefinition,
   FitOptions,
   LayoutBox,
   Point,

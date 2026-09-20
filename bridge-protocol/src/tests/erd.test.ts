@@ -26,6 +26,7 @@ import {
   removeRelationship,
   summarizeErd,
 } from "../erd/edit.js";
+import { erdAutoLayout, erdEntitySize, ERD_BOX } from "../erd/layout.js";
 import type { StateMachineDefinition } from "../definition.js";
 
 const LIBRARY: EntityRelationshipDefinition = {
@@ -239,6 +240,29 @@ test("removeRelationship takes every match, or only the labelled one", () => {
   def = addRelationship(def, { from: "A", to: "B", cardinality: "N:M", label: "likes" });
   assert.equal(removeRelationship(def, "A", "B", "likes").relationships.length, 1);
   assert.equal(removeRelationship(def, "A", "B").relationships.length, 0);
+});
+
+test("layout — the one side sits above the many side, boxes never overlap, size follows the attributes", () => {
+  const boxes = erdAutoLayout(LIBRARY);
+  assert.deepEqual(Object.keys(boxes).sort(), ["Loan", "Member", "Shelf"]);
+  assert.ok(boxes.Member.y < boxes.Loan.y, "Member (one) is above Loan (many)");
+  assert.equal(boxes.Member.y, boxes.Shelf.y, "an unrelated entity shares the top layer");
+  assert.ok(boxes.Member.x + boxes.Member.width <= boxes.Shelf.x, "siblings do not overlap");
+  assert.equal(boxes.Loan.height, ERD_BOX.headerHeight + 5 * ERD_BOX.rowHeight + ERD_BOX.padBottom);
+  assert.equal(erdEntitySize({ name: "Shelf" }).height, ERD_BOX.headerHeight + ERD_BOX.rowHeight + ERD_BOX.padBottom);
+  assert.deepEqual(erdAutoLayout(LIBRARY), boxes, "deterministic");
+});
+
+test("layout — N:1 puts the target above, and a cycle still gets a finite layout", () => {
+  let def = addEntity(addEntity(addEntity(emptyErd("demo", "G"), { name: "A" }), { name: "B" }), { name: "C" });
+  def = addRelationship(def, { from: "A", to: "B", cardinality: "N:1" });
+  assert.ok(erdAutoLayout(def).B.y < erdAutoLayout(def).A.y);
+  def = addRelationship(def, { from: "B", to: "C", cardinality: "N:1" });
+  def = addRelationship(def, { from: "C", to: "A", cardinality: "N:1" });
+  def = addRelationship(def, { from: "A", to: "A", cardinality: "1:N" });
+  const boxes = erdAutoLayout(def);
+  assert.equal(Object.keys(boxes).length, 3);
+  for (const b of Object.values(boxes)) assert.ok(Number.isFinite(b.x) && Number.isFinite(b.y));
 });
 
 test("small helpers", () => {
