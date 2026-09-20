@@ -68,5 +68,10 @@ export {
 export type { Box, FitOptions, Point, ScaleLimits, Viewport } from "./viewport.js";
 export { renderMermaid } from "./render/mermaid.js";
 export { renderAscii } from "./render/ascii.js";
+export * from "./erd/definition.js";
+export { validateErd } from "./erd/validate.js";
+export type { ErdValidationError } from "./erd/validate.js";
+export { checkLinks, checkStateOf, guardFields } from "./erd/links.js";
+export { renderMermaidEr } from "./render/mermaidEr.js";
 export { diagramFileName, timeStamp, episodeOf } from "./exportName.js";
 export type { DiagramNameInput } from "./exportName.js";

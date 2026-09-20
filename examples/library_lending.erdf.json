@@ -1,0 +1,63 @@
+{
+  "settings": {
+    "namespace": "Examples.Library",
+    "name": "LibraryLending",
+    "description": "A lending library: members borrow copies of books. Loan.status stores the state of a LoanLifecycle machine."
+  },
+  "entities": [
+    {
+      "name": "Member",
+      "description": "A person who may borrow",
+      "attributes": [
+        { "name": "member_id", "type": "int", "key": "pk" },
+        { "name": "email", "type": "string", "key": "uk" },
+        { "name": "full_name", "type": "string" },
+        { "name": "joined_at", "type": "datetime" }
+      ]
+    },
+    {
+      "name": "Book",
+      "description": "A title, independent of how many copies the library holds",
+      "attributes": [
+        { "name": "book_id", "type": "int", "key": "pk" },
+        { "name": "isbn", "type": "string", "key": "uk" },
+        { "name": "title", "type": "string" }
+      ]
+    },
+    {
+      "name": "Author",
+      "attributes": [
+        { "name": "author_id", "type": "int", "key": "pk" },
+        { "name": "full_name", "type": "string" }
+      ]
+    },
+    {
+      "name": "Copy",
+      "description": "One physical copy of a book",
+      "attributes": [
+        { "name": "copy_id", "type": "int", "key": "pk" },
+        { "name": "book_id", "type": "int", "references": "Book.book_id" },
+        { "name": "shelf", "type": "string", "nullable": true }
+      ]
+    },
+    {
+      "name": "Loan",
+      "description": "One member holding one copy for a period",
+      "attributes": [
+        { "name": "loan_id", "type": "int", "key": "pk" },
+        { "name": "member_id", "type": "int", "references": "Member.member_id" },
+        { "name": "copy_id", "type": "int", "references": "Copy.copy_id" },
+        { "name": "status", "type": "string", "stateOf": "LoanLifecycle" },
+        { "name": "due_at", "type": "datetime" },
+        { "name": "renewal_count", "type": "int" },
+        { "name": "max_renewals", "type": "int" }
+      ]
+    }
+  ],
+  "relationships": [
+    { "from": "Member", "to": "Loan", "cardinality": "1:N", "label": "takes out" },
+    { "from": "Copy", "to": "Loan", "cardinality": "1:N", "label": "is lent as" },
+    { "from": "Book", "to": "Copy", "cardinality": "1:N", "label": "is held as" },
+    { "from": "Author", "to": "Book", "cardinality": "N:M", "label": "writes" }
+  ]
+}
