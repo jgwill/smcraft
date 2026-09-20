@@ -5,7 +5,7 @@
 
 **Spec ID**: 80
 **Version**: 1.0
-**Status**: all five slices landed on branch `feat/erdf-diagram-type-260919`. Not published: no package version was bumped.
+**Status**: all five slices landed. Shipped in `@miadi/stateloom-protocol` 0.1.6, `@miadi/stateloom` 0.1.4, `@miadi/stateloom-canvas` 0.1.2, `@miadi/stateloom-mcp` 0.2.4, `@miadi/stateloom-web` 0.1.6.
 **Implementation**: TypeScript — `bridge-protocol/src/erd/`, `mcp/src/erd.ts`, `bridge-canvas/src/EntityRelationshipCanvas.tsx`, `web/src/components/erd/`
 
 ## Creative Intent
