@@ -80,6 +80,7 @@ export function applyPatchOps(
     switch (op.op) {
       case 'settings.update': {
         next.settings = { ...next.settings, ...op.patch };
+        if (next.settings.notes === "") delete next.settings.notes;
         break;
       }
 
@@ -96,6 +97,7 @@ export function applyPatchOps(
       case 'state.update': {
         const state = requireState(next.state, op.name, 'state.update');
         Object.assign(state, op.patch);
+        if (state.notes === "") delete state.notes;
         break;
       }
 

@@ -25,6 +25,9 @@
  *   - create_erd, add_entity, update_entity, add_attribute, add_relationship
  *   - remove_entity, remove_attribute, remove_relationship
  *   - validate_erd, check_links
+ *
+ * Notes (either document type): set_notes, get_notes — what a person or an
+ * agent wrote down about the diagram or one of its shapes, saved in the file.
  *   get_definition, load_definition and render_diagram answer for an ERD when
  *   the active document is one.
  *
@@ -56,6 +59,7 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "os";
 import { createBridgeClient, type BridgeClient } from "@miadi/stateloom-client";
 import {
+  collectNotes,
   envAlias,
   isErdfPath,
   type EntityRelationshipDefinition,
@@ -70,6 +74,9 @@ import {
   erdGetDefinition,
   erdLoadDefinition,
   erdRender,
+  erdGetNotes,
+  erdSetNotes,
+  formatNotes,
   type ErdHost,
 } from "./erd.js";
 
@@ -94,6 +101,7 @@ interface StateDef {
   name: string;
   kind?: "normal" | "final" | "history";
   description?: string;
+  notes?: string;
   transitions?: TransitionDef[];
   states?: StateDef[];
   onEntry?: string;
@@ -117,6 +125,7 @@ interface Definition {
     namespace: string;
     name: string;
     asynchronous: boolean;
+    notes?: string;
     _source?: {
       kind?: string;
       pdeId?: string;
@@ -1242,6 +1251,51 @@ server.tool(
 );
 
 registerErdTools(server, erdHost);
+
+// Notes — the same two tools for either document type.
+
+server.tool(
+  "set_notes",
+  "Save working notes on the active diagram or on one of its shapes — what was said about it, an open question, a decision — so whoever opens the document next (a person or an agent) finds them. Omit `target` for the whole diagram; otherwise `target` is a state name (state machine) or an entity name (ERD). The text replaces what was there; an empty string clears it. Notes are kept in the document and are not part of the model: engines and code generation ignore them.",
+  { target: z.string().optional(), notes: z.string() },
+  async ({ target, notes }) => {
+    if (isErdfPath(PROJECT_FILE)) return erdSetNotes(erdHost, target, notes);
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+    const holder = target ? findState(def.state, target) : def.settings;
+    if (!holder)
+      return { content: [{ type: "text", text: `State '${target}' not found.` }], isError: true };
+    if (notes.trim()) holder.notes = notes;
+    else delete holder.notes;
+    writeDef(def);
+    // "" is how an erased note travels; the far side removes the key.
+    const patch = { notes: notes.trim() ? notes : "" };
+    bridgeEmitPatch([target ? { op: "state.update", name: target, patch } : { op: "settings.update", patch }]);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `${notes.trim() ? "Saved" : "Cleared"} the notes on ${target ? `state '${target}'` : "the diagram"}.`,
+        },
+      ],
+    };
+  }
+);
+
+server.tool(
+  "get_notes",
+  "Read every note in the active document in one call — the diagram's own first, then each shape that has one. Read them before changing a diagram somebody else has been working on: they are where a person leaves what they were thinking.",
+  {},
+  async () => {
+    if (isErdfPath(PROJECT_FILE)) return erdGetNotes(erdHost);
+    const def = readDef();
+    if (!def)
+      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+    const entries = collectNotes(def as unknown as StateMachineDefinition);
+    return { content: [{ type: "text", text: formatNotes(def.settings.name, PROJECT_FILE, entries) }] };
+  }
+);
 
 // Resources
 

@@ -21,7 +21,7 @@
  * `add_entity`. The edits are the protocol's pure functions, the same ones the
  * MCP tools call, so a hand and an agent make identical changes.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { EntityRelationshipCanvas } from "@miadi/stateloom-canvas";
 import { createBridgeSession, type BridgeSession } from "@miadi/stateloom-react";
 import {
@@ -42,6 +42,7 @@ import {
   removeRelationship,
   renderMermaidEr,
   updateEntity,
+  updateErdSettings,
   validateErd,
   type EntityRelationshipDefinition,
   type ErdCardinality,
@@ -52,11 +53,14 @@ import {
   type Viewport,
 } from "@miadi/stateloom-protocol";
 import DocSwitcher from "@/components/DocSwitcher";
+import IssueIcon from "@/components/IssueIcon";
+import LockIcon from "@/components/LockIcon";
 import { docQuery, navigateToDoc, useRequestedDoc } from "@/lib/docParam";
 import { loadRuntimeConfig } from "@/lib/runtimeConfig";
+import { useSheetDrag } from "@/lib/useSheetDrag";
 
 type Moved = Record<string, { x: number; y: number }>;
-type Tab = "entities" | "relations" | "problems";
+type Tab = "entities" | "relations" | "notes" | "issues";
 type Edit = (def: EntityRelationshipDefinition) => EntityRelationshipDefinition;
 
 // The two notations give an entity different footprints, so each keeps its own
@@ -65,6 +69,22 @@ const layoutKey = (docPath: string, notation: ErdNotation): string =>
   notation === "chen" ? `stateloom:erd-layout:chen:${docPath}` : `stateloom:erd-layout:${docPath}`;
 
 const NOTATION_KEY = "stateloom:erd-notation";
+const LOCK_KEY = "stateloom:erd-lock";
+
+/**
+ * Whether shapes start locked in place. A stored choice wins; without one, a
+ * touch screen starts locked — there a drag is almost always "move the view",
+ * and a shape that slides away under the thumb is the accident, not the intent.
+ */
+function readLocked(): boolean {
+  try {
+    const stored = localStorage.getItem(LOCK_KEY);
+    if (stored !== null) return stored === "1";
+    return window.matchMedia("(pointer: coarse)").matches;
+  } catch {
+    return false;
+  }
+}
 
 function readMoved(docPath: string, notation: ErdNotation): Moved {
   try {
@@ -120,6 +140,8 @@ export default function ErdWorkspace() {
   const [def, setDef] = useState<EntityRelationshipDefinition | null>(null);
   const [moved, setMoved] = useState<Moved>({});
   const [notation, setNotation] = useState<ErdNotation>("crowsfoot");
+  // Locked: a drag that starts on a shape pans the board instead of moving the shape. A tap still selects.
+  const [locked, setLocked] = useState(false);
   const [viewport, setViewport] = useState<Viewport>({ ...IDENTITY_VIEWPORT });
   const [fitKey, setFitKey] = useState(0);
   const [selection, setSelection] = useState<string | null>(null);
@@ -142,6 +164,8 @@ export default function ErdWorkspace() {
   // Desktop only: the right column can be folded away.
   const [panelHidden, setPanelHidden] = useState(false);
   const boardRef = useRef<HTMLDivElement | null>(null);
+  // The sheet's handle answers a thumb: pull down to close, up to grow, tap to toggle.
+  const sheet = useSheetDrag({ onClose: () => setSheetOpen(false), restVh: 62, tallVh: 92 });
   const [peers, setPeers] = useState(0);
   // null: not checked. "none": checked, and no state machine sits beside the document.
   const [linkReport, setLinkReport] = useState<ErdValidationError[] | "none" | null>(null);
@@ -169,6 +193,7 @@ export default function ErdWorkspace() {
       setDocPath(path);
       setDef(loaded ?? emptyErd("Default", name));
       setNotation(preferred);
+      setLocked(readLocked());
       setMoved(readMoved(path, preferred));
       setSelection(null);
       setLinkReport(null);
@@ -287,7 +312,7 @@ export default function ErdWorkspace() {
     const machines = await siblingMachines(docPath);
     if (machines.length === 0) {
       setLinkReport("none");
-      setTab("problems");
+      setTab("issues");
       setSheetOpen(true);
       return setStatus("no .smdf.json beside this document to check against", "warn");
     }
@@ -296,8 +321,8 @@ export default function ErdWorkspace() {
     );
     found.push(...checkStateOf(def, machines.map((m) => m.def.settings?.name ?? "")));
     setLinkReport(found);
-    // The answer lives in the Problems tab, so go there — on a phone it is otherwise behind a closed sheet.
-    setTab("problems");
+    // The answer lives in the Issues tab, so go there — on a phone it is otherwise behind a closed sheet.
+    setTab("issues");
     setSheetOpen(true);
     setPanelHidden(false);
     setStatus(`checked ${machines.length} machine(s): ${found.length} problem(s)`, found.length ? "warn" : "ok");
@@ -314,6 +339,17 @@ export default function ErdWorkspace() {
     return { width: rect?.width ?? 0, height: rect?.height ?? 0 };
   };
 
+  const toggleLock = (): void => {
+    const next = !locked;
+    setLocked(next);
+    try {
+      localStorage.setItem(LOCK_KEY, next ? "1" : "0");
+    } catch {
+      // The choice then lasts for this visit only.
+    }
+    setStatus(next ? "shapes locked — a drag anywhere moves the view" : "shapes unlocked — drag one to move it");
+  };
+
   const zoomBy = (factor: number): void => {
     const { width, height } = boardSize();
     setViewport((vp) => zoomAt(vp, factor, { x: width / 2, y: height / 2 }));
@@ -326,13 +362,14 @@ export default function ErdWorkspace() {
     if (!box || !width) return;
     setViewport(fitToBoxes([box], width, height, { padding: 28, maxScale: 1.25 }));
     setSelection(name);
-    setSheetOpen(false);
+    sheet.close();
   };
 
   const openTab = (next: Tab): void => {
     // Tapping the tab you are already reading closes the sheet, so the dock is
     // both switcher and dismiss control.
-    setSheetOpen((wasOpen) => !(wasOpen && tab === next));
+    if (sheetOpen && tab === next) sheet.close();
+    else setSheetOpen(true);
     setTab(next);
   };
 
@@ -340,10 +377,11 @@ export default function ErdWorkspace() {
   const fileName = docPath.split("/").pop() || "…";
   const linkProblems = Array.isArray(linkReport) ? linkReport : [];
   const problemCount = problems.length + linkProblems.length;
-  const tabs: { id: Tab; label: string; icon: string; badge?: number }[] = [
+  const tabs: { id: Tab; label: string; icon: ReactNode; badge?: number }[] = [
     { id: "entities", label: "Entities", icon: "▭" },
     { id: "relations", label: "Relations", icon: "⟷" },
-    { id: "problems", label: "Problems", icon: "⚠", badge: problemCount || undefined },
+    { id: "notes", label: "Notes", icon: "✎", badge: undefined },
+    { id: "issues", label: "Issues", icon: <IssueIcon />, badge: problemCount || undefined },
   ];
   const shown = (id: Tab): string => (tab === id ? "" : "hidden md:block");
 
@@ -455,6 +493,7 @@ export default function ErdWorkspace() {
               viewport={viewport}
               onViewportChange={setViewport}
               selection={selection}
+              readOnly={locked}
               errorElements={errorEntities}
               fitKey={fitKey}
               onSelect={setSelection}
@@ -485,6 +524,17 @@ export default function ErdWorkspace() {
 
           {/* View controls live on the board they act on. */}
           <div className="absolute bottom-3 right-3 flex flex-col overflow-hidden rounded-lg border border-gray-700 bg-gray-900/90 shadow-lg backdrop-blur">
+            <button
+              title={locked ? "Shapes are locked: dragging moves the view. Tap to unlock." : "Lock the shapes in place, so dragging only moves the view"}
+              aria-label="Lock shapes in place"
+              aria-pressed={locked}
+              onClick={toggleLock}
+              className={`flex h-10 w-10 items-center justify-center border-b border-gray-800 hover:bg-gray-800 md:h-8 md:w-8 ${
+                locked ? "bg-blue-950/60 text-blue-300" : "text-gray-400"
+              }`}
+            >
+              <LockIcon locked={locked} />
+            </button>
             {(
               [
                 ["＋", "Zoom in", () => zoomBy(1.25)],
@@ -519,24 +569,25 @@ export default function ErdWorkspace() {
         </div>
 
         {sheetOpen && (
-          <div className="fixed inset-0 z-20 bg-black/50 md:hidden" onClick={() => setSheetOpen(false)} aria-hidden="true" />
+          <div className="fixed inset-0 z-20 bg-black/50 md:hidden" onClick={sheet.close} aria-hidden="true" />
         )}
 
         {def && (
           <aside
-            className={`safe-x fixed inset-x-0 bottom-0 z-30 flex h-[62dvh] flex-col overflow-hidden rounded-t-2xl border-t border-gray-800 bg-gray-900 shadow-2xl transition-transform duration-200 ease-out ${
+            style={sheet.sheetStyle}
+            className={`safe-x fixed inset-x-0 bottom-0 z-30 flex h-[var(--sheet-h)] flex-col overflow-hidden rounded-t-2xl border-t border-gray-800 bg-gray-900 shadow-2xl transition-[transform,height] duration-200 ease-out ${
               sheetOpen ? "translate-y-0" : "pointer-events-none translate-y-full"
             } md:pointer-events-auto md:static md:z-auto md:h-auto md:w-80 md:translate-y-0 md:rounded-none md:border-l md:border-t-0 md:shadow-none md:transition-none ${
               panelHidden ? "md:hidden" : ""
             }`}
           >
-            <div className="md:hidden">
+            <div className="md:hidden" {...sheet.zoneProps}>
               <div className="flex justify-center pb-1 pt-2">
-                <span className="h-1 w-10 rounded-full bg-gray-700" />
+                <span className="h-1.5 w-12 rounded-full bg-gray-600" />
               </div>
               <div className="flex items-center justify-between border-b border-gray-800 px-4 pb-2">
                 <h2 className="text-sm font-semibold text-gray-300">{tabs.find((t) => t.id === tab)?.label}</h2>
-                <button onClick={() => setSheetOpen(false)} className="-mr-2 px-3 py-2 text-lg text-gray-400" aria-label="Close panel">
+                <button onClick={sheet.close} className="-mr-2 px-3 py-2 text-lg text-gray-400" aria-label="Close panel">
                   ✕
                 </button>
               </div>
@@ -684,8 +735,51 @@ export default function ErdWorkspace() {
                 )}
               </section>
 
-              <section className={shown("problems")}>
-                <div className={`${heading} max-md:mt-0 ${problemCount === 0 && !linkReport ? "md:hidden" : ""}`}>Problems</div>
+              <section className={shown("notes")}>
+                <div className={`${heading} max-md:mt-0`}>Notes</div>
+                <p className="mb-1 text-[11px] text-gray-600">
+                  Saved in the document, for whoever opens it next — you, or an agent (it reads them with get_notes).
+                </p>
+                <NotesField
+                  key="diagram"
+                  label="On this diagram"
+                  value={def.settings.notes ?? ""}
+                  placeholder="What was discussed, what is still open…"
+                  onSave={(notes) => apply((d) => updateErdSettings(d, { notes }))}
+                />
+                {selected ? (
+                  <NotesField
+                    key={`entity:${selected.name}`}
+                    label={`On ${selected.name}`}
+                    value={selected.notes ?? ""}
+                    placeholder={`A question or a decision about ${selected.name}…`}
+                    onSave={(notes) => apply((d) => updateEntity(d, selected.name, { notes }))}
+                  />
+                ) : (
+                  <p className="mt-2 text-[11px] text-gray-600">Select an entity to leave a note on it.</p>
+                )}
+                {def.entities.some((e) => e.notes?.trim()) && (
+                  <>
+                    <div className={heading}>Entities with notes</div>
+                    <div className="flex flex-wrap gap-1">
+                      {def.entities
+                        .filter((e) => e.notes?.trim())
+                        .map((e) => (
+                          <button
+                            key={e.name}
+                            className={`${button} ${selection === e.name ? "border-blue-500 text-blue-300" : ""}`}
+                            onClick={() => setSelection(e.name)}
+                          >
+                            {e.name}
+                          </button>
+                        ))}
+                    </div>
+                  </>
+                )}
+              </section>
+
+              <section className={shown("issues")}>
+                <div className={`${heading} max-md:mt-0 ${problemCount === 0 && !linkReport ? "md:hidden" : ""}`}>Issues</div>
                 {problems.map((p, i) => (
                   <div key={`p${i}`} className="py-0.5 text-[11px] text-red-300">
                     [{p.ruleId}] {p.message}
@@ -714,7 +808,7 @@ export default function ErdWorkspace() {
         )}
       </div>
 
-      {/* Tab dock (phone). Three tabs one thumb-tap away, and the problem count is on screen at all times. */}
+      {/* Tab dock (phone). Three tabs one thumb-tap away, and the issue count is on screen at all times. */}
       <nav className="dock-safe safe-x fixed inset-x-0 bottom-0 z-40 flex border-t border-gray-800 bg-gray-900/95 backdrop-blur-md md:hidden">
         {tabs.map((t) => {
           const current = sheetOpen && tab === t.id;
@@ -727,10 +821,10 @@ export default function ErdWorkspace() {
                 current ? "text-blue-400" : "text-gray-500"
               }`}
             >
-              <span className="text-base leading-none">{t.icon}</span>
+              <span className="flex h-4 items-center text-base leading-none">{t.icon}</span>
               <span>{t.label}</span>
               {t.badge !== undefined && (
-                <span className="absolute right-1/2 top-1 min-w-[16px] translate-x-5 rounded-full bg-red-600 px-1 text-[10px] leading-4 text-white">
+                <span className="absolute right-1/2 top-1 min-w-[16px] translate-x-5 rounded-full border border-red-900/80 bg-red-950/80 px-1 text-[10px] leading-4 text-red-200">
                   {t.badge}
                 </span>
               )}
@@ -740,6 +834,60 @@ export default function ErdWorkspace() {
         })}
       </nav>
     </div>
+  );
+}
+
+/**
+ * A notes box that saves by itself: shortly after the typing stops, and when
+ * focus leaves it. Each save is a whole-document write, so it is not done per
+ * keystroke. When the saved text changes underneath — an agent's set_notes,
+ * for instance — the box takes it, unless someone is typing in it: a save of
+ * their own words coming back must never pull the text out from under them.
+ */
+function NotesField({
+  label,
+  value,
+  placeholder,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onSave: (notes: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [seen, setSeen] = useState(value);
+  const [focused, setFocused] = useState(false);
+  if (value !== seen) {
+    setSeen(value);
+    if (!focused) setDraft(value);
+  }
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const save = (text: string): void => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    if (text !== value) onSave(text);
+  };
+  return (
+    <label className="mt-2 block">
+      <span className="text-[11px] text-gray-500">{label}</span>
+      <textarea
+        className={`${input} h-24 resize-y leading-snug`}
+        placeholder={placeholder}
+        value={draft}
+        onChange={(e) => {
+          const text = e.target.value;
+          setDraft(text);
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = setTimeout(() => save(text), 900);
+        }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          save(draft);
+        }}
+      />
+    </label>
   );
 }
 

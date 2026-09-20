@@ -14,6 +14,8 @@ export interface ErdSettings {
   namespace: string;
   name: string;
   description?: string;
+  /** Working notes about the whole diagram, for whoever opens it next — a person or an agent. */
+  notes?: string;
 }
 
 /** Primary or unique. A foreign key is stated by `references`, so one attribute can be both. */
@@ -47,6 +49,8 @@ export interface ErdEntity {
   description?: string;
   /** Exists only through another entity (an order line, without its order). Chen draws it as a double rectangle. */
   weak?: boolean;
+  /** Working notes about this entity. `description` says what it IS; notes are the conversation about it. */
+  notes?: string;
   attributes?: ErdAttribute[];
 }
 

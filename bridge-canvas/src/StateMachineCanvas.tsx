@@ -1424,9 +1424,18 @@ export const StateMachineCanvas = forwardRef<StateMachineCanvasHandle, StateMach
                       </text>
                     )}
                     {errored && (
-                      <text x={pos.x + 6} y={pos.y + 14} className="slc-node-warn">
-                        ⚠
-                      </text>
+                      // Drawn, not typed: "⚠" is a full-colour emoji on iOS and ignores the danger ink.
+                      <path
+                        d={`M ${pos.x + 6} ${pos.y + 15} l 5.5 -9.5 l 5.5 9.5 Z M ${pos.x + 11.5} ${pos.y + 9.5} v 2.6`}
+                        className="slc-node-warn-mark"
+                      />
+                    )}
+                    {state.notes?.trim() && (
+                      // A small tab on the top edge: somebody left notes on this state.
+                      <g>
+                        <title>{`Notes: ${state.notes}`}</title>
+                        <rect x={pos.x + pos.width - 24} y={pos.y - 5} width={13} height={5} rx={1.5} className="slc-note-mark" />
+                      </g>
                     )}
                     {composite && (
                       <text

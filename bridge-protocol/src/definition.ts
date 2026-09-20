@@ -31,6 +31,12 @@ export interface SettingsModel {
   namespace: string;
   name?: string;
   description?: string;
+  /**
+   * Working notes about the whole diagram — what a person or an agent wrote
+   * down while discussing it, for whoever opens it next. Not part of the
+   * machine: the engines and the code generator ignore it.
+   */
+  notes?: string;
   asynchronous: boolean;
   objects?: ObjectRef[];
   context?: ContextConfig;
@@ -105,6 +111,8 @@ export interface StateDef {
   name: string;
   kind?: StateKindType;
   description?: string;
+  /** Working notes about this state (see `SettingsModel.notes`). `description` says what the state IS; notes are the conversation about it. */
+  notes?: string;
   onEntry?: { actions: ActionDef[] };
   onExit?: { actions: ActionDef[] };
   transitions?: TransitionDef[];

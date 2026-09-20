@@ -116,6 +116,16 @@ export default function PropertiesPanel() {
             onChange={(e) => updateState(selection.id!, { description: e.target.value || undefined })}
           />
         </label>
+        {/* Notes: what was said about this state, kept in the document for whoever opens it next. */}
+        <label className="block">
+          <span className="text-xs text-gray-500">Notes</span>
+          <textarea
+            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 h-20"
+            placeholder="An open question, a decision, something to tell the agent…"
+            value={state.notes ?? ""}
+            onChange={(e) => updateState(selection.id!, { notes: e.target.value || undefined })}
+          />
+        </label>
 
         {/* onEntry actions */}
         <ActionEditor

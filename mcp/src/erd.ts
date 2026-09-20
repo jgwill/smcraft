@@ -24,6 +24,7 @@ import {
   addRelationship,
   checkLinks,
   checkStateOf,
+  collectNotes,
   emptyErd,
   ERD_CARDINALITIES,
   isErdDefinition,
@@ -33,6 +34,7 @@ import {
   removeRelationship,
   renderMermaidEr,
   updateEntity,
+  updateErdSettings,
   summarizeErd,
   validateErd,
   type EntityRelationshipDefinition,
@@ -167,6 +169,27 @@ export function erdRender(
       { type: "text", text },
     ],
   };
+}
+
+/** One block per note, the diagram's own first. What `get_notes` answers with for either document type. */
+export function formatNotes(name: string, path: string, entries: { target: string | null; notes: string }[]): string {
+  if (entries.length === 0) return `No notes in '${name}' (${path}).`;
+  const blocks = entries.map((n) => `[${n.target ?? "diagram"}]\n${n.notes}`);
+  return `${entries.length} note(s) in '${name}' (${path}):\n\n${blocks.join("\n\n")}`;
+}
+
+export function erdGetNotes(host: ErdHost): ToolResult {
+  const def = readErd(host.projectFile());
+  if (!def) return fail(`No ERD at ${host.projectFile()}.`);
+  return ok(formatNotes(def.settings?.name ?? "", host.projectFile(), collectNotes(def)));
+}
+
+export function erdSetNotes(host: ErdHost, target: string | undefined, notes: string): ToolResult {
+  return mutate(
+    host,
+    (def) => (target ? updateEntity(def, target, { notes }) : updateErdSettings(def, { notes })),
+    () => `${notes.trim() ? "Saved" : "Cleared"} the notes on ${target ? `entity '${target}'` : "the diagram"}.`,
+  );
 }
 
 const formatErrors = (errors: ErdValidationError[]): string =>
