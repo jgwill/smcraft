@@ -13,7 +13,8 @@ has never seen this repository can load one and act.
 |---|---|---|
 | `stateloom-setup` | Standing the whole system up from nothing: npm/PyPI packages, MCP registration, the `.smdf.json` project document, the hub on 4599, the web designer on 4598, the `STATELOOM_*` env contract, and a verification checklist that proves each piece is live. | `stateloom skills install stateloom-setup` |
 | `stateloom-docker` | The whole loom in containers: one image, four roles, **one published port**. `stateloom docker up`, the `jgwill/stateloom` image, compose, the same-origin gateway that makes a containerised canvas connect without being told the network, MCP over HTTP with a bearer token, and the document mount. | `stateloom skills install stateloom-docker` |
-| `stateloom-design` | Designing a machine conversationally through the 15 MCP tools — tool order, building a hierarchy, reading validation output, and the mistakes that produce V003/V004 errors. | `stateloom skills install stateloom-design` |
+| `stateloom-design` | Designing a machine conversationally through the 17 MCP tools — tool order, building a hierarchy, reading validation output, the mistakes that produce V003/V004 errors, and the notes a person leaves on a diagram (`get_notes` / `set_notes`). | `stateloom skills install stateloom-design` |
+| `stateloom-erd` | Designing the DATA beside the machines: an entity-relationship diagram in a sibling `.erdf.json` — entities, attributes, keys, cardinality, weak entities, the E001–E005 rules, `check_links` (what a machine names that the data does not have), `stateOf`, and the two notations (crow's foot, Chen) that are a view and never data. | `stateloom skills install stateloom-erd` |
 | `stateloom-live-loop` | The real-time bridge: agent and human editing one board at once. Hub, rooms keyed by absolute path, presence, `smcx watch`, the web canvas, persist-then-emit, external-edit detection, and diagnosing `○ no disk`. | `stateloom skills install stateloom-live-loop` |
 | `stateloom-render` | Drawing the machine from all three surfaces (CLI, MCP, web), the four formats, the PNG rasterizer fallback chain, and `--stamp` export naming. | `stateloom skills install stateloom-render` |
 | `stateloom-codegen` | SMDF → validated → generated Python (or TypeScript), the runtime the generated code imports, and how to run the result. | `stateloom skills install stateloom-codegen` |
@@ -48,6 +49,7 @@ live surfaces, that the hub is running. After setup, the skills are independent:
 stateloom-docker ─── or ─── stateloom-setup
                                 │
    ┌────────────────────────────┤
+   ├── stateloom-erd ─────── (the data beside the machines; pairs with stateloom-design)
    ├── stateloom-design ──┬── stateloom-render
    │                      ├── stateloom-codegen
    │                      └── stateloom-rispec

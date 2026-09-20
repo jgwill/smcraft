@@ -44,6 +44,7 @@ A node in the state hierarchy tree. Properties:
 | `onExit` | ActionDef[] | Actions executed on state exit |
 | `parallel` | ParallelDef | Orthogonal regions (parallel state) |
 | `description` | string | Human-readable purpose |
+| `notes` | string | Working notes about this state — what a person or an agent wrote down while discussing it, for whoever opens the document next. `settings.notes` carries the same for the whole diagram. Not part of the machine: parsers, engines and the code generator ignore it. MCP: `get_notes`, `set_notes` |
 
 **State Classification (derived):**
 - **Leaf**: `states == [] AND parallel == None`

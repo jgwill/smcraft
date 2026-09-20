@@ -12,7 +12,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { EntityRelationshipDefinition } from "@miadi/stateloom-protocol";
-import { registerErdTools, erdGetDefinition, erdLoadDefinition, erdRender, type ErdHost } from "../erd.js";
+import {
+  registerErdTools,
+  erdGetDefinition,
+  erdGetNotes,
+  erdLoadDefinition,
+  erdRender,
+  erdSetNotes,
+  type ErdHost,
+} from "../erd.js";
 
 interface Rig {
   dir: string;
@@ -174,6 +182,29 @@ test("weak is set at creation or later, and clearing it removes the field", asyn
     assert.ok(!("weak" in def.entities[1]));
     assert.equal(def.entities[1].description, "One purchase", "an omitted field is left alone");
     assert.equal((await r.call("update_entity", { name: "Ghost", weak: true })).isError, true);
+  } finally {
+    await r.close();
+  }
+});
+
+test("notes on the diagram and on an entity are saved in the file, read back in one call, and cleared by an empty string", async () => {
+  const r = await rig();
+  try {
+    await r.call("create_erd", { namespace: "demo", name: "Library" });
+    await r.call("add_entity", { name: "Loan" });
+    assert.equal(erdSetNotes(r.host, undefined, "Members vs patrons: pick one word.").isError, undefined);
+    assert.equal(erdSetNotes(r.host, "Loan", "Needs a due date.").isError, undefined);
+    assert.equal(erdSetNotes(r.host, "Ghost", "x").isError, true);
+
+    const read = erdGetNotes(r.host).content[0].text;
+    assert.match(read, /^2 note\(s\) in 'Library'/);
+    assert.ok(read.indexOf("[diagram]") < read.indexOf("[Loan]"), "the diagram's note comes first");
+    const def = JSON.parse(erdGetDefinition(r.host).content[0].text) as EntityRelationshipDefinition;
+    assert.equal(def.entities[0].notes, "Needs a due date.");
+
+    erdSetNotes(r.host, "Loan", "");
+    erdSetNotes(r.host, undefined, "  ");
+    assert.match(erdGetNotes(r.host).content[0].text, /^No notes/);
   } finally {
     await r.close();
   }

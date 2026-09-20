@@ -38,6 +38,17 @@ export default function SettingsPanel() {
         />
       </label>
 
+      {/* Notes about the whole diagram, kept in the document for whoever opens it next. */}
+      <label className="block">
+        <span className="text-xs text-gray-500">Notes on this diagram</span>
+        <textarea
+          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 h-24"
+          placeholder="What was discussed, what is still open, what to tell the agent…"
+          value={settings.notes ?? ""}
+          onChange={(e) => updateSettings({ notes: e.target.value || undefined })}
+        />
+      </label>
+
       <label className="flex items-center gap-2 text-sm text-gray-300">
         <input
           type="checkbox"

@@ -5,7 +5,7 @@
 
 **Spec ID**: 80
 **Version**: 1.0
-**Status**: all five slices landed (protocol 0.1.6, hub 0.1.4, canvas 0.1.2, mcp 0.2.4, web 0.1.6). Chen notation as a second drawing, `weak` entities and `update_entity` follow in protocol 0.1.7, canvas 0.1.3, mcp 0.2.5, web 0.1.7. The phone-first designer layout is web 0.1.8.
+**Status**: all five slices landed (protocol 0.1.6, hub 0.1.4, canvas 0.1.2, mcp 0.2.4, web 0.1.6). Chen notation as a second drawing, `weak` entities and `update_entity` follow in protocol 0.1.7, canvas 0.1.3, mcp 0.2.5, web 0.1.7. The phone-first designer layout is web 0.1.8 Web 0.1.9 adds the quiet Issues tab, the dragging sheet handle, the shape lock and notes; notes are protocol 0.1.8, canvas 0.1.4, mcp 0.2.6; the `stateloom-erd` skill is skills 0.3.2.
 **Implementation**: TypeScript — `bridge-protocol/src/erd/`, `mcp/src/erd.ts`, `bridge-canvas/src/EntityRelationshipCanvas.tsx`, `web/src/components/erd/`
 
 ## Creative Intent
@@ -41,6 +41,7 @@ ERDF is a **sibling** of SMDF, never a section inside it. A machine is one behav
 | `name` | string | Unique entity identifier |
 | `description` | string | Human-readable purpose |
 | `weak` | boolean | Exists only through another entity (an order line, without its order). Chen draws it as a double rectangle |
+| `notes` | string | Working notes about this entity — what a person or an agent wrote down while discussing it, for whoever opens the document next. `settings.notes` carries the same for the whole diagram. Not part of the model |
 | `attributes` | ErdAttribute[] | The entity's fields |
 
 ### ErdAttribute
@@ -128,6 +129,8 @@ The loom weaves one active document, and its type is its extension. `set_project
 
 **Check** — `validate_erd()` (E001–E005), `check_links(erd_path?, smdf_paths?)` (L001–L004). With no arguments from an ERD, every `.smdf.json` beside it is checked.
 
+**Notes** — `get_notes()`, `set_notes(target?, notes)`: the same two tools for a machine or an ERD; an empty string clears. A shape with notes carries a small tab on its top edge on the canvas.
+
 **By extension** — `get_definition`, `load_definition` and `render_diagram` answer for the ERD when the active document is one. An ERD renders as `mermaid` only, to `<name>.erd.mmd`.
 
 Every edit is written to disk, then mirrored to the bridge room as a whole document. The edits themselves are the pure functions in `bridge-protocol/src/erd/edit.ts`, which the canvas uses too.
@@ -154,7 +157,7 @@ Chen shows less per attribute, and hides nothing: an oval's tooltip carries the 
 
 **Canvas** — `<EntityRelationshipCanvas>` in `@miadi/stateloom-canvas` has the same contract as `<StateMachineCanvas>`: props in, callbacks out, the host owns definition, positions and viewport. Same gestures (wheel pans, ⌃/⌘ wheel zooms, drag pans or moves a box, two fingers pinch), same `--slc-*` theme variables. Relationship lines use the shared edge router and carry a bar ("one") or a crow's foot ("many") at each end; labels use the shared chip placer. An attribute with `stateOf` is drawn with a ◉ in the accent ink, and activating it calls `onOpenMachine(machine)`.
 
-**Designer** — `web/` opens the ERD workspace when the document ends in `.erdf.json` (by `?doc=`, or the serving process's default document) and the state designer otherwise; the choice is made before either mounts. The workspace loads through the same file API, joins the same hub room, and edits with the same pure functions the MCP tools call. Every edit is written to disk first and then pushed whole, because the agent's tools read the file before each edit. ◉ opens the `.smdf.json` beside the document whose `settings.name` matches. "Check links" runs L001–L004 against every machine beside the document. The board gets the screen: the header is one row at every width, zoom and fit float on the board, and status is a line over its corner that steps back to a dot. On a phone the panel is a bottom sheet that starts closed behind a three-tab dock (Entities, Relations, Problems — the state designer's own shape), a tapped entity offers a pill that opens its details, and "Show on board" brings one entity to the middle at a readable size; on a desktop the panel is the right column and can be folded away. A two-icon switch in the header (▤ crow's foot, ◇ Chen) chooses the notation; the choice is kept in the browser. Dragged positions are kept in the browser too, keyed by document path and notation, and are not part of the ERDF.
+**Designer** — `web/` opens the ERD workspace when the document ends in `.erdf.json` (by `?doc=`, or the serving process's default document) and the state designer otherwise; the choice is made before either mounts. The workspace loads through the same file API, joins the same hub room, and edits with the same pure functions the MCP tools call. Every edit is written to disk first and then pushed whole, because the agent's tools read the file before each edit. ◉ opens the `.smdf.json` beside the document whose `settings.name` matches. "Check links" runs L001–L004 against every machine beside the document. The board gets the screen: the header is one row at every width, zoom and fit float on the board, and status is a line over its corner that steps back to a dot. On a phone the panel is a bottom sheet that starts closed behind a four-tab dock (Entities, Relations, Notes, Issues — the state designer's own shape; the Issues mark is an outline in the dock's own grey, never the colour emoji "⚠" becomes on iOS), a tapped entity offers a pill that opens its details, "Show on board" brings one entity to the middle at a readable size, the sheet's handle drags (down to close, up to grow, a tap to toggle), and a padlock on the board locks the shapes so a drag only moves the view — the default on a touch screen; on a desktop the panel is the right column and can be folded away. A two-icon switch in the header (▤ crow's foot, ◇ Chen) chooses the notation; the choice is kept in the browser. Dragged positions are kept in the browser too, keyed by document path and notation, and are not part of the ERDF.
 
 **Hub** — a room is keyed by document path and never validates what it holds, so an ERDF rides the existing hub. The file watcher sends an ERD whole (`def:full`), never as a patch.
 

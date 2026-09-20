@@ -21,6 +21,8 @@ export interface SettingsModel {
   namespace: string;
   name?: string;
   description?: string;
+  /** Working notes about the whole diagram — saved in the document, ignored by engines and codegen. */
+  notes?: string;
   asynchronous: boolean;
   /**
    * Objects the generated context is constructed with. `ObjectRef` is what
@@ -97,6 +99,8 @@ export interface StateDef {
   name: string;
   kind?: StateKindType;
   description?: string;
+  /** Working notes about this state: the conversation about it, where `description` says what it is. */
+  notes?: string;
   onEntry?: { actions: ActionDef[] };
   onExit?: { actions: ActionDef[] };
   transitions?: TransitionDef[];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Canvas from "@/components/Canvas";
 import PropertiesPanel from "@/components/PropertiesPanel";
 import EventsPanel from "@/components/EventsPanel";
@@ -12,9 +12,11 @@ import DesignBridge from "@/components/DesignBridge";
 import UiScale from "@/components/UiScale";
 import { useDesignerStore } from "@/store/useDesignerStore";
 import ErdWorkspace from "@/components/erd/ErdWorkspace";
+import IssueIcon from "@/components/IssueIcon";
 import { isErdfPath } from "@miadi/stateloom-protocol";
 import { useRequestedDoc } from "@/lib/docParam";
 import { loadRuntimeConfig } from "@/lib/runtimeConfig";
+import { useSheetDrag } from "@/lib/useSheetDrag";
 
 type Tab = "properties" | "events" | "settings" | "validation";
 
@@ -78,6 +80,8 @@ function MachineDesigner() {
   // the entire screen, and at `md` and up the responsive classes pin it open as
   // the 320px right sidebar it has always been — this flag stops mattering.
   const [sheetOpen, setSheetOpen] = useState(false);
+  // The sheet's handle answers a thumb: pull down to close, up to grow, tap to toggle.
+  const sheet = useSheetDrag({ onClose: () => setSheetOpen(false), restVh: 70, tallVh: 92 });
   const errors = useDesignerStore((s) => s.errors);
   const contextMenu = useDesignerStore((s) => s.contextMenu);
   const hideContextMenu = useDesignerStore((s) => s.hideContextMenu);
@@ -86,11 +90,12 @@ function MachineDesigner() {
   const setDrawMode = useDesignerStore((s) => s.setDrawMode);
   const setDrawSource = useDesignerStore((s) => s.setDrawSource);
 
-  const tabs: { id: Tab; label: string; icon: string; badge?: number }[] = [
+  const tabs: { id: Tab; label: string; icon: ReactNode; badge?: number }[] = [
     { id: "properties", label: "Properties", icon: "🎛" },
     { id: "events", label: "Events", icon: "⚡" },
     { id: "settings", label: "Settings", icon: "⚙" },
-    { id: "validation", label: "Errors", icon: "⚠", badge: errors.length || undefined },
+    // Drawn, not typed: "⚠" is a bright yellow colour emoji on iOS. See IssueIcon.
+    { id: "validation", label: "Errors", icon: <IssueIcon />, badge: errors.length || undefined },
   ];
 
   const activeLabel = tabs.find((t) => t.id === activeTab)?.label ?? "";
@@ -99,7 +104,8 @@ function MachineDesigner() {
   // both switcher and dismiss control and no screen height is spent on a
   // separate close affordance.
   const toggleTab = (id: Tab) => {
-    setSheetOpen((wasOpen) => !(wasOpen && activeTab === id));
+    if (sheetOpen && activeTab === id) sheet.close();
+    else setSheetOpen(true);
     setActiveTab(id);
   };
 
@@ -125,7 +131,7 @@ function MachineDesigner() {
         {sheetOpen && (
           <div
             className="fixed inset-0 z-20 bg-black/50 md:hidden"
-            onClick={() => setSheetOpen(false)}
+            onClick={sheet.close}
             aria-hidden="true"
           />
         )}
@@ -136,21 +142,22 @@ function MachineDesigner() {
             declaration — position, height, width, transform, radius, border
             side — which is why the class list is long. */}
         <aside
-          className={`safe-x fixed inset-x-0 bottom-0 z-30 h-[70dvh] flex flex-col overflow-hidden rounded-t-2xl border-t border-gray-800 bg-gray-900 shadow-2xl transition-transform duration-200 ease-out ${
+          style={sheet.sheetStyle}
+          className={`safe-x fixed inset-x-0 bottom-0 z-30 h-[var(--sheet-h)] flex flex-col overflow-hidden rounded-t-2xl border-t border-gray-800 bg-gray-900 shadow-2xl transition-[transform,height] duration-200 ease-out ${
             sheetOpen ? "translate-y-0" : "translate-y-full pointer-events-none"
           } md:static md:z-auto md:h-auto md:w-80 md:translate-y-0 md:pointer-events-auto md:rounded-none md:border-t-0 md:border-l md:shadow-none md:transition-none`}
         >
           {/* Sheet header (phone). The grab handle reads as "this thing is a
               sheet"; the dock below already names the tabs, so repeating the
               tab bar here would only cost height. */}
-          <div className="md:hidden">
+          <div className="md:hidden" {...sheet.zoneProps}>
             <div className="flex justify-center pt-2 pb-1">
-              <span className="h-1 w-10 rounded-full bg-gray-700" />
+              <span className="h-1.5 w-12 rounded-full bg-gray-600" />
             </div>
             <div className="flex items-center justify-between border-b border-gray-800 px-4 pb-2">
               <h2 className="text-sm font-semibold text-gray-300">{activeLabel}</h2>
               <button
-                onClick={() => setSheetOpen(false)}
+                onClick={sheet.close}
                 className="-mr-2 px-3 py-2 text-lg text-gray-400"
                 aria-label="Close panel"
               >
@@ -215,7 +222,7 @@ function MachineDesigner() {
                 current ? "text-blue-400" : "text-gray-500"
               }`}
             >
-              <span className="text-base leading-none">{tab.icon}</span>
+              <span className="flex h-4 items-center text-base leading-none">{tab.icon}</span>
               <span>{tab.label}</span>
               {tab.badge !== undefined && tab.badge > 0 && (
                 <span className="absolute top-1 right-1/2 translate-x-4 rounded-full bg-red-600 px-1 text-[10px] leading-4 text-white min-w-[16px]">

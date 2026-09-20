@@ -4,17 +4,17 @@
 
 **Engine (npm):** `@miadi/stateloom-engine` 0.4.4 — renamed from `smcraft`, which is deprecated on npm — parser, validator, runtime, SMDF interpreter, Python + TypeScript codegen
 **Engine (PyPI):** `miadi-stateloom-engine` 0.2.1 — the Python twin, CLI `smcg`
-**Protocol:** `@miadi/stateloom-protocol` 0.1.5
+**Protocol:** `@miadi/stateloom-protocol` 0.1.8 — also carries the ERD format (types, validator, link check, layout)
 **Client:** `@miadi/stateloom-client` 0.1.2
-**Hub:** `@miadi/stateloom` 0.1.3 — bin `smcraft-bridge`
+**Hub:** `@miadi/stateloom` 0.1.4 — bin `smcraft-bridge`
 **React:** `@miadi/stateloom-react` 0.1.6
-**Canvas:** `@miadi/stateloom-canvas` 0.1.1 — `<StateMachineCanvas>`, the design surface as a mountable component
+**Canvas:** `@miadi/stateloom-canvas` 0.1.4 — `<StateMachineCanvas>` and `<EntityRelationshipCanvas>`, the design surfaces as mountable components
 **CLI:** `@miadi/stateloom-cli` 0.1.3 — bin `smcx`
-**MCP:** `@miadi/stateloom-mcp` 0.2.3 — bins `stateloom-mcp`, `smcraft-mcp`
-**Skills:** `@miadi/stateloom-skills` 0.2.2 — bin `stateloom`
-**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.1.3, bin `stateloom-web`
+**MCP:** `@miadi/stateloom-mcp` 0.2.6 — bins `stateloom-mcp`, `smcraft-mcp`; 17 state-machine tools and 10 ERD tools
+**Skills:** `@miadi/stateloom-skills` 0.3.2 — bin `stateloom`
+**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.1.9, bin `stateloom-web`
 **Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
-**RISE Specs:** 70–79
+**RISE Specs:** 70–80
 **Repository:** https://github.com/jgwill/smcraft
 **Published at:** https://docs.smcraft.jgwill.com
 
@@ -263,6 +263,41 @@ V002 is load-bearing beyond validation: because state names are unique, `name` i
 | MCP `validate_definition` | its own five reference/uniqueness checks | **rule IDs collide with different meanings**: its V001 is "no events defined", V004 an unknown transition target, V005 "root has no child state" |
 
 Read the message, never the number, unless you know which of the three answered.
+
+---
+
+## 2b. ERDF — the Entity-Relationship Definition Format
+
+The sibling of SMDF. A `.smdf.json` describes one behaviour; a `.erdf.json` describes the data every behaviour acts on, once, for all of them. It is a design document, written during conceptualization. Full spec: [80 — ERDF Format](./rispecs/80-erdf-format.spec.md). Implementation: `bridge-protocol/src/erd/` (TypeScript only; there is no Python twin yet).
+
+```json
+{
+  "settings": { "namespace": "Examples.Library", "name": "LibraryLending", "description": "…", "notes": "…" },
+  "entities": [
+    { "name": "Loan", "description": "…", "weak": false, "notes": "…",
+      "attributes": [
+        { "name": "loan_id", "type": "int", "key": "pk" },
+        { "name": "member_id", "type": "int", "references": "Member.member_id" },
+        { "name": "status", "type": "string", "stateOf": "LoanLifecycle" }
+      ] }
+  ],
+  "relationships": [ { "from": "Member", "to": "Loan", "cardinality": "1:N", "label": "takes out" } ]
+}
+```
+
+- **Attribute** — `name`, `type` (free string), `key` (`pk` | `uk`), `references` (`"Entity"` or `"Entity.attribute"` — this is what makes a foreign key, so one attribute can be both pk and fk), `nullable`, `stateOf` (the `settings.name` of the machine whose state it stores; a list when one column serves several machines), `description`.
+- **Relationship** — `from`, `to`, `cardinality` (`1:1` | `1:N` | `N:1` | `N:M`, read left to right), `label` (the verb). Addressed by index, as transitions are.
+- **Entity** — `weak: true` for an entity that exists only through another.
+
+**Validation** — `validateErd(def)`: E001 entity names unique and non-empty · E002 attribute names unique within an entity · E003 relationship ends exist · E004 cardinality is a known value · E005 `references` resolves.
+
+**The link to SMDF is by name only.** `settings.objects[].class` ↔ entity name; a guard's `<instance>.<field>` ↔ an attribute of that entity; `settings.name` ↔ an attribute's `stateOf`. `checkLinks(smdf, erdf)` reports: L001 an object a guard reads fields of has a class that is no entity (an object no guard reads is treated as a service and left alone) · L002 a guard reads a field the entity lacks · L003 an attribute stores this machine's state but its entity is not one of the machine's objects. `checkStateOf(erdf, machineNames)` adds L004: `stateOf` names no known machine. Guards are free text: only the `<instance>.<field>` shape is read, and method calls are skipped.
+
+**Notation is a view, never data.** `ErdNotation = "crowsfoot" | "chen"`. Crow's foot lists attributes as rows inside the entity box; Chen draws a rectangle (double when `weak`), an oval per attribute with the primary key underlined, a diamond per relationship, and `1`/`N`/`M` beside the line. The choice is the viewer's and is never written to the file, so every reader — tools, link check, a code generator — reads the same document. `erdAutoLayout(def, { notation })` lays out for either; `renderMermaidEr(def)` gives a Mermaid `erDiagram` (crow's foot; Mermaid has no Chen).
+
+**Notes** — both formats carry `settings.notes` and `notes` on a shape (a state, an entity): what a person or an agent wrote down while discussing the diagram, for whoever opens it next. Engines and codegen ignore them. `collectNotes(def)` reads them all, the diagram's own first. In the live diff an erased note travels as `""` and `applyPatchOps` removes the key.
+
+**Transport** — an ERD has no PatchOp vocabulary; it always travels whole (`def:full`). The hub never validates what a room holds, so an ERDF rides the same hub, room keyed by path.
 
 ---
 
@@ -799,6 +834,16 @@ free — one client, and the caller's own trust:
   team, not one for everybody.
 - **8 MiB body cap** so an unauthenticated probe cannot be a memory attack.
 
+### Notes — either document type
+
+`get_notes()` returns every note in the active document, the diagram's own first; `set_notes(target?, notes)` saves (or, with `""`, clears) the note on the diagram (`target` omitted) or on one state / entity. Read them before changing a diagram someone else has worked on.
+
+### ERD tools — the data beside the machines
+
+The active document's type is its extension. `set_project_file` takes a `.smdf.json` or a `.erdf.json`; while an ERD is active `get_definition`, `load_definition` and `render_diagram` (mermaid only) answer for it, and `create_state_machine` / `load_definition` refuse to write a machine over it.
+
+`create_erd(namespace, name, description?, path?, overwrite?)` — writes `<name>.erdf.json` beside the active document and makes it the active one · `add_entity(name, description?, weak?)` · `update_entity(name, description?, weak?)` · `add_attribute(entity, name, type, key?, references?, nullable?, stateOf?, description?)` · `add_relationship(from, to, cardinality, label?, description?)` · `remove_entity(name)` (takes its relationships with it) · `remove_attribute(entity, name)` · `remove_relationship(from, to, label?)` · `validate_erd()` · `check_links(erd_path?, smdf_paths?)` — with no arguments from an active ERD, every `.smdf.json` in the same folder is checked.
+
 ### Design session protocol
 1. **Point** — `set_project_file` (or let `STATELOOM_PROJECT_FILE` do it)
 2. **Initialize** — `create_state_machine` or `load_definition`
@@ -811,7 +856,7 @@ free — one client, and the caller's own trust:
 
 ## 7. Agent Skills
 
-`@miadi/stateloom-skills` 0.2.2, bin `stateloom` (alias `stateloom-skills`).
+`@miadi/stateloom-skills` 0.3.2, bin `stateloom` (alias `stateloom-skills`).
 
 ```bash
 npx -y @miadi/stateloom-skills skills list
@@ -821,10 +866,12 @@ npx -y @miadi/stateloom-skills skills install --all
 
 `install` copies a ready-to-use `SKILL.md` into `.claude/skills/`, so an agent that has never seen this system arrives already knowing how to drive it. The sources live in `./skills/` in this repository and are synced into the package at build/pack time.
 
-Eight skills, one per surface of the system:
+Ten skills, one per surface of the system:
 
 - `stateloom-setup` — stand it all up from nothing
-- `stateloom-design` — design a machine through the MCP tools
+- `stateloom-docker` — the same loom as one container image behind one port
+- `stateloom-design` — design a machine through the MCP tools, and read or leave notes on it
+- `stateloom-erd` — design the data beside the machines: a `.erdf.json` entity-relationship diagram, its rules, `check_links` against the machines, `stateOf`, and the two notations that are a view and never data
 - `stateloom-live-loop` — agent and human on one board
 - `stateloom-render` — draw it, from any of the three surfaces
 - `stateloom-codegen` — SMDF → Python / TypeScript
@@ -1082,6 +1129,9 @@ Next.js 16 (App Router), React 19 with the React Compiler, Zustand 5, SVG canvas
 
 **`PropertiesPanel.tsx`** — the selected state or transition: name, kind, description, entry/exit action list, and for transitions the event, target, condition and description. **`EventsPanel.tsx`** — events with their parameters. **`SettingsPanel.tsx`** — namespace, name, asynchronous toggle, object references. **`ValidationPanel.tsx`** — rule ids and messages, click-to-select the errored state. **`CodePreview.tsx`** — generated code with a Python/TypeScript selector and copy-to-clipboard.
 
+### The ERD workspace
+A document ending in `.erdf.json` opens a different workspace, decided before either designer mounts (`?doc=`, or the serving process's default document). It shares what is underneath — the file API, the hub room keyed by the resolved path, the canvas package — and none of the store: an ERD has no state tree, no events and no PatchOps. Every edit is written to disk and then pushed whole, because the agent's MCP tools read the file before each of their own edits. The header is one row at every width with a ▤ / ◇ notation switch; zoom, fit and a padlock float on the board (locked, a drag on a shape pans instead of moving it — the default on a touch screen); status is a line over the board's corner. On a phone the panel is a bottom sheet behind a four-tab dock (Entities, Relations, Notes, Issues) whose handle drags: down to close, up to grow, a tap to toggle. "Check links" runs L001–L004 against every machine beside the document; an attribute with `stateOf` shows a ◉ that opens its machine. Both designers keep notes on the diagram and on each shape.
+
 ### Store
 A Zustand store holds the definition, state positions, selection, undo/redo history, validation errors, canvas mode and the generated-code cache. Granular actions map one-to-one onto the PatchOp vocabulary, which is what lets a local edit and a remote patch take the same path into the document.
 
@@ -1108,6 +1158,8 @@ A Zustand store holds the definition, state positions, selection, undo/redo hist
 **[78 — Forgewright Episode Rendering](./rispecs/78-forgewright-episode-rendering.plan.md)** (plan) — rendering episode state machines for the chronicle: where diagrams live, how they are named, which surface draws them.
 
 **[79 — Layout Persistence](./rispecs/79-layout-persistence.plan.md)** (plan) — carrying hand-placed box positions in the document, so a board arranged by a person survives a reload and reaches the other surfaces.
+
+**[80 — ERDF Format](./rispecs/80-erdf-format.spec.md)** — the entity-relationship sibling of SMDF: entities, attributes, relationships, rules E001–E005, the by-name link to the machines and its rules L001–L004, the MCP tools, the two notations as a view, the canvas and the ERD workspace.
 
 ---
 
@@ -1160,6 +1212,12 @@ Trading strategy demonstrating a composite state (Active with three children), t
 
 ### FDB Breakout Strategy (`examples/fdb_breakout_strategy.smdf.json`)
 A 13-state trading FSM with three object references (strategy, market, broker), 14 typed events, a timer (MaxPuiTimer), a deep composite hierarchy (Active with six children), six final states, guard conditions, and retry logic (Active_EntryOrderCanceled → Active_WaitingSignal under `cancel_count < max_cancel`).
+
+### Library lending (`examples/library_lending.erdf.json`)
+An ERD, domain-neutral: Member, Book, Author, Copy (weak), Loan. `Loan.status` carries `stateOf: "LoanLifecycle"`; Author–Book is `N:M`.
+
+### Trading strategy data (`examples/trading_strategy.erdf.json`)
+The ERD beside the two breakout machines, drawn from the real SQLAlchemy models: Campaign → TradingStrategy → parameters, levels, order requests, executions, transitions. `TradingStrategy.strategy_state` carries `stateOf` for both machines. Run `check_links` against `fdb_breakout_strategy.smdf.json` to see L001/L003 in practice: the machine names its object class `FDBBreakoutStrategyEntity`, the model says `TradingStrategy`.
 
 ### Chronicle machines
 miadi-chronicle episodes host their machines at `<episode>/diagrams/<name>.smdf.json` — the convention `episodeOf()` reads to build the `ep252--` export prefix. First proven inhabitant: ep103's `film-preprod`. ep090 predates the convention with six machines under `state-machines/*.smcraft.json`; see `docs/reviews/` for the reconciliation recommendation. Handoff history is in `docs/handoffs/`.

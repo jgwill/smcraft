@@ -74,7 +74,9 @@ const doc = envAlias("PROJECT_FILE"); // STATELOOM_PROJECT_FILE ?? SMCRAFT_PROJE
 | Tree | `collectAllStates`, `collectStateNames`, `collectEventIds`, `buildParentMap` |
 | Layout | `autoLayout`, `AUTO_LAYOUT_DEFAULTS`, `LayoutBox` |
 | Edges & labels | `routeEdges`, `edgeCurve`, `selfLoopCurve`, `facingSides`, `portAt`, `bezier`, `placeLabels`, `chipSize`, `glyphAt`, `textWidth`, `guardText`, `eventGlyph`, `ALL_GLYPHS` |
-| Render | `renderMermaid`, `renderAscii` |
+| Render | `renderMermaid`, `renderAscii`, `renderMermaidEr` |
+| ERD (`.erdf.json`) | `EntityRelationshipDefinition`, `ErdEntity`, `ErdAttribute`, `ErdRelationship`, `ErdNotation`, `isErdDefinition`, `isErdfPath`, `emptyErd`, `validateErd` (E001–E005), `checkLinks` / `checkStateOf` (L001–L004), `addEntity` … `removeRelationship`, `updateEntity`, `updateErdSettings`, `erdAutoLayout`, `erdChenGeometry` |
+| Notes | `collectNotes` — every note in a machine or an ERD, the diagram's own first |
 | Export naming | `diagramFileName`, `timeStamp`, `episodeOf` |
 | Environment | `envAlias` |
 

@@ -84,6 +84,12 @@ function diffSettings(
       changed = true;
     }
   }
+  // Notes can be erased, and an erased note has to reach the other surfaces:
+  // it travels as "" and `applyPatchOps` removes the key.
+  if (prev.settings.notes !== undefined && next.settings.notes === undefined) {
+    patch.notes = "";
+    changed = true;
+  }
   if (changed) ops.push({ op: 'settings.update', patch });
 }
 
@@ -240,6 +246,10 @@ function diffStates(
     }
     if (!eq(before.description, state.description) && state.description !== undefined) {
       patch.description = state.description;
+      changed = true;
+    }
+    if (!eq(before.notes, state.notes)) {
+      patch.notes = state.notes ?? ""; // "" erases — see diffSettings
       changed = true;
     }
     if (changed) ops.push({ op: 'state.update', name: state.name, patch });

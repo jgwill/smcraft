@@ -143,6 +143,11 @@ function attributeTitle(attr: ErdAttribute): string {
     .join(" — ");
 }
 
+/** What hovering an entity says: what it is, then what was said about it. */
+function entityTitle(entity: { description?: string; notes?: string }): string {
+  return [entity.description ?? "", entity.notes?.trim() ? `Notes: ${entity.notes}` : ""].filter(Boolean).join("\n\n");
+}
+
 /**
  * Chen only: the short segment from where a routed line ends (on the corridor
  * above or below the rectangle) to the rectangle's own edge.
@@ -459,8 +464,11 @@ export function EntityRelationshipCanvas({
                       </g>
                     );
                   })}
-                  {entity.description && <title>{entity.description}</title>}
+                  {entityTitle(entity) && <title>{entityTitle(entity)}</title>}
                   <rect x={rect.x} y={rect.y} width={rect.width} height={rect.height} rx={2} className={boxClass} />
+                  {entity.notes?.trim() && (
+                    <rect x={rect.x + rect.width - 24} y={rect.y - 5} width={13} height={5} rx={1.5} className="slc-note-mark" />
+                  )}
                   {entity.weak && (
                     <rect
                       x={rect.x + 4}
@@ -494,8 +502,12 @@ export function EntityRelationshipCanvas({
                   onContextMenu(e.clientX, e.clientY, { kind: "entity", id: entity.name });
                 }}
               >
-                {entity.description && <title>{entity.description}</title>}
+                {entityTitle(entity) && <title>{entityTitle(entity)}</title>}
                 <rect x={box.x} y={box.y} width={box.width} height={box.height} rx={6} className={boxClass} />
+                {entity.notes?.trim() && (
+                  // A small tab on the top edge: somebody left notes on this entity.
+                  <rect x={box.x + box.width - 24} y={box.y - 5} width={13} height={5} rx={1.5} className="slc-note-mark" />
+                )}
                 <path
                   d={`M ${box.x} ${box.y + ERD_BOX.headerHeight} h ${box.width}`}
                   className="slc-erd-rule"

@@ -18,6 +18,14 @@ it with plain `node`. Drag states around, draw transitions, edit events, run the
 validator, generate code, export the diagram as PNG / JPEG / SVG / Mermaid /
 Markdown.
 
+Open a `.erdf.json` instead (`?doc=/abs/path/model.erdf.json`) and the same server shows the
+**ERD workspace**: entities, attributes and relationships drawn in crow's foot or Chen
+notation (a two-icon switch — the choice is the viewer's, never written to the file), a
+link check against the state machines beside the document, and a padlock that locks the
+shapes so a drag only moves the view. Both designers keep **notes** on the diagram and on
+each shape, saved in the document for whoever opens it next. On a phone the board gets the
+screen: the panel is a bottom sheet behind a tab dock, and its handle drags.
+
 It is not the engine (`@miadi/stateloom-engine` runs machines) and not the hub
 (`@miadi/stateloom` sequences the live document). It is the human-facing surface
 onto the same `.smdf.json` the agent-facing MCP server writes.

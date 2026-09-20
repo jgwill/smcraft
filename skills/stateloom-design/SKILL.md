@@ -1,6 +1,6 @@
 ---
 name: stateloom-design
-description: Design a hierarchical state machine conversationally through the stateloom / smcraft MCP tools. Use when creating or editing a .smdf.json state machine, calling create_state_machine, add_state, add_event, add_transition, remove_state, list_states, list_events, load_definition or validate_definition, building nested composite states, choosing state kinds (normal, final, history), fixing V001-V005 validation errors, or switching the active project document with set_project_file.
+description: Design a hierarchical state machine conversationally through the stateloom / smcraft MCP tools. Use when creating or editing a .smdf.json state machine, calling create_state_machine, add_state, add_event, add_transition, remove_state, list_states, list_events, load_definition or validate_definition, building nested composite states, choosing state kinds (normal, final, history), fixing V001-V005 validation errors, switching the active project document with set_project_file, or reading and leaving notes on the diagram and its states with get_notes and set_notes.
 ---
 
 # Designing a state machine through the MCP tools
@@ -35,7 +35,7 @@ absolute path. A missing file is a legitimate target — the next `create_state_
 
 ---
 
-## The 15 tools
+## The 17 tools
 
 | Group | Tools |
 |---|---|
@@ -43,6 +43,13 @@ absolute path. A missing file is a legitimate target — the next `create_state_
 | Inspect | `get_definition`, `list_states`, `list_events`, `get_project_file` |
 | Act | `validate_definition`, `generate_code`, `generate_rispec`, `render_diagram` |
 | Document | `set_project_file`, `get_project_file` |
+| Notes | `get_notes`, `set_notes` |
+
+The same server also carries ten tools for the **data** beside the machine — entities,
+attributes, relationships — in a sibling `.erdf.json` document. That is the `stateloom-erd`
+skill. The active document's type is its extension: while an `.erdf.json` is active, the
+tools above report "no state machine" and refuse to write one over it;
+`set_project_file` back to the `.smdf.json` to continue here.
 
 There is also the MCP resource `smcraft://definition` (the current definition as JSON) and the
 MCP prompt `design-state-machine` (a guided design conversation).
@@ -287,6 +294,24 @@ Then look at it and move on:
 - `render_diagram { "format": "png" }` — see it (skill: `stateloom-render`)
 - `generate_code { "language": "python" }` — run it (skill: `stateloom-codegen`)
 - `generate_rispec` — specify it (skill: `stateloom-rispec`)
+
+---
+
+## Notes — read them first, leave your own
+
+A person discussing the machine writes notes into it, on the whole diagram or on one state.
+They live in the document (`settings.notes`, `notes` on a state) for whoever opens it next.
+
+```
+get_notes                                                      # every note, the diagram's own first
+set_notes  { "target": "Rolling", "notes": "Should a retake reset the slate?" }
+set_notes  { "notes": "Decided: one machine per shooting day." }   # no target = the diagram
+set_notes  { "target": "Rolling", "notes": "" }                    # an empty string clears it
+```
+
+Call `get_notes` before changing a machine someone else has worked on. `set_notes` replaces
+the text. `description` says what a state IS; notes are the conversation about it. They are
+not part of the machine: the engines and the code generator ignore them.
 
 ---
 
