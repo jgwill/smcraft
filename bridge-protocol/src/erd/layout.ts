@@ -16,11 +16,19 @@
  * Pure: same definition, same boxes, every time.
  */
 import type { LayoutBox } from "../autoLayout.js";
-import type { EntityRelationshipDefinition, ErdEntity, ErdRelationship } from "./definition.js";
+import type { EntityRelationshipDefinition, ErdEntity, ErdNotation, ErdRelationship } from "./definition.js";
+import { erdChenFootprint } from "./chen.js";
 
 export interface ErdLayoutOptions {
   hSpacing?: number;
   vSpacing?: number;
+  /**
+   * Which drawing the boxes are for. The placement rules are the same; what
+   * changes is how much room an entity needs — a Chen entity reserves its
+   * attribute ovals on both sides — and the room left between layers, where
+   * Chen puts the relationship diamonds.
+   */
+  notation?: ErdNotation;
 }
 
 /** The row geometry both the layout and the canvas draw with. */
@@ -36,7 +44,10 @@ export const ERD_BOX = {
   badgeWidth: 46,
 } as const;
 
-export const ERD_LAYOUT_DEFAULTS: Required<ErdLayoutOptions> = { hSpacing: 70, vSpacing: 90 };
+export const ERD_LAYOUT_DEFAULTS: Required<ErdLayoutOptions> = { hSpacing: 70, vSpacing: 90, notation: "crowsfoot" };
+
+/** Chen needs the taller gap: a diamond sits between every two layers it joins. */
+const CHEN_V_SPACING = 130;
 
 /** The text of one attribute row, as the canvas writes it. */
 export function erdRowText(attribute: { name: string; type: string }): string {
@@ -80,7 +91,10 @@ export function erdAutoLayout(
   def: EntityRelationshipDefinition,
   options: ErdLayoutOptions = {},
 ): Record<string, LayoutBox> {
-  const { hSpacing, vSpacing } = { ...ERD_LAYOUT_DEFAULTS, ...options };
+  const notation = options.notation ?? ERD_LAYOUT_DEFAULTS.notation;
+  const hSpacing = options.hSpacing ?? ERD_LAYOUT_DEFAULTS.hSpacing;
+  const vSpacing = options.vSpacing ?? (notation === "chen" ? CHEN_V_SPACING : ERD_LAYOUT_DEFAULTS.vSpacing);
+  const sizeOf = notation === "chen" ? erdChenFootprint : erdEntitySize;
   const entities: ErdEntity[] = [];
   const seen = new Set<string>();
   for (const e of def.entities ?? []) {
@@ -134,7 +148,7 @@ export function erdAutoLayout(
     return slot;
   };
   for (const e of entities) {
-    put({ id: e.name, entity: e.name, ...erdEntitySize(e), upper: [], lower: [], x: 0 }, layerOf.get(e.name) ?? 0);
+    put({ id: e.name, entity: e.name, ...sizeOf(e), upper: [], lower: [], x: 0 }, layerOf.get(e.name) ?? 0);
   }
   let lanes = 0;
   for (const [upper, lowers] of below) {

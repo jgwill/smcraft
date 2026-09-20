@@ -32,9 +32,11 @@ import {
   removeEntity,
   removeRelationship,
   renderMermaidEr,
+  updateEntity,
   validateErd,
   type EntityRelationshipDefinition,
   type ErdCardinality,
+  type ErdNotation,
   type ErdValidationError,
   type LayoutBox,
   type StateMachineDefinition,
@@ -47,13 +49,27 @@ import { loadRuntimeConfig } from "@/lib/runtimeConfig";
 type Moved = Record<string, { x: number; y: number }>;
 type Edit = (def: EntityRelationshipDefinition) => EntityRelationshipDefinition;
 
-const layoutKey = (docPath: string): string => `stateloom:erd-layout:${docPath}`;
+// The two notations give an entity different footprints, so each keeps its own
+// dragged arrangement. Crow's foot keeps the key it has always had.
+const layoutKey = (docPath: string, notation: ErdNotation): string =>
+  notation === "chen" ? `stateloom:erd-layout:chen:${docPath}` : `stateloom:erd-layout:${docPath}`;
 
-function readMoved(docPath: string): Moved {
+const NOTATION_KEY = "stateloom:erd-notation";
+
+function readMoved(docPath: string, notation: ErdNotation): Moved {
   try {
-    return JSON.parse(localStorage.getItem(layoutKey(docPath)) ?? "{}") as Moved;
+    return JSON.parse(localStorage.getItem(layoutKey(docPath, notation)) ?? "{}") as Moved;
   } catch {
     return {};
+  }
+}
+
+/** The viewer's own preference — kept in this browser, never in the document. */
+function readNotation(): ErdNotation {
+  try {
+    return localStorage.getItem(NOTATION_KEY) === "chen" ? "chen" : "crowsfoot";
+  } catch {
+    return "crowsfoot";
   }
 }
 
@@ -93,6 +109,7 @@ export default function ErdWorkspace() {
   const [docPath, setDocPath] = useState("");
   const [def, setDef] = useState<EntityRelationshipDefinition | null>(null);
   const [moved, setMoved] = useState<Moved>({});
+  const [notation, setNotation] = useState<ErdNotation>("crowsfoot");
   const [viewport, setViewport] = useState<Viewport>({ ...IDENTITY_VIEWPORT });
   const [fitKey, setFitKey] = useState(0);
   const [selection, setSelection] = useState<string | null>(null);
@@ -119,9 +136,11 @@ export default function ErdWorkspace() {
       }
       if (body.exists && !loaded) return setStatus(`${path} is not a readable ERD definition`);
       const name = (path.split("/").pop() ?? "Untitled").replace(/\.erdf\.json$/i, "");
+      const preferred = readNotation();
       setDocPath(path);
       setDef(loaded ?? emptyErd("Default", name));
-      setMoved(readMoved(path));
+      setNotation(preferred);
+      setMoved(readMoved(path, preferred));
       setSelection(null);
       setLinkReport(null);
       setFitKey((k) => k + 1);
@@ -156,12 +175,12 @@ export default function ErdWorkspace() {
 
   const positions = useMemo<Record<string, LayoutBox>>(() => {
     if (!def) return {};
-    const derived = erdAutoLayout(def);
+    const derived = erdAutoLayout(def, { notation });
     for (const [name, at] of Object.entries(moved)) {
       if (derived[name]) derived[name] = { ...derived[name], ...at };
     }
     return derived;
-  }, [def, moved]);
+  }, [def, moved, notation]);
 
   const problems = useMemo(() => (def ? validateErd(def) : []), [def]);
   const errorEntities = useMemo(
@@ -201,20 +220,32 @@ export default function ErdWorkspace() {
       setMoved((prev) => {
         const next = { ...prev, [name]: { x: Math.round(box.x), y: Math.round(box.y) } };
         try {
-          localStorage.setItem(layoutKey(docPath), JSON.stringify(next));
+          localStorage.setItem(layoutKey(docPath, notation), JSON.stringify(next));
         } catch {
           // A full or disabled store costs the arrangement, not the document.
         }
         return next;
       });
     },
-    [docPath],
+    [docPath, notation],
   );
+
+  const chooseNotation = (next: ErdNotation): void => {
+    if (next === notation) return;
+    try {
+      localStorage.setItem(NOTATION_KEY, next);
+    } catch {
+      // The choice then lasts for this visit only.
+    }
+    setNotation(next);
+    setMoved(readMoved(docPath, next));
+    setFitKey((k) => k + 1);
+  };
 
   const arrange = (): void => {
     setMoved({});
     try {
-      localStorage.removeItem(layoutKey(docPath));
+      localStorage.removeItem(layoutKey(docPath, notation));
     } catch {
       /* as above */
     }
@@ -258,6 +289,28 @@ export default function ErdWorkspace() {
           {status}
           {peers > 1 ? ` · ${peers} in the room` : ""}
         </span>
+        {/* Same document, two drawings. The choice is this browser's; it is never written to the file. */}
+        <span className="inline-flex overflow-hidden rounded border border-gray-700" role="group" aria-label="Notation">
+          {(
+            [
+              ["crowsfoot", "▤", "Crow's foot — attributes listed inside the entity box"],
+              ["chen", "◇", "Chen — attributes as ovals, relationships as diamonds"],
+            ] as const
+          ).map(([id, glyph, title]) => (
+            <button
+              key={id}
+              title={title}
+              aria-label={title}
+              aria-pressed={notation === id}
+              onClick={() => chooseNotation(id)}
+              className={`px-2 py-1 text-sm leading-none ${
+                notation === id ? "bg-blue-900/60 text-blue-200" : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+              }`}
+            >
+              {glyph}
+            </button>
+          ))}
+        </span>
         <button className={button} onClick={arrange} title="Forget the dragged positions and lay the board out again">
           ⤢ Arrange
         </button>
@@ -280,6 +333,7 @@ export default function ErdWorkspace() {
           {def && (
             <EntityRelationshipCanvas
               definition={def}
+              notation={notation}
               positions={positions}
               viewport={viewport}
               onViewportChange={setViewport}
@@ -323,6 +377,17 @@ export default function ErdWorkspace() {
             {selected && (
               <>
                 <div className={heading}>{selected.name}</div>
+                <label
+                  className="mb-1 flex items-center gap-2 text-[11px] text-gray-400"
+                  title="Exists only through another entity (an order line, without its order). Chen draws it as a double rectangle."
+                >
+                  <input
+                    type="checkbox"
+                    checked={!!selected.weak}
+                    onChange={(e) => apply((d) => updateEntity(d, selected.name, { weak: e.target.checked }))}
+                  />
+                  weak entity
+                </label>
                 {(selected.attributes ?? []).map((a) => (
                   <div key={a.name} className="flex items-center justify-between gap-2 py-0.5 font-mono text-[11px]">
                     <span className={a.stateOf ? "text-blue-300" : "text-gray-300"}>

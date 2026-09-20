@@ -156,6 +156,29 @@ test("remove_entity takes its relationships with it; remove_attribute and remove
   }
 });
 
+test("weak is set at creation or later, and clearing it removes the field", async () => {
+  const r = await rig();
+  try {
+    await r.call("create_erd", { namespace: "demo", name: "Shop" });
+    assert.match((await r.call("add_entity", { name: "OrderLine", weak: true })).text, /Added weak entity/);
+    await r.call("add_entity", { name: "Order" });
+    await r.call("add_attribute", { entity: "Order", name: "order_id", type: "int", key: "pk" });
+    assert.equal((await r.call("update_entity", { name: "Order", weak: true, description: "One purchase" })).isError, false);
+
+    let def = JSON.parse(erdGetDefinition(r.host).content[0].text) as EntityRelationshipDefinition;
+    assert.deepEqual(def.entities.map((e) => [e.name, e.weak === true]), [["OrderLine", true], ["Order", true]]);
+    assert.equal(def.entities[1].attributes!.length, 1, "update_entity keeps the attributes");
+
+    await r.call("update_entity", { name: "Order", weak: false });
+    def = JSON.parse(erdGetDefinition(r.host).content[0].text) as EntityRelationshipDefinition;
+    assert.ok(!("weak" in def.entities[1]));
+    assert.equal(def.entities[1].description, "One purchase", "an omitted field is left alone");
+    assert.equal((await r.call("update_entity", { name: "Ghost", weak: true })).isError, true);
+  } finally {
+    await r.close();
+  }
+});
+
 test("create_erd and render stay inside the document root", async () => {
   const r = await rig({ root: true });
   try {

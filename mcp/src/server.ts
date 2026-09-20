@@ -22,7 +22,7 @@
  *   - get_project_file: Report the active document path and bridge status
  *
  * ERD tools (Spec 80, ./erd.ts) — the active document's type is its extension:
- *   - create_erd, add_entity, add_attribute, add_relationship
+ *   - create_erd, add_entity, update_entity, add_attribute, add_relationship
  *   - remove_entity, remove_attribute, remove_relationship
  *   - validate_erd, check_links
  *   get_definition, load_definition and render_diagram answer for an ERD when

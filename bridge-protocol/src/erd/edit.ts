@@ -46,6 +46,25 @@ export function addEntity(def: EntityRelationshipDefinition, entity: ErdEntity):
   return next;
 }
 
+/** Change what an entity says about itself. `undefined` leaves a field alone; `""` / `false` clears it. */
+export function updateEntity(
+  def: EntityRelationshipDefinition,
+  name: string,
+  patch: { description?: string; weak?: boolean },
+): EntityRelationshipDefinition {
+  const next = clone(def);
+  const entity = entityIn(next, name);
+  if (patch.description !== undefined) {
+    if (patch.description) entity.description = patch.description;
+    else delete entity.description;
+  }
+  if (patch.weak !== undefined) {
+    if (patch.weak) entity.weak = true;
+    else delete entity.weak;
+  }
+  return next;
+}
+
 /** Remove an entity and every relationship that touches it. */
 export function removeEntity(def: EntityRelationshipDefinition, name: string): EntityRelationshipDefinition {
   const next = clone(def);

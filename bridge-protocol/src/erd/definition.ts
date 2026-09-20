@@ -45,8 +45,21 @@ export function stateOfList(attribute: ErdAttribute): string[] {
 export interface ErdEntity {
   name: string;
   description?: string;
+  /** Exists only through another entity (an order line, without its order). Chen draws it as a double rectangle. */
+  weak?: boolean;
   attributes?: ErdAttribute[];
 }
+
+/**
+ * How an ERDF is DRAWN — never what it holds. Crow's foot lists attributes
+ * inside the entity box; Chen draws each as an oval and each relationship as a
+ * diamond. The choice belongs to whoever is looking, so it is never written
+ * into the document: everything that reads an ERDF (tools, link check, code
+ * generation) reads the same file whichever way it is being viewed.
+ */
+export type ErdNotation = "crowsfoot" | "chen";
+
+export const ERD_NOTATIONS: readonly ErdNotation[] = ["crowsfoot", "chen"];
 
 /** Read left to right: one `from` has many `to` is `1:N`. */
 export type ErdCardinality = "1:1" | "1:N" | "N:1" | "N:M";
