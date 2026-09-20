@@ -1,0 +1,53 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "SMCraft / Stateloom",
+  "description": "Design, validate, generate and run hierarchical state machines and ERDs. One format (SMDF/ERDF) shared live by an engine, codegen, an MCP server, a CLI, a socket hub and a browser canvas.",
+  "excludeFolders": [
+    "archive",
+    "archived",
+    "old",
+    "docs/old",
+    "deprecated",
+    "legacy",
+    "previous",
+    "outdated",
+    "superseded",
+    "_snaps",
+    "py-smcraft-deprecated",
+    "stcevaluations",
+    "node_modules",
+    "dist",
+    "build",
+    "engine",
+    "web-dist",
+    ".next",
+    "coverage",
+    "__pycache__",
+    ".venv",
+    "docs/audits/issue-10-screenshots"
+  ],
+  "excludeFiles": [
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "poetry.lock",
+    "uv.lock",
+    ".DS_Store",
+    ".gitignore",
+    ".npmignore",
+    ".dockerignore",
+    "tsconfig.json",
+    "tsconfig.build.json",
+    "eslint.config.mjs",
+    "next.config.ts",
+    "postcss.config.mjs",
+    "vitest.config.ts"
+  ],
+  "rules": [
+    "The document on disk is the only truth. Every surface writes the file first, then emits its patch to the hub, so an edit made while no hub is running is still a real edit — and the hub itself never writes disk.",
+    "A board is live while it is open: an agent, a terminal and a browser edit one document together. Call get_notes and check presence before rearranging someone else's diagram. Notes are for the next human; engines ignore them.",
+    "STATELOOM_PROJECT_FILE must be absolute. Two processes resolving one relative path against two working directories is the exact defect this prevents, and the divergence is silent — nothing errors, the boards just differ.",
+    "Validation rule ids are not shared between implementations. The MCP server's V001 is not the engine's V001, and the TypeScript engine carries seven of the format's fourteen rules. Read the message, never the number.",
+    "Revise the rispec in the same commit as the code. rispecs/70-80 are read as current by agents that cannot check them against source, so a spec left behind does not go quiet — it becomes a confident wrong answer."
+  ]
+}
