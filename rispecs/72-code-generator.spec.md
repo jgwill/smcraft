@@ -4,9 +4,10 @@
 > References: CAISHEN Spec 62 (State Machine Code Generator)
 
 **Spec ID**: 72
-**Version**: 1.0
-**Source**: Extracted from `smcraft/py/smcraft/codegen.py`, `smcraft/ts/src/codegen.ts`, `smcraft/py/smcraft/cli.py`
-**Implementation**: Python (`py/smcraft/codegen.py`), TypeScript (`ts/src/codegen.ts`), CLI (`smcg`)
+**Version**: 1.1
+**Source**: Extracted from `py/stateloom/codegen.py`, `ts/src/codegen.ts`, `py/stateloom/cli.py`
+**Implementation**: Python (`py/stateloom/codegen.py`, PyPI `miadi-stateloom-engine`), TypeScript (`ts/src/codegen.ts`, npm `@miadi/stateloom-engine/codegen`), CLI `smcg` (ships with the Python package)
+**Revised**: 2026-09-20 — package rename; each engine generates its own language only; the three-implementation tension partially resolved
 
 ## Creative Intent
 
@@ -81,11 +82,15 @@ Transforms EnrichedModel into a single Python file containing:
            context._current_state.on_ev_start(context, param1)
    ```
 
-### TypeScript CodeGenerator
+### TypeScriptCodeGenerator
 Mirrors Python output structure adapted for TypeScript:
 - `enum States { ... }`
 - `class StateBase extends State { ... }`
 - `class MyMachineContext extends Context { ... }`
+
+Generated TypeScript imports the runtime by package name — `import { Context, State, TransitionHelper } from "@miadi/stateloom-engine/runtime"` — so the emitted file compiles wherever the package is installed.
+
+**One engine, one target.** `@miadi/stateloom-engine` exports `TypeScriptCodeGenerator` and nothing else from `./codegen`; `stateloom.codegen` exports `PythonCodeGenerator` and `generate_python`. Neither engine generates the other's language. Documentation that reads "Python + TypeScript code generators" is describing the pair of packages, not either one.
 
 ### CLI Interface (`smcg`)
 
@@ -100,19 +105,21 @@ Options:
   -v, --verbose          Show counts and details
 ```
 
-**Output**: `{output_dir}/{name}_fsm.{py|ts}`
+**Output**: `{output_dir}/{name}_fsm.py` — snake_cased from the machine name (`TestMachine` → `test_machine_fsm.py`).
+
+`-l` accepts `python` and nothing else today. A caller passing `typescript` gets an argparse error, which is what the web designer's TypeScript button currently hits (see the tension below).
 
 ## Structural Tensions
 
-### Three Codegen Implementations
-**Current Reality**: Python package (`codegen.py`), TypeScript package (`codegen.ts`), and MCP server (`server.ts` inline) each implement code generation independently
+### Three Codegen Implementations — **partially resolved**
+**Current Reality**: MCP `generate_code` and the web designer's `POST /api/generate` both shell out to the real `smcg` CLI. The MCP server keeps an inline `generatePythonFallback()` for hosts with no `smcg` on PATH, so the third implementation still exists — as a fallback now, not as the primary path
 **Desired Outcome**: Single authoritative codegen per language, invoked by all consumers
-**Resolution Path**: MCP `generate_code` → subprocess call to `smcg` CLI; web designer "Generate" → same path. The `codegen.py`/`codegen.ts` remain the single source of truth.
+**Resolution**: ✅ `smcg` is the primary path from every surface. ⬜ The fallback remains; a host without the Python package silently gets thinner output than one with it, and nothing in the returned text says which one produced it
 
 ### TypeScript CLI Target
-**Current Reality**: `smcg` CLI only supports `-l python`; TypeScript codegen exists in `ts/src/codegen.ts` but not wired to CLI
+**Current Reality**: `smcg` only accepts `-l python` (`cli.py`, `choices=["python"]`). `TypeScriptCodeGenerator` exists in `ts/src/codegen.ts` and is reachable programmatically, but no CLI reaches it — so the web designer's TypeScript generate path fails at the argparse boundary
 **Desired Outcome**: `smcg input.smdf.json -l typescript` produces TypeScript output
-**Resolution Path**: Add TypeScript target to CLI dispatch, importing TS codegen or reimplementing in Python
+**Resolution Path**: Either widen `smcg`'s choices and port the TS generator to Python, or give the TypeScript engine its own bin and have `/api/generate` and `generate_code` dispatch on language
 
 ### Parallel Region Code Generation
 **Current Reality**: `PythonCodeGenerator` ignores `StateDef.parallel` — no region contexts generated
@@ -123,19 +130,19 @@ Options:
 
 ### Scenario: End-to-End State Machine from Conversation
 **Desired Outcome**: LLM agent designs FSM via MCP tools, generates working Python code, user runs it
-**Current Reality**: MCP `generate_code` produces lightweight inline code missing actions, timers, nesting
+**Current Reality**: ~~MCP `generate_code` produces lightweight inline code~~ — it calls `smcg` and falls back to the inline generator only when the CLI is absent
 **Natural Progression**: MCP tool calls `smcg` subprocess → full codegen with all features → agent delivers production code
-**Resolution**: Agent-designed state machines generate the same quality code as CLI-designed ones
+**Resolution**: ✅ Agent-designed state machines generate the same code as CLI-designed ones, on any host where the Python engine is installed
 
 ### Scenario: Web Designer to Running Code
 **Desired Outcome**: User designs in web UI, clicks "Generate", gets downloadable Python file
-**Current Reality**: "Generate" button exports JSON definition, not executable code
-**Natural Progression**: Generate button → POST to backend API → `smcg` CLI → return generated code → CodePreview shows real Python
-**Resolution**: Visual design produces executable code in one click
+**Current Reality**: ~~"Generate" button exports JSON definition~~ — `POST /api/generate` writes a temp `.smdf.json`, runs `smcg` with `execFileSync` (no shell, sanitized name), reads `{snake}_fsm.py` back and returns it into `CodePreview`
+**Natural Progression**: landed for Python
+**Resolution**: ✅ for Python. ⬜ for TypeScript, which reaches `smcg -l typescript` and is rejected
 
 ## Dependencies
 
 - **Spec 70 (SMDF)**: Input format consumed by parser
 - **Spec 71 (Runtime)**: Generated code imports runtime classes
-- **Spec 73 (MCP Server)**: Should invoke this codegen, not reimplement
-- **Spec 74 (Web Designer)**: Generate button should invoke this codegen
+- **Spec 73 (MCP Server)**: `generate_code` invokes `smcg`, with an inline fallback
+- **Spec 74 (Web Designer)**: the Generate button invokes `smcg` through `POST /api/generate`

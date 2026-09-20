@@ -20,7 +20,12 @@ A loom is five agreements, and every one of them fails silently when broken:
 | The document directory is **writable by the process** | the first save fails, long after setup "succeeded" |
 | Every surface agrees which **vocabulary** a path is in | the agent hands its human a link to somebody else's board |
 
-That last one is the container's own contribution and the review found three of it:
+A document is a `.smdf.json` (a state machine) or a `.erdf.json` (the entity-relationship
+diagram of the data those machines act on — Spec 80). The container treats both the same
+way: same mount, same allowlist, same hub room keyed by the resolved path. Only the
+workspace the canvas opens differs, and it decides that from the extension.
+
+That last agreement is the container's own contribution and the review found three of it:
 `/data/x.smdf.json` and `/home/you/diagrams/x.smdf.json` are the same file under two names,
 and code that hands one across the boundary produces something that looks right and is not.
 `STATELOOM_CANVAS_URL`, `GET /api/docs` and the refusal wording in `resolveDocPath` are all

@@ -6,8 +6,9 @@
 > Implementation: `mcp/src/server.ts` (`generate_rispec` tool), `web/src/app/api/rispec/route.ts` (HTTP mirror), `web/src/components/Toolbar.tsx` (📜 RISE button)
 
 **Spec ID**: 76
-**Version**: 1.0
+**Version**: 1.1
 **Status**: **implemented** (minimum-viable generator; PDE enrichment wired)
+**Revised**: 2026-09-20 (v1.1) — env name and the ERD's absence from the generator stated; the rest holds as written
 
 ## Creative Intent
 
@@ -113,7 +114,9 @@ and returns `null` on any failure — the generator degrades gracefully to a PDE
 | HTTP API | `POST /api/rispec` in `web/src/app/api/rispec/route.ts` | `{ intent?: string }` body | `{ rispec: string, projectFile: string }` |
 | Web UI | `📜 RISE` button in `Toolbar.tsx` | — | Code preview panel shows rendered markdown |
 
-All three paths resolve the same file via `SMCRAFT_PROJECT_FILE` and produce byte-identical output for the same inputs.
+All three paths resolve the same file via `STATELOOM_PROJECT_FILE` (legacy twin `SMCRAFT_PROJECT_FILE`) and produce byte-identical output for the same inputs.
+
+**Machines only.** `generate_rispec` narrates a `.smdf.json`. An ERD (`.erdf.json`, Spec 80) has no rispec generator — the data document is not yet re-narratable, and an agent holding an active ERD should switch documents before asking for one.
 
 ## Structural Tension Chart
 
@@ -128,6 +131,7 @@ All three paths resolve the same file via `SMCRAFT_PROJECT_FILE` and produce byt
 
 - **Intent-aware pruning**: allow `intent` to scope which states/transitions are rendered (e.g. "focus on the fire-keeper path").
 - **Cross-STC rispecs**: when multiple SMDFs cohere into one STC (structural tension chart), render a combined rispec rather than per-file.
+- **ERD narration**: a `generate_rispec` that reads a `.erdf.json` — the entities, their keys and the machines their `stateOf` attributes name — so the data half of a design can also leave as prose.
 - **Round-trip**: parse a RISE rispec back into an SMDF scaffold (the reverse direction — design from narrative).
 - **Ceremonial linkage**: when `settings._source` references a ceremony (future field), pull the ceremony's opening/closing into the Exportation section.
 

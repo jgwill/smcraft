@@ -4,9 +4,10 @@
 > References: CAISHEN Spec 60 (State Machine Definition Format)
 
 **Spec ID**: 70
-**Version**: 1.0
-**Source**: Extracted from `smcraft/py/smcraft/model.py`, `smcraft/py/smcraft/parser.py`
-**Implementation**: Python (`py/smcraft/`), TypeScript (`ts/src/`), MCP (`mcp/src/server.ts`)
+**Version**: 1.1
+**Source**: Extracted from `py/stateloom/model.py`, `py/stateloom/parser.py`
+**Implementation**: Python (`py/stateloom/`, PyPI `miadi-stateloom-engine`), TypeScript (`ts/src/`, npm `@miadi/stateloom-engine`), MCP (`mcp/src/server.ts`)
+**Revised**: 2026-09-20 — package directories renamed (`py/smcraft/` → `py/stateloom/`); ERDF (Spec 80) named as the sibling document type
 
 ## Creative Intent
 
@@ -85,7 +86,16 @@ Groups events by their external interface (feeder). Each source generates a type
 
 ## Validation Rules
 
-| Rule | Description | Status |
+**Which validator you are holding matters.** The format specifies fourteen rules; the two
+engines do not carry the same subset. `✅ Implemented` below means the **Python** engine,
+which implements all fourteen. The TypeScript engine implements V001, V002, V003, V005,
+V006, V007 and V013 — so V004, V008, V009, V010, V011, V012 and V014 are found by `smcg`
+and not by `validate()` in JavaScript. The MCP server's `validate_definition` runs its own
+reference and uniqueness set whose **rule ids are not these**: its V001 is "no events
+defined", its V004 an unknown transition target, its V005 "root has no child state". Read
+the message, not the number.
+
+| Rule | Description | Status (Python) |
 |------|-------------|--------|
 | V001 | Exactly one root state | ✅ Implemented |
 | V002 | Unique state names across entire tree | ✅ Implemented |
@@ -119,7 +129,7 @@ The parser auto-detects format by file extension and content inspection.
 
 ### Scenario: Human Designs Composite Workflow
 **Desired Outcome**: User creates nested state machine with parallel regions in the web designer
-**Current Reality**: Web designer shows flat state view; data model supports hierarchy
+**Current Reality**: ~~Web designer shows flat state view~~ — drill-down landed (Spec 74). Double-click a composite state and the canvas shows only its children; a breadcrumb walks back up
 **Natural Progression**: User creates parent state, drills into it, adds child states with transitions, navigates back; SMDF captures full hierarchy
 **Resolution**: Hierarchical `.smdf.json` with composite and parallel states
 
@@ -127,5 +137,7 @@ The parser auto-detects format by file extension and content inspection.
 
 - **Spec 71 (Runtime)**: Consumes SMDF definitions for execution
 - **Spec 72 (Code Generator)**: Transforms SMDF into executable code
-- **Spec 73 (MCP Server)**: Manipulates SMDF in-memory via tools
+- **Spec 73 (MCP Server)**: Manipulates SMDF on disk via tools
 - **Spec 74 (Web Designer)**: Visual editing of SMDF structure
+- **Spec 77 (Real-Time Design Bridge)**: Carries SMDF as the document type in every patch envelope
+- **Spec 80 (ERDF Format)**: The sibling document type. A `.smdf.json` describes one behaviour; a `.erdf.json` describes the data every behaviour acts on. The link is by name — `settings.objects[].class` names an entity, a guard's `<instance>.<field>` names an attribute

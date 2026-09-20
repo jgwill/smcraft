@@ -7,8 +7,11 @@
 > Artifacts: `stcevaluations/65438273-888a-487d-855d-ede6e7a1ee6f/`, `docs/audits/issue-10-mcp-web-bridge-design.md`
 
 **Spec ID**: 75
-**Version**: 2.0
+**Version**: 2.1
 **Status**: § 1 and § 4 **implemented**; § 2 and § 3 still aspirational
+**Revised**: 2026-09-20 (v2.1) — Spec 77's socket.io hub now carries live sync; what this spec describes is the durable layer beneath it, still correct and still load-carrying when no hub is running
+
+> **Where this sits now.** Spec 77 supersedes § 1's *sync model* — granular patches over socket.io, not whole-file re-reads. It does not supersede the file. `PUT /api/file`, `GET /api/watch` and `BridgeProvider` still ship and still work with no hub at all; the hub owns no truth and writes no disk. Read this spec for the substrate, Spec 77 for what rides on it.
 
 ## Creative Intent
 
@@ -47,7 +50,7 @@ The agent, the WebUI, and the filesystem form a single coherent design surface. 
 ```
 
 **Contract:**
-- **One file, one truth.** Both surfaces resolve `SMCRAFT_PROJECT_FILE` (absolute path). No in-memory duplicate.
+- **One file, one truth.** Both surfaces resolve `STATELOOM_PROJECT_FILE` (legacy twin `SMCRAFT_PROJECT_FILE`; absolute path). No in-memory duplicate.
 - **MCP tools** call `readDef()` before mutation and `writeDef()` after — every handler is atomic against the file.
 - **Web API:**
   - `GET /api/file` → `{ path, content, mtime, exists }`
@@ -92,7 +95,9 @@ Persistence is no longer a feature layered *on top* of an in-memory store — it
 4. ⬜ `generate_to_file` with real `smcg` invocation and `output_dir`
 5. ⬜ `launch_designer` quality-of-life tool
 6. ⬜ Scaffold generation (`pyproject.toml` / `package.json` + entrypoint)
-7. ⬜ TypeScript codegen parity with Python (`smcg` is Python-only today)
+7. ⬜ TypeScript codegen parity with Python (`smcg` still accepts only `-l python`; the web's TypeScript button reaches an argparse refusal — Spec 72)
+8. ✅ Live granular sync over socket.io, presence, and a CLI on the same board (Spec 77)
+9. ✅ Document switching from either side — `set_project_file` on the agent's, `?doc=` on the designer's (Spec 73, Spec 74)
 
 ## Dependencies
 

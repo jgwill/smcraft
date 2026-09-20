@@ -2,8 +2,8 @@
 
 > Design, validate, generate and run hierarchical state machines. One declarative format (SMDF) is read by an engine, a code generator, an MCP server, a terminal CLI, a socket.io hub and a browser canvas — so an agent, a person at a shell and a person at a canvas can edit the same document while it is open, and each sees the others' edits arrive.
 
-**Engine (npm):** `@miadi/stateloom-engine` 0.4.4 — renamed from `smcraft`, which is deprecated on npm — parser, validator, runtime, SMDF interpreter, Python + TypeScript codegen
-**Engine (PyPI):** `miadi-stateloom-engine` 0.2.1 — the Python twin, CLI `smcg`
+**Engine (npm):** `@miadi/stateloom-engine` 0.4.4 — renamed from `smcraft`, which is deprecated on npm — parser, validator, runtime, SMDF interpreter, TypeScript codegen
+**Engine (PyPI):** `miadi-stateloom-engine` 0.2.1 — the Python twin, Python codegen, CLI `smcg`
 **Protocol:** `@miadi/stateloom-protocol` 0.1.8 — also carries the ERD format (types, validator, link check, layout)
 **Client:** `@miadi/stateloom-client` 0.1.2
 **Hub:** `@miadi/stateloom` 0.1.4 — bin `smcraft-bridge`
@@ -69,29 +69,33 @@ smcraft/
 ├── ts/                    # npm: @miadi/stateloom-engine 0.4.4  (was smcraft)
 │   └── src/               # model.ts, parser.ts, runtime.ts, codegen.ts, index.ts,
 │                          # machine.ts — the SMDF interpreter (no codegen)
-├── bridge-protocol/       # npm: @miadi/stateloom-protocol 0.1.5
+├── bridge-protocol/       # npm: @miadi/stateloom-protocol 0.1.8
 │   └── src/               # definition, ops (PatchOp), apply, diff, seq, events (EV),
-│                          # tree, autoLayout, edgeRoutes, edgeLabels, glyphs,
-│                          # exportName, env (envAlias), render/{mermaid,ascii}
+│                          # tree, autoLayout, edgeRoutes, edgeLabels, glyphs, notes,
+│                          # exportName, env (envAlias), render/{mermaid,ascii},
+│                          # erd/ — the ERDF format: types, validate, links, layout, edit
 ├── bridge-client/         # npm: @miadi/stateloom-client 0.1.2
 │   └── src/client.ts      # createBridgeClient — join/patch/full/presence
-├── bridge/                # npm: @miadi/stateloom 0.1.3 — bin smcraft-bridge
+├── bridge/                # npm: @miadi/stateloom 0.1.4 — bin smcraft-bridge
 │   └── src/               # hub.ts (startBridge), docio.ts, watcher.ts, bin.js
 ├── bridge-react/          # npm: @miadi/stateloom-react 0.1.6
 │   └── src/               # session.ts, useSmcraftBridge.ts, autoLayout.ts, viewport.ts
-├── bridge-canvas/         # npm: @miadi/stateloom-canvas 0.1.1
-│   └── src/               # StateMachineCanvas.tsx + styles.css — every colour a --slc-* var
+├── bridge-canvas/         # npm: @miadi/stateloom-canvas 0.1.4
+│   └── src/               # StateMachineCanvas.tsx, EntityRelationshipCanvas.tsx,
+│                          # drill.ts, theme.ts + styles.css — every colour a --slc-* var
 ├── cli/                   # npm: @miadi/stateloom-cli 0.1.3 — bin smcx
 │   └── src/               # index.ts, docio.ts, mutate.ts, commands/, render/
-├── mcp/                   # npm: @miadi/stateloom-mcp 0.2.3
-│   └── src/               # server.ts (15 tools, 1 resource, 1 prompt), projectSwitch.ts
-├── skills-cli/            # npm: @miadi/stateloom-skills 0.2.2 — bin stateloom
-├── skills/                # the eight skill sources the CLI installs
+├── mcp/                   # npm: @miadi/stateloom-mcp 0.2.6
+│   └── src/               # server.ts (17 state-machine tools, 1 resource, 1 prompt),
+│                          # erd.ts (10 ERD tools), projectSwitch.ts
+├── skills-cli/            # npm: @miadi/stateloom-skills 0.3.2 — bin stateloom
+├── skills/                # the ten skill sources the CLI installs
 ├── web/                   # source PRIVATE — the designer app (Next.js)
-├── web-dist/              # npm: @miadi/stateloom-web 0.1.3 — web/'s prebuilt standalone build
+├── web-dist/              # npm: @miadi/stateloom-web 0.1.9 — web/'s prebuilt standalone build
+├── docker/, Dockerfile    # jgwill/stateloom — the whole loom behind one port
 ├── scripts/live-loop.sh   # one absolute source of truth for the live loop
-├── examples/              # Example SMDF definitions
-├── rispecs/               # RISE specifications 70–79
+├── examples/              # Example SMDF and ERDF definitions
+├── rispecs/               # RISE specifications 70–80
 └── KINSHIP.md             # Lineage and relationships
 ```
 
@@ -576,7 +580,7 @@ Generates the TypeScript equivalent of the Python output: state enum, base state
 
 Spec 77 is the contract; this section is what shipped.
 
-### 5.1 `@miadi/stateloom-protocol` 0.1.5
+### 5.1 `@miadi/stateloom-protocol` 0.1.8
 
 Zero runtime dependencies. Everything else in the loom depends on it, and it depends on nothing — which is why the same layout, the same edge routing and the same file names appear on every surface without any of them importing each other.
 
@@ -639,6 +643,10 @@ export const EV = {
 
 **Environment:** `envAlias(suffix, env?)` reads `STATELOOM_${suffix}` first, falls back to `SMCRAFT_${suffix}`. `NEXT_PUBLIC_*` client reads cannot use it — Next.js inlines only literal accesses — so those keep an explicit `??` chain.
 
+**ERD (Spec 80):** the whole second document type lives here too — `erd/definition` (types), `validateErd` (E001–E005), `checkLinks` / `checkStateOf` / `guardFields` (L001–L004), `erdAutoLayout` / `erdEntitySize` / `ERD_BOX`, the Chen geometry (`ChenGeometry`, `ChenOval`), `renderMermaidEr`, and the pure edits `addEntity` … `removeRelationship` that the MCP tools and the ERD workspace both call. Same rule as the machines: the package computes, nobody else duplicates it.
+
+**Notes:** `collectNotes(def)` → `NoteEntry[]` for either document type, the diagram's own note first. Notes live in the document (`settings.notes`, `notes` on a shape) and are ignored by every engine, validator and generator — they are for the next person to open the board.
+
 ### 5.2 `@miadi/stateloom-client` 0.1.2
 
 ```typescript
@@ -647,7 +655,7 @@ import { createBridgeClient, type BridgeClient, type BridgeStatus } from "@miadi
 
 A framework-agnostic socket.io-client wrapper: join a room, send patches, send a full definition, receive both, track presence, and auto-resync when a sequence gap says this client missed something. No React, no DOM.
 
-### 5.3 `@miadi/stateloom` 0.1.3 — the hub
+### 5.3 `@miadi/stateloom` 0.1.4 — the hub
 
 ```bash
 npx -y @miadi/stateloom            # bin: smcraft-bridge
@@ -714,7 +722,7 @@ Every mutation is **durable-first**: persist to disk, then emit to the hub. The 
 
 `render` reads the durable `.smdf.json` straight off disk: no hub, no browser, no agent needed. It prints the absolute path it wrote.
 
-### 5.6 `@miadi/stateloom-canvas` 0.1.1 — the board as a component
+### 5.6 `@miadi/stateloom-canvas` 0.1.4 — the boards as components
 
 ```typescript
 import { StateMachineCanvas } from "@miadi/stateloom-canvas";
@@ -730,7 +738,7 @@ lets the designer and forgewright render the same board from different state. Ev
 Peer dependency `react ^19`. Depends on `stateloom-protocol` for layout, edge routing and label
 placement, so a canvas and a `smcx render` of the same document agree on where the boxes are.
 
-### 5.7 `@miadi/stateloom-mcp` 0.2.3 — see §6
+### 5.7 `@miadi/stateloom-mcp` 0.2.6 — see §6
 
 The MCP server is a bridge client like any other. It depends on `stateloom-cli` (for the render path), `stateloom-client` and `stateloom-protocol`.
 
@@ -759,7 +767,7 @@ The MCP server is a bridge client like any other. It depends on `stateloom-cli` 
 
 The package ships two bins: `stateloom-mcp` and `smcraft-mcp`. The second is the pre-rename name, kept so an existing registration does not break.
 
-### The 15 tools
+### The 17 state-machine tools
 
 **Build**
 
@@ -1123,9 +1131,9 @@ Next.js 16 (App Router), React 19 with the React Compiler, Zustand 5, SVG canvas
 
 ### Components
 
-**`Canvas.tsx`** — the SVG rendering surface. Flattens the hierarchy with `collectAllStates(definition.state)`. States are rounded rectangles with kind indicators (dashed for final, badges for entry/exit actions); transitions are Bézier curves routed through assigned ports so two edges between the same pair each get their own door. Draw mode: click source → click target → event picker. Drag-to-move with position persistence. Right-click context menu. Validation errors as red borders and a ⚠ icon. Keyboard: Delete, Ctrl+Z / Ctrl+Y, Escape.
+**`Canvas.tsx`** — a binding, not an implementation. The board itself is `<StateMachineCanvas>` from `@miadi/stateloom-canvas`; this file says which store field answers which prop and nothing else. What the board does: states as rounded rectangles with kind indicators (dashed for final, badges for entry/exit actions); transitions as Bézier curves routed through assigned ports so two edges between the same pair each get their own door; composite drill-down; draw mode (click source → click target → event picker); drag-to-move with position persistence; held-press / right-click context menu; validation errors as red borders and a ⚠ icon; keyboard Delete, Ctrl+Z / Ctrl+Y, Escape. It moved out because forgewright wanted the same board and could not have it while the board and the store were one object.
 
-**`Toolbar.tsx`** — Open / Save / Export with a format picker, Select ↔ Draw mode toggle, +State, Delete, Validate, Generate, Undo, Redo, ⤢ Arrange (`autoLayout`).
+**`Toolbar.tsx`** — Open / Save / 📥 Export with a format picker (`png`, `jpeg`, `svg`, `mermaid`, `markdown`), Select ↔ Draw mode toggle, +State, Delete, Validate, Generate, 📜 RISE, Undo, Redo, ⤢ Arrange (`autoLayout`).
 
 **`PropertiesPanel.tsx`** — the selected state or transition: name, kind, description, entry/exit action list, and for transitions the event, target, condition and description. **`EventsPanel.tsx`** — events with their parameters. **`SettingsPanel.tsx`** — namespace, name, asynchronous toggle, object references. **`ValidationPanel.tsx`** — rule ids and messages, click-to-select the errored state. **`CodePreview.tsx`** — generated code with a Python/TypeScript selector and copy-to-clipboard.
 
@@ -1133,7 +1141,7 @@ Next.js 16 (App Router), React 19 with the React Compiler, Zustand 5, SVG canvas
 A document ending in `.erdf.json` opens a different workspace, decided before either designer mounts (`?doc=`, or the serving process's default document). It shares what is underneath — the file API, the hub room keyed by the resolved path, the canvas package — and none of the store: an ERD has no state tree, no events and no PatchOps. Every edit is written to disk and then pushed whole, because the agent's MCP tools read the file before each of their own edits. The header is one row at every width with a ▤ / ◇ notation switch; zoom, fit and a padlock float on the board (locked, a drag on a shape pans instead of moving it — the default on a touch screen); status is a line over the board's corner. On a phone the panel is a bottom sheet behind a four-tab dock (Entities, Relations, Notes, Issues) whose handle drags: down to close, up to grow, a tap to toggle. "Check links" runs L001–L004 against every machine beside the document; an attribute with `stateOf` shows a ◉ that opens its machine. Both designers keep notes on the diagram and on each shape.
 
 ### Store
-A Zustand store holds the definition, state positions, selection, undo/redo history, validation errors, canvas mode and the generated-code cache. Granular actions map one-to-one onto the PatchOp vocabulary, which is what lets a local edit and a remote patch take the same path into the document.
+A Zustand store holds the definition, layout (positions + viewport), `docPath`, selection, undo/redo history, validation errors, canvas mode, the drill-down breadcrumb (`navigationPath` / `currentParent`), the generated-code cache, and the two live fields — `activeStates` from a running machine and `presence` from the hub. Granular actions map one-to-one onto the PatchOp vocabulary, which is what lets a local edit and a remote patch take the same path into the document. Hand-dragged positions are remembered per document in `localStorage` (`lib/layoutMemory.ts`), and only where they deviate from what `autoLayout` derives — so ⤢ Arrange writes nothing and an improved layout algorithm still reaches a returning user.
 
 ---
 

@@ -5,8 +5,9 @@
 > Consumers: `web/` (Next.js designer), `miadisabelle/forgewright` (runtime platform, `smcraft ^0.3.0`)
 
 **Spec ID**: 77
-**Version**: 1.0
-**Status**: § design landed; implementation in progress on branch `12-realtime-design-bridge`. Extends Spec 75 without disturbing it.
+**Version**: 1.1
+**Status**: **landed.** All nine workstreams shipped and published — `@miadi/stateloom-protocol`, `-client`, the hub, `-react`, `-cli`, the MCP's bridge client, the web provider and canvas, forgewright's reuse, and the full-loop integration. Extends Spec 75 without disturbing it.
+**Revised**: 2026-09-20 (v1.1) — status corrected from in-progress to landed; env vars given their `STATELOOM_*` primary names; the board named as the package it became.
 
 ## Creative Intent
 
@@ -173,4 +174,6 @@ The node blooms onto the browser canvas the instant the CLI (or agent) emits it;
 - **`smcraft ^0.3.0` runtime** — the `Machine` interpreter forgewright drives to produce `runtime.enter/exit`.
 - **socket.io / socket.io-client / chokidar / commander** — new runtime deps, isolated to the packages that need them.
 
-**Env vars:** `SMCRAFT_BRIDGE_URL`, `SMCRAFT_BRIDGE_PORT` (4599), `SMCRAFT_BRIDGE_HOST` (127.0.0.1), `NEXT_PUBLIC_SMCRAFT_BRIDGE_URL`, `SMCRAFT_BRIDGE_TOKEN` (optional), `SMCRAFT_PROJECT_FILE` (unchanged; durable truth + `docId` source).
+**Env vars:** `STATELOOM_BRIDGE_URL`, `STATELOOM_BRIDGE_PORT` (4599), `STATELOOM_BRIDGE_HOST` (127.0.0.1), `NEXT_PUBLIC_STATELOOM_BRIDGE_URL`, `STATELOOM_BRIDGE_TOKEN` (optional), `STATELOOM_PROJECT_FILE` (durable truth + `docId` source). Every one has a legacy `SMCRAFT_*` twin read as fallback (`envAlias`), so registrations written before the rename keep working. The browser prefers `GET /api/config` over the build-time `NEXT_PUBLIC_*` value, which is what lets a prebuilt designer be published (Spec 74).
+
+**Since landing:** the web canvas moved out to `@miadi/stateloom-canvas`, so the animation contract in this spec is now the package's and forgewright consumes the board itself rather than re-implementing it. The hub also serves `.erdf.json` rooms (Spec 80) — same room key, same presence, whole-document pushes instead of PatchOps, because an ERD has no op vocabulary.

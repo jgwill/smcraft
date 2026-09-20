@@ -14,8 +14,8 @@ Ten published npm packages, plus the Python engine on PyPI. The designer source 
 
 | Install | What it is |
 |---|---|
-| `npm i @miadi/stateloom-engine` (0.4.4) | The engine. SMDF parser, validator V001–V014, hierarchical runtime, SMDF interpreter, Python + TypeScript code generators. |
-| `pip install miadi-stateloom-engine` (0.2.1) | The Python twin of the engine, plus the `smcg` generator CLI. |
+| `npm i @miadi/stateloom-engine` (0.4.4) | The engine. SMDF parser, validator (a subset of V001–V014 — see below), hierarchical runtime, the `Machine` SMDF interpreter, TypeScript code generator. |
+| `pip install miadi-stateloom-engine` (0.2.1) | The Python twin of the engine: the full validator V001–V014, the Python code generator, and the `smcg` CLI. |
 | `npm i @miadi/stateloom-protocol` (0.1.8) | Zero-runtime-dependency foundation: patch ops, diff/apply, wire envelopes, layout, edge routing, viewport math, ASCII/Mermaid render, export naming, env aliasing. |
 | `npm i @miadi/stateloom-client` (0.1.2) | Framework-agnostic socket.io-client wrapper: join / patch / full / presence with auto-resync. |
 | `npm i @miadi/stateloom` (0.1.4) | The socket.io hub. Bin `smcraft-bridge`. |
@@ -49,6 +49,8 @@ npm subpath exports:
 - `@miadi/stateloom-engine/codegen` — `TypeScriptCodeGenerator`
 
 Python mirrors this as `stateloom.model`, `stateloom.parser`, `stateloom.runtime`, `stateloom.codegen`, `stateloom.cli`. `ObserverLogger` (Python `logging`) exists on the Python side only.
+
+**Each engine generates its own language.** The npm package exports `TypeScriptCodeGenerator`; the PyPI package exports `PythonCodeGenerator` and carries `smcg`, which accepts `-l python` and nothing else. "Python and TypeScript codegen" describes the pair of packages, never either one — and it is why the web designer's TypeScript generate button, which shells out to `smcg`, does not work yet (Spec 72).
 
 ## SMDF — State Machine Definition Format
 

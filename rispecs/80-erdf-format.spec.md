@@ -5,7 +5,7 @@
 
 **Spec ID**: 80
 **Version**: 1.0
-**Status**: all five slices landed (protocol 0.1.6, hub 0.1.4, canvas 0.1.2, mcp 0.2.4, web 0.1.6). Chen notation as a second drawing, `weak` entities and `update_entity` follow in protocol 0.1.7, canvas 0.1.3, mcp 0.2.5, web 0.1.7. The phone-first designer layout is web 0.1.8 Web 0.1.9 adds the quiet Issues tab, the dragging sheet handle, the shape lock and notes; notes are protocol 0.1.8, canvas 0.1.4, mcp 0.2.6; the `stateloom-erd` skill is skills 0.3.2.
+**Status**: all five slices landed (protocol 0.1.6, hub 0.1.4, canvas 0.1.2, mcp 0.2.4, web 0.1.6). Chen notation as a second drawing, `weak` entities and `update_entity` follow in protocol 0.1.7, canvas 0.1.3, mcp 0.2.5, web 0.1.7. The phone-first designer layout is web 0.1.8. Web 0.1.9 adds the quiet Issues tab, the dragging sheet handle, the shape lock and notes; notes are protocol 0.1.8, canvas 0.1.4, mcp 0.2.6; the `stateloom-erd` skill is skills 0.3.2.
 **Implementation**: TypeScript — `bridge-protocol/src/erd/`, `mcp/src/erd.ts`, `bridge-canvas/src/EntityRelationshipCanvas.tsx`, `web/src/components/erd/`
 
 ## Creative Intent

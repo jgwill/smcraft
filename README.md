@@ -11,8 +11,8 @@ and a person at a canvas can all edit the same document while it is open.
 
 | Package | Install | Directory | What it is |
 |---|---|---|---|
-| [`@miadi/stateloom-engine`](https://www.npmjs.com/package/@miadi/stateloom-engine) | `npm i @miadi/stateloom-engine` | `ts/` | The engine: SMDF parser, validator V001–V014, hierarchical runtime, SMDF interpreter, TypeScript + Python codegen. Renamed from `smcraft`, which is deprecated on npm |
-| [`miadi-stateloom-engine`](https://pypi.org/project/miadi-stateloom-engine/) | `pip install miadi-stateloom-engine` | `py/` | The Python twin, plus the `smcg` generator CLI |
+| [`@miadi/stateloom-engine`](https://www.npmjs.com/package/@miadi/stateloom-engine) | `npm i @miadi/stateloom-engine` | `ts/` | The engine: SMDF parser, validator, hierarchical runtime, the `Machine` SMDF interpreter, TypeScript codegen. Renamed from `smcraft`, which is deprecated on npm |
+| [`miadi-stateloom-engine`](https://pypi.org/project/miadi-stateloom-engine/) | `pip install miadi-stateloom-engine` | `py/` | The Python twin: the full validator V001–V014, Python codegen, and the `smcg` CLI |
 | [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | `npm i @miadi/stateloom-protocol` | `bridge-protocol/` | Zero-dependency foundation: patch ops, diff/apply, envelopes, layout, edge routing, ASCII/Mermaid render, export naming — and the ERD format: types, validator, link check, layout |
 | [`@miadi/stateloom-client`](https://www.npmjs.com/package/@miadi/stateloom-client) | `npm i @miadi/stateloom-client` | `bridge-client/` | Framework-agnostic socket.io-client wrapper: join / patch / full / presence with auto-resync |
 | [`@miadi/stateloom`](https://www.npmjs.com/package/@miadi/stateloom) | `npm i @miadi/stateloom` | `bridge/` | The socket.io hub. Bin `smcraft-bridge` |
@@ -104,9 +104,14 @@ npx -y @miadi/stateloom-skills skills list
 npx -y @miadi/stateloom-skills skills install --all
 ```
 
-Drops a ready-to-use `SKILL.md` into `.claude/skills/` for each of
-`stateloom-setup`, `stateloom-design`, `stateloom-live-loop`, `stateloom-render`,
-`stateloom-codegen`, `stateloom-rispec`. Sources live in [`skills/`](./skills/).
+Drops a ready-to-use `SKILL.md` into `.claude/skills/`. Ten skills, sources in
+[`skills/`](./skills/): `stateloom-setup`, `stateloom-docker`, `stateloom-design`,
+`stateloom-erd`, `stateloom-live-loop`, `stateloom-render`, `stateloom-codegen`,
+`stateloom-rispec`, `stateloom-service`, `stateloom-tailnet`.
+
+The last two are the deployment pair — `stateloom-service` runs the hub and canvas as
+supervised systemd user units over the published packages, and `stateloom-tailnet`
+publishes that pair on a private Tailscale tailnet.
 
 ### Python engine
 
@@ -189,16 +194,20 @@ Full specs in [`rispecs/`](./rispecs/):
 | [70](./rispecs/70-smdf-format.spec.md) | SMDF format — schema, state types, validation V001–V014 |
 | [71](./rispecs/71-runtime-engine.spec.md) | Runtime engine — Context, State, TransitionHelper, observers |
 | [72](./rispecs/72-code-generator.spec.md) | Code generator — SMCG pipeline, Python + TS targets |
-| [73](./rispecs/73-mcp-server.spec.md) | MCP server — tool surface, design session protocol, "Path Power" |
-| [74](./rispecs/74-web-designer.spec.md) | Web designer — canvas, store, components |
+| [73](./rispecs/73-mcp-server.spec.md) | MCP server — 17 + 10 tools, transports, design session protocol, "Path Power" |
+| [74](./rispecs/74-web-designer.spec.md) | Web designer — the canvas package, store, document switching, the ERD workspace |
 | [75](./rispecs/75-agent-designer-bridge.spec.md) | Agent ↔ designer bridge — live sync, scaffold pipeline |
 | [76](./rispecs/76-rise-rispec-generator.spec.md) | RISE rispec generator — SMDF as exportation terminus |
 | [77](./rispecs/77-realtime-design-bridge.spec.md) | Real-time design bridge — granular bidirectional sync |
 | [78](./rispecs/78-forgewright-episode-rendering.plan.md) | Forgewright episode rendering (plan) |
 | [79](./rispecs/79-layout-persistence.plan.md) | Layout persistence for the live canvas (plan) |
+| [80](./rispecs/80-erdf-format.spec.md) | ERDF format — the entity-relationship sibling, rules E001–E005, link rules L001–L004 |
 
 Specs 60-63 in the upstream `caishen` repo define the C# StateForge contracts this
 reimplements.
+
+Each spec header carries a **Revised** line. Specs 70–77 were last revised 2026-09-20 to
+match what the packages above actually ship.
 
 ## MCP Document Tools & Episode Diagrams
 
