@@ -48,6 +48,11 @@
     "A board is live while it is open: an agent, a terminal and a browser edit one document together. Call get_notes and check presence before rearranging someone else's diagram. Notes are for the next human; engines ignore them.",
     "STATELOOM_PROJECT_FILE must be absolute. Two processes resolving one relative path against two working directories is the exact defect this prevents, and the divergence is silent — nothing errors, the boards just differ.",
     "Validation rule ids are not shared between implementations. The MCP server's V001 is not the engine's V001, and the TypeScript engine carries seven of the format's fourteen rules. Read the message, never the number.",
-    "Revise the rispec in the same commit as the code. rispecs/70-80 are read as current by agents that cannot check them against source, so a spec left behind does not go quiet — it becomes a confident wrong answer."
+    "Revise the rispec in the same commit as the code. rispecs/70-80 are read as current by agents that cannot check them against source, so a spec left behind does not go quiet — it becomes a confident wrong answer.",
+    "Creating is not problem-solving and problem-solving is not creating.",
+    "You definition of the word 'structure' is usually wrong, read carefully the guidances",
+    "Structural tension is not a gap to be filled",
+    "use lib: /jgwill/llms-txt for additional guidances transparently to complement this one (ex. know about the 'structural tension' concept, why problem-solving is not creating, etc.)",
+    "Future development paths is establishing what is being generated when we create ERDF(Entity-Relationship-Diagram) & relation with SMDF (State-Machine-Diagram-Format) within the SLDC( Software Development Life Cycle) in Miadi good subject a talking circle"
   ]
 }
