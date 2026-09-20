@@ -17,6 +17,15 @@ import {
 import { validateErd } from "../erd/validate.js";
 import { checkLinks, checkStateOf, guardFields } from "../erd/links.js";
 import { renderMermaidEr } from "../render/mermaidEr.js";
+import {
+  addAttribute,
+  addEntity,
+  addRelationship,
+  removeAttribute,
+  removeEntity,
+  removeRelationship,
+  summarizeErd,
+} from "../erd/edit.js";
 import type { StateMachineDefinition } from "../definition.js";
 
 const LIBRARY: EntityRelationshipDefinition = {
@@ -193,6 +202,43 @@ test("L002 — guards inside parallel regions are read too", () => {
 test("L004 — stateOf names a machine that is not among those checked", () => {
   assert.deepEqual(checkStateOf(LIBRARY, ["LoanLifecycle"]), []);
   assert.deepEqual(rules(checkStateOf(LIBRARY, ["Other"])), ["L004"]);
+});
+
+test("edits return a new definition and leave the input alone", () => {
+  const start = emptyErd("demo", "Shop");
+  let def = addEntity(start, { name: "Customer" });
+  def = addEntity(def, { name: "Order", description: "One purchase" });
+  def = addAttribute(def, "Order", { name: "order_id", type: "int", key: "pk", nullable: undefined });
+  def = addAttribute(def, "Order", { name: "customer_id", type: "int", references: "Customer" });
+  def = addRelationship(def, { from: "Customer", to: "Order", cardinality: "1:N", label: "places" });
+  assert.deepEqual(start.entities, [], "the input is untouched");
+  assert.deepEqual(validateErd(def), []);
+  assert.ok(!("nullable" in def.entities[1].attributes![0]), "undefined never reaches the JSON");
+  assert.equal(summarizeErd(def), "Customer — 0 attribute(s)\nOrder — 2 attribute(s)\nCustomer 1:N Order : places");
+
+  def = removeAttribute(def, "Order", "customer_id");
+  assert.equal(def.entities[1].attributes!.length, 1);
+  def = removeEntity(def, "Customer");
+  assert.deepEqual(def.relationships, [], "removing an entity removes the relationships that touch it");
+});
+
+test("edits that cannot be made say why", () => {
+  const def = addEntity(emptyErd("demo", "Shop"), { name: "Customer" });
+  assert.throws(() => addEntity(def, { name: "Customer" }), /already exists/);
+  assert.throws(() => addEntity(def, { name: " " }), /needs a name/);
+  assert.throws(() => addAttribute(def, "Ghost", { name: "x", type: "int" }), /Entity 'Ghost' not found\. Entities: Customer\./);
+  assert.throws(() => addRelationship(def, { from: "Customer", to: "Ghost", cardinality: "1:N" }), /'Ghost' not found/);
+  assert.throws(() => addRelationship(def, { from: "Customer", to: "Customer", cardinality: "lots" as never }), /is not one of/);
+  assert.throws(() => removeAttribute(def, "Customer", "nope"), /not found/);
+  assert.throws(() => removeRelationship(def, "Customer", "Customer"), /No relationship/);
+});
+
+test("removeRelationship takes every match, or only the labelled one", () => {
+  let def = addEntity(addEntity(emptyErd("demo", "G"), { name: "A" }), { name: "B" });
+  def = addRelationship(def, { from: "A", to: "B", cardinality: "1:N", label: "owns" });
+  def = addRelationship(def, { from: "A", to: "B", cardinality: "N:M", label: "likes" });
+  assert.equal(removeRelationship(def, "A", "B", "likes").relationships.length, 1);
+  assert.equal(removeRelationship(def, "A", "B").relationships.length, 0);
 });
 
 test("small helpers", () => {

@@ -18,8 +18,15 @@
  *   - load_definition: Load a definition from JSON
  *   - list_states: List all states in the current definition
  *   - list_events: List all events in the current definition
- *   - set_project_file: Choose which .smdf.json path is the active document
+ *   - set_project_file: Choose which document is active (.smdf.json or .erdf.json)
  *   - get_project_file: Report the active document path and bridge status
+ *
+ * ERD tools (Spec 80, ./erd.ts) — the active document's type is its extension:
+ *   - create_erd, add_entity, add_attribute, add_relationship
+ *   - remove_entity, remove_attribute, remove_relationship
+ *   - validate_erd, check_links
+ *   get_definition, load_definition and render_diagram answer for an ERD when
+ *   the active document is one.
  *
  * Resources:
  *   - smcraft://definition — Current state machine definition
@@ -48,9 +55,23 @@ import { basename, dirname, join, resolve } from "path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "os";
 import { createBridgeClient, type BridgeClient } from "@miadi/stateloom-client";
-import { envAlias, type PatchOp, type StateMachineDefinition } from "@miadi/stateloom-protocol";
+import {
+  envAlias,
+  isErdfPath,
+  type EntityRelationshipDefinition,
+  type PatchOp,
+  type StateMachineDefinition,
+} from "@miadi/stateloom-protocol";
 import { renderDiagramToFile, defaultOutputPath } from "@miadi/stateloom-cli/render";
 import { resolveProjectSwitch } from "./projectSwitch.js";
+import {
+  registerErdTools,
+  erdSummary,
+  erdGetDefinition,
+  erdLoadDefinition,
+  erdRender,
+  type ErdHost,
+} from "./erd.js";
 
 // STATELOOM_* read first, SMCRAFT_* legacy twin honored — the live MCP
 // registration bakes SMCRAFT_PROJECT_FILE and must keep working (2026-07-27
@@ -121,6 +142,8 @@ let PROJECT_FILE = resolve(
 );
 
 function readDef(): Definition | null {
+  // An ERD is not a machine; the state-machine tools see no definition there.
+  if (isErdfPath(PROJECT_FILE)) return null;
   if (!existsSync(PROJECT_FILE)) return null;
   try {
     const raw = readFileSync(PROJECT_FILE, "utf8");
@@ -133,6 +156,13 @@ function readDef(): Definition | null {
 }
 
 function writeDef(def: Definition): void {
+  // Never write a machine over an ERD: create_state_machine and load_definition
+  // write without reading first, so this is the one place that can refuse.
+  if (isErdfPath(PROJECT_FILE)) {
+    throw new Error(
+      `The active document ${PROJECT_FILE} is an ERD. Use the ERD tools on it, or set_project_file to a .smdf.json document for a state machine.`,
+    );
+  }
   writeFileSync(PROJECT_FILE, JSON.stringify({ stateMachine: def }, null, 2), "utf8");
 }
 
@@ -257,6 +287,22 @@ function bridgeEmitFull(def: Definition): void {
     /* best-effort */
   }
 }
+
+// What ./erd.ts needs of this server's state. Called at tool time, after the
+// guards further down this file are initialised.
+const erdHost: ErdHost = {
+  projectFile: () => PROJECT_FILE,
+  switchTo: (path) => {
+    const denial = denyProjectSwitch(path);
+    if (denial) return denial;
+    PROJECT_FILE = path;
+    bindBridge(PROJECT_FILE);
+    joinBridge();
+    return undefined;
+  },
+  emitFull: (def: EntityRelationshipDefinition) => bridgeEmitFull(def as unknown as Definition),
+  outsideRoot: (path) => outsideRoot(path),
+};
 
 function createEmpty(namespace: string, name: string): Definition {
   return {
@@ -925,9 +971,10 @@ server.tool(
 
 server.tool(
   "get_definition",
-  "Get the current state machine definition as JSON",
+  "Get the current definition as JSON — the state machine, or the ERD when the active document is a .erdf.json",
   {},
   async () => {
+    if (isErdfPath(PROJECT_FILE)) return erdGetDefinition(erdHost);
     const def = readDef();
     if (!def)
       return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
@@ -939,9 +986,10 @@ server.tool(
 
 server.tool(
   "load_definition",
-  "Load a state machine definition from JSON",
+  "Load a definition from JSON into the active document — a state machine, or an ERD when the active document is a .erdf.json",
   { json: z.string() },
   async ({ json }) => {
+    if (isErdfPath(PROJECT_FILE)) return erdLoadDefinition(erdHost, json);
     try {
       const parsed = JSON.parse(json);
       const def: Definition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
@@ -1006,7 +1054,7 @@ server.tool(
 
 server.tool(
   "set_project_file",
-  "Choose the active document the loom weaves — two modalities. STANDALONE: any .smdf.json path. RELATIONAL: a chronicle address `miadi-chronicle://<episode>/<diagram>` resolving over $MIADI_CHRONICLE_ROOT to <episode-dir>/diagrams/<diagram>.smdf.json — an ambiguous episode number is a hard error naming the candidates. Disk persistence AND the live bridge room both re-point. A missing file is legitimate — naming it is how an episode's first diagram is created.",
+  "Choose the active document the loom weaves — two modalities. STANDALONE: any .smdf.json path (a state machine) or .erdf.json path (an ERD — the ERD tools act on it). RELATIONAL: a chronicle address `miadi-chronicle://<episode>/<diagram>` resolving over $MIADI_CHRONICLE_ROOT to <episode-dir>/diagrams/<diagram>.smdf.json — an ambiguous episode number is a hard error naming the candidates. Disk persistence AND the live bridge room both re-point. A missing file is legitimate — naming it is how an episode's first diagram is created.",
   { path: z.string() },
   async ({ path }) => {
     try {
@@ -1019,11 +1067,13 @@ server.tool(
         joinBridge();
       }
       const def = r.exists ? readDef() : null;
-      const summary = def
-        ? `existing machine '${def.settings.name}' (${collectStateNames(def.state).length} states, ${collectEventIds(def).length} events)`
-        : r.exists
-          ? "file exists but is not a readable definition"
-          : "no file yet — create_state_machine or load_definition will write it";
+      const summary = isErdfPath(PROJECT_FILE)
+        ? erdSummary(PROJECT_FILE)
+        : def
+          ? `existing machine '${def.settings.name}' (${collectStateNames(def.state).length} states, ${collectEventIds(def).length} events)`
+          : r.exists
+            ? "file exists but is not a readable definition"
+            : "no file yet — create_state_machine or load_definition will write it";
       const bridgeNote = BRIDGE_URL
         ? r.unchanged
           ? `bridge unchanged (${bridge?.status ?? "not configured"})`
@@ -1052,11 +1102,13 @@ server.tool(
   {},
   async () => {
     const def = readDef();
-    const summary = def
-      ? `machine '${def.settings.name}' (${collectStateNames(def.state).length} states, ${collectEventIds(def).length} events)`
-      : existsSync(PROJECT_FILE)
-        ? "file exists but is not a readable definition"
-        : "file does not exist yet";
+    const summary = isErdfPath(PROJECT_FILE)
+      ? erdSummary(PROJECT_FILE)
+      : def
+        ? `machine '${def.settings.name}' (${collectStateNames(def.state).length} states, ${collectEventIds(def).length} events)`
+        : existsSync(PROJECT_FILE)
+          ? "file exists but is not a readable definition"
+          : "file does not exist yet";
     const bridgeNote = BRIDGE_URL
       ? `bridge: ${bridge?.status ?? "not initialized"} → ${BRIDGE_URL}`
       : "bridge not configured (STATELOOM_BRIDGE_URL unset)";
@@ -1118,6 +1170,7 @@ server.tool(
     open: z.boolean().optional(),
   },
   async ({ format, path, scale, theme, stamp, open }) => {
+    if (isErdfPath(PROJECT_FILE)) return erdRender(erdHost, { format, path, stamp });
     const def = readDef();
     if (!def)
       return {
@@ -1187,6 +1240,8 @@ server.tool(
     }
   }
 );
+
+registerErdTools(server, erdHost);
 
 // Resources
 

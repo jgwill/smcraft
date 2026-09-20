@@ -5,8 +5,8 @@
 
 **Spec ID**: 80
 **Version**: 1.0
-**Status**: format, validator, Mermaid render and link check landed in `bridge-protocol/src/erd/`. MCP tools and canvas follow (see Slices).
-**Implementation**: TypeScript (`bridge-protocol/src/erd/`)
+**Status**: format, validator, edits, Mermaid render and link check landed in `bridge-protocol/src/erd/`; MCP tools landed in `mcp/src/erd.ts`. The canvas follows (see Slices).
+**Implementation**: TypeScript (`bridge-protocol/src/erd/`, `mcp/src/erd.ts`)
 
 ## Creative Intent
 
@@ -113,9 +113,23 @@ Link rules, reported by `checkLinks`:
 |---|---|---|
 | S1 | This spec | landed |
 | S2 | `bridge-protocol/src/erd/` — types, validator, Mermaid render, examples | landed |
-| S3 | MCP tools (`create_erd`, `add_entity`, `add_attribute`, `add_relationship`, `remove_entity`, `validate_erd`), document type by extension | pending |
+| S3 | MCP tools in `mcp/src/erd.ts`, document type by extension | landed |
 | S4 | `<EntityRelationshipCanvas>` in `bridge-canvas`, live over the hub's `full` envelope | pending |
-| S5 | `checkLinks` in the protocol (landed), `check_links` MCP tool | pending |
+| S5 | `checkLinks` in the protocol, `check_links` MCP tool | landed |
+
+## MCP Tools
+
+The loom weaves one active document, and its type is its extension. `set_project_file` takes either; the state-machine tools refuse to write over an ERD.
+
+**Build** — `create_erd(namespace, name, description?, path?, overwrite?)` (also makes it the active document), `add_entity(name, description?)`, `add_attribute(entity, name, type, key?, references?, nullable?, stateOf?, description?)`, `add_relationship(from, to, cardinality, label?, description?)`
+
+**Correct** — `remove_entity(name)` (takes its relationships with it), `remove_attribute(entity, name)`, `remove_relationship(from, to, label?)`
+
+**Check** — `validate_erd()` (E001–E005), `check_links(erd_path?, smdf_paths?)` (L001–L004). With no arguments from an ERD, every `.smdf.json` beside it is checked.
+
+**By extension** — `get_definition`, `load_definition` and `render_diagram` answer for the ERD when the active document is one. An ERD renders as `mermaid` only, to `<name>.erd.mmd`.
+
+Every edit is written to disk, then mirrored to the bridge room as a whole document. The edits themselves are the pure functions in `bridge-protocol/src/erd/edit.ts`, which the canvas uses too.
 
 ## Creative Advancement Scenarios
 
