@@ -34,6 +34,7 @@
     {
       "name": "Copy",
       "description": "One physical copy of a book",
+      "weak": true,
       "attributes": [
         { "name": "copy_id", "type": "int", "key": "pk" },
         { "name": "book_id", "type": "int", "references": "Book.book_id" },

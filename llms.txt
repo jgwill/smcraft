@@ -16,15 +16,15 @@ Ten published npm packages, plus the Python engine on PyPI. The designer source 
 |---|---|
 | `npm i @miadi/stateloom-engine` (0.4.4) | The engine. SMDF parser, validator V001–V014, hierarchical runtime, SMDF interpreter, Python + TypeScript code generators. |
 | `pip install miadi-stateloom-engine` (0.2.1) | The Python twin of the engine, plus the `smcg` generator CLI. |
-| `npm i @miadi/stateloom-protocol` (0.1.6) | Zero-runtime-dependency foundation: patch ops, diff/apply, wire envelopes, layout, edge routing, viewport math, ASCII/Mermaid render, export naming, env aliasing. |
+| `npm i @miadi/stateloom-protocol` (0.1.7) | Zero-runtime-dependency foundation: patch ops, diff/apply, wire envelopes, layout, edge routing, viewport math, ASCII/Mermaid render, export naming, env aliasing. |
 | `npm i @miadi/stateloom-client` (0.1.2) | Framework-agnostic socket.io-client wrapper: join / patch / full / presence with auto-resync. |
 | `npm i @miadi/stateloom` (0.1.4) | The socket.io hub. Bin `smcraft-bridge`. |
 | `npm i @miadi/stateloom-react` (0.1.6) | React 19 binding: `useSmcraftBridge`, session core. Re-exports the protocol's viewport helpers at the address the web designer has always imported them from. |
-| `npm i @miadi/stateloom-canvas` (0.1.2) | The design surface as a mountable component: `<StateMachineCanvas>` — wheel/⌃wheel/middle-drag/Space+drag/pinch navigation, composite drill-down, box dragging, routed edges, settled event chips, zoom HUD. Props in, callbacks out; every colour a `--slc-*` CSS variable. Ship `@miadi/stateloom-canvas/styles.css` with it. |
+| `npm i @miadi/stateloom-canvas` (0.1.3) | The design surface as a mountable component: `<StateMachineCanvas>` — wheel/⌃wheel/middle-drag/Space+drag/pinch navigation, composite drill-down, box dragging, routed edges, settled event chips, zoom HUD. Props in, callbacks out; every colour a `--slc-*` CSS variable. Ship `@miadi/stateloom-canvas/styles.css` with it. |
 | `npm i -g @miadi/stateloom-cli` (0.1.3) | Bin `smcx` — drive the loom from a terminal. |
-| `npx -y @miadi/stateloom-mcp` (0.2.4) | The MCP server. Bins `stateloom-mcp` and legacy `smcraft-mcp`. |
+| `npx -y @miadi/stateloom-mcp` (0.2.5) | The MCP server. Bins `stateloom-mcp` and legacy `smcraft-mcp`. |
 | `npx -y @miadi/stateloom-skills` (0.2.2) | Bin `stateloom` — installs agent skills into `.claude/skills/`. |
-| `npx -y @miadi/stateloom-web` (0.1.6) | Bin `stateloom-web` — the visual designer, prebuilt. Serves on 4598; reads its bridge URL at runtime from `GET /api/config`, so a published build carries nobody's URL and a redeploy is a restart, never a rebuild. |
+| `npx -y @miadi/stateloom-web` (0.1.7) | Bin `stateloom-web` — the visual designer, prebuilt. Serves on 4598; reads its bridge URL at runtime from `GET /api/config`, so a published build carries nobody's URL and a redeploy is a restart, never a rebuild. |
 
 Dependency direction: everything points at `@miadi/stateloom-protocol`. Nothing points back.
 
@@ -64,7 +64,7 @@ State classification is derived from structure, not declared: leaf (no children)
 
 Full schema: [Spec 70 — SMDF Format](./rispecs/70-smdf-format.spec.md)
 
-## MCP server — 15 state-machine tools, 9 ERD tools
+## MCP server — 15 state-machine tools, 10 ERD tools
 
 `@miadi/stateloom-mcp`, stdio by default (Streamable HTTP optional — see Transport below). Registration:
 
@@ -109,9 +109,11 @@ The sibling of SMDF: a `.erdf.json` describes the data a system's machines act o
 
 **The loom weaves one active document and its type is its extension.** `set_project_file` takes a `.smdf.json` or a `.erdf.json`; `get_definition`, `load_definition` and `render_diagram` (mermaid only for an ERD) answer for whichever is active; the state-machine tools refuse to write over an ERD.
 
-**ERD tools** — `create_erd(namespace, name, description?, path?, overwrite?)` (also makes it the active document), `add_entity`, `add_attribute`, `add_relationship`, `remove_entity`, `remove_attribute`, `remove_relationship`, `validate_erd()` (rules E001–E005), `check_links(erd_path?, smdf_paths?)` (rules L001–L004 — what a machine names that the ERD does not carry).
+**ERD tools** — `create_erd(namespace, name, description?, path?, overwrite?)` (also makes it the active document), `add_entity` (`weak?` for an entity that exists only through another), `update_entity`, `add_attribute`, `add_relationship`, `remove_entity`, `remove_attribute`, `remove_relationship`, `validate_erd()` (rules E001–E005), `check_links(erd_path?, smdf_paths?)` (rules L001–L004 — what a machine names that the ERD does not carry).
 
 From `@miadi/stateloom-protocol`: `validateErd`, `checkLinks`, `checkStateOf`, `renderMermaidEr`, `erdAutoLayout`, and the pure edits `addEntity` … `removeRelationship`. From `@miadi/stateloom-canvas`: `<EntityRelationshipCanvas>`. The web designer opens its ERD workspace for any `?doc=<path>.erdf.json`.
+
+**Two drawings of one document.** `<EntityRelationshipCanvas notation="crowsfoot" | "chen">` and the ▤ / ◇ switch in the web designer choose between crow's foot (attributes as rows in the entity box) and Chen (attribute ovals, relationship diamonds, underlined keys, double rectangle for a `weak` entity). The notation is the viewer's choice and is never written to the file; tools and code generation read the same ERDF either way. `erdAutoLayout(def, { notation })` lays out for either.
 
 Examples: `examples/library_lending.erdf.json`, `examples/trading_strategy.erdf.json`. Full spec: [Spec 80 — ERDF Format](./rispecs/80-erdf-format.spec.md)
 

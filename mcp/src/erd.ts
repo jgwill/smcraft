@@ -32,6 +32,7 @@ import {
   removeEntity,
   removeRelationship,
   renderMermaidEr,
+  updateEntity,
   summarizeErd,
   validateErd,
   type EntityRelationshipDefinition,
@@ -221,10 +222,22 @@ export function registerErdTools(server: McpServer, host: ErdHost): void {
 
   server.tool(
     "add_entity",
-    "Add an entity to the active ERD",
-    { name: z.string(), description: z.string().optional() },
-    async ({ name, description }) =>
-      mutate(host, (def) => addEntity(def, { name, description }), () => `Added entity '${name}'.`),
+    "Add an entity to the active ERD. `weak` marks an entity that exists only through another one (an order line, without its order); Chen notation draws it as a double rectangle.",
+    { name: z.string(), description: z.string().optional(), weak: z.boolean().optional() },
+    async ({ name, description, weak }) =>
+      mutate(
+        host,
+        (def) => addEntity(def, { name, description, weak: weak || undefined }),
+        () => `Added ${weak ? "weak " : ""}entity '${name}'.`,
+      ),
+  );
+
+  server.tool(
+    "update_entity",
+    "Change an entity's description or whether it is weak, keeping its attributes and relationships. Omit a field to leave it alone; an empty description or weak:false clears it.",
+    { name: z.string(), description: z.string().optional(), weak: z.boolean().optional() },
+    async ({ name, description, weak }) =>
+      mutate(host, (def) => updateEntity(def, name, { description, weak }), () => `Updated entity '${name}'.`),
   );
 
   server.tool(

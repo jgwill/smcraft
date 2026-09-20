@@ -27,6 +27,8 @@ import {
   summarizeErd,
 } from "../erd/edit.js";
 import { erdAutoLayout, erdEntitySize, ERD_BOX } from "../erd/layout.js";
+import { CHEN, chenCardinalityText, erdChenFootprint, erdChenGeometry } from "../erd/chen.js";
+import { updateEntity } from "../erd/edit.js";
 import type { StateMachineDefinition } from "../definition.js";
 
 const LIBRARY: EntityRelationshipDefinition = {
@@ -263,6 +265,48 @@ test("layout — N:1 puts the target above, and a cycle still gets a finite layo
   const boxes = erdAutoLayout(def);
   assert.equal(Object.keys(boxes).length, 3);
   for (const b of Object.values(boxes)) assert.ok(Number.isFinite(b.x) && Number.isFinite(b.y));
+});
+
+test("chen — the rectangle is centred, ovals stand in two columns beside it, lines get a clear corridor", () => {
+  const loan = LIBRARY.entities[1]; // five attributes: three left, two right
+  const size = erdChenFootprint(loan);
+  const box = { x: 100, y: 200, ...size };
+  const g = erdChenGeometry(loan, box);
+
+  assert.equal(g.rect.x + g.rect.width / 2, box.x + box.width / 2, "rectangle centred in its box");
+  assert.equal(g.ovals.length, 5);
+  assert.deepEqual(g.ovals.map((o) => o.cx < g.rect.x), [true, true, true, false, false], "first half left, second half right");
+  assert.deepEqual(g.ovals.map((o) => o.attribute.name), loan.attributes!.map((a) => a.name), "document order is kept");
+  for (const o of g.ovals) {
+    assert.ok(o.cx - o.rx >= box.x && o.cx + o.rx <= box.x + box.width, "an oval stays inside the entity's box");
+    assert.ok(o.cy - o.ry >= box.y - 3 && o.cy + o.ry <= box.y + box.height + 3, "…vertically too");
+    assert.ok(o.cx + o.rx <= g.rect.x || o.cx - o.rx >= g.rect.x + g.rect.width, "and never over the rectangle's corridor");
+  }
+  assert.deepEqual(g.routingBox, { x: g.rect.x, y: box.y, width: g.rect.width, height: box.height });
+  assert.equal(size.height, 3 * CHEN.pitch, "as tall as its longer column");
+  assert.deepEqual(erdChenFootprint({ name: "Shelf" }), { width: CHEN.rectMinWidth, height: CHEN.rectHeight });
+});
+
+test("chen — layout reserves the ovals' room, and the notation never reaches the document", () => {
+  const crow = erdAutoLayout(LIBRARY);
+  const chen = erdAutoLayout(LIBRARY, { notation: "chen" });
+  assert.ok(chen.Loan.width > crow.Loan.width, "a Chen entity is wider: its attributes stand beside it");
+  assert.ok(chen.Member.y < chen.Loan.y, "same placement rule: one above many");
+  assert.ok(chen.Loan.y - (chen.Member.y + chen.Member.height) >= 130, "room between layers for the diamond");
+  assert.deepEqual(erdAutoLayout(LIBRARY), crow, "crow's foot is unchanged by the option existing");
+  assert.ok(!JSON.stringify(LIBRARY).includes("notation"));
+  assert.deepEqual(["1:1", "1:N", "N:1", "N:M"].map(chenCardinalityText), [["1", "1"], ["1", "N"], ["N", "1"], ["M", "N"]]);
+});
+
+test("updateEntity sets and clears weak and description, and leaves the rest alone", () => {
+  let def = updateEntity(LIBRARY, "Loan", { weak: true, description: "One member holding one copy" });
+  assert.equal(def.entities[1].weak, true);
+  assert.equal(def.entities[1].attributes!.length, 5);
+  assert.equal(LIBRARY.entities[1].weak, undefined, "the input is untouched");
+  def = updateEntity(def, "Loan", { weak: false, description: "" });
+  assert.ok(!("weak" in def.entities[1]) && !("description" in def.entities[1]));
+  assert.deepEqual(validateErd(def), []);
+  assert.throws(() => updateEntity(LIBRARY, "Ghost", { weak: true }), /not found/);
 });
 
 test("small helpers", () => {

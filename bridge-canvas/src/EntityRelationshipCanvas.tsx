@@ -16,6 +16,13 @@
  * Relationship lines reuse the state canvas's edge router, so several lines on
  * one box face each get a port of their own. Each end carries its cardinality
  * mark: a bar for "one", a crow's foot for "many".
+ *
+ * `notation` chooses the drawing, never the data. "crowsfoot" (the default) is
+ * the above. "chen" draws the same definition the way Chen did: the entity is a
+ * rectangle (double when `weak`), each attribute an oval beside it with the
+ * primary key underlined, each relationship a diamond carrying its verb, and
+ * the cardinality written as 1 / N / M beside the line. An oval shows the name
+ * only; its tooltip carries everything else the document says about it.
  */
 import {
   useCallback,
@@ -27,7 +34,11 @@ import {
   type ReactNode,
 } from "react";
 import {
+  CHEN,
   ERD_BOX,
+  chenCardinalityText,
+  chenDiamondHalfWidth,
+  erdChenGeometry,
   erdRowText,
   fitToBoxes,
   panBy,
@@ -41,6 +52,7 @@ import {
   type EntityRelationshipDefinition,
   type ErdAttribute,
   type ErdCardinality,
+  type ErdNotation,
   type LayoutBox,
   type Viewport,
 } from "@miadi/stateloom-protocol";
@@ -53,6 +65,8 @@ export interface ErdCanvasTarget {
 
 export interface EntityRelationshipCanvasProps {
   definition: EntityRelationshipDefinition;
+  /** How to draw it. The host lays `positions` out for the same notation (`erdAutoLayout(def, { notation })`). */
+  notation?: ErdNotation;
   /** Entity name → box. The host owns these; `erdAutoLayout` seeds them. */
   positions: Record<string, LayoutBox>;
   viewport: Viewport;
@@ -115,6 +129,31 @@ function endMark(tip: EdgePoint, toward: EdgePoint, kind: "one" | "many"): strin
   return `M ${at(13, 0)} L ${at(0, 7)} M ${at(13, 0)} L ${at(0, -7)} M ${at(13, 0)} L ${at(0, 0)}`;
 }
 
+/** Everything the document says about an attribute, for a tooltip — what a Chen oval does not have room to show. */
+function attributeTitle(attr: ErdAttribute): string {
+  const machines = stateOfList(attr);
+  return [
+    `${erdRowText(attr)}${attr.nullable ? " ?" : ""}`,
+    attr.key === "pk" ? "primary key" : attr.key === "uk" ? "unique" : "",
+    attr.references ? `references ${attr.references}` : "",
+    machines.length ? `stores the state of ${machines.join(", ")}` : "",
+    attr.description ?? "",
+  ]
+    .filter(Boolean)
+    .join(" — ");
+}
+
+/**
+ * Chen only: the short segment from where a routed line ends (on the corridor
+ * above or below the rectangle) to the rectangle's own edge.
+ */
+function stubTo(rect: LayoutBox | undefined, end: EdgePoint): string {
+  if (!rect) return "";
+  const x = Math.min(rect.x + rect.width, Math.max(rect.x, end.x));
+  const y = Math.min(rect.y + rect.height, Math.max(rect.y, end.y));
+  return x === end.x && y === end.y ? "" : `M ${end.x} ${end.y} L ${x} ${y}`;
+}
+
 const keyBadges = (attr: ErdAttribute): string =>
   [attr.key === "pk" ? "PK" : attr.key === "uk" ? "UK" : "", attr.references ? "FK" : ""].filter(Boolean).join(" ");
 
@@ -132,6 +171,7 @@ interface Gesture {
 
 export function EntityRelationshipCanvas({
   definition,
+  notation = "crowsfoot",
   positions,
   viewport,
   onViewportChange,
@@ -166,6 +206,12 @@ export function EntityRelationshipCanvas({
     });
   }, [definition.entities, positions]);
 
+  const chen = notation === "chen";
+  const geometry = useMemo(
+    () => new Map(chen ? entities.map((e) => [e.name, erdChenGeometry(e, positions[e.name])]) : []),
+    [chen, entities, positions],
+  );
+
   // Routed by index, not by name: the router keys its faces on a space-joined
   // string, and an entity may be called "Order Line".
   const edges = useMemo(() => {
@@ -173,19 +219,25 @@ export function EntityRelationshipCanvas({
     const drawn = (definition.relationships ?? []).filter((r) => r && indexOf.has(r.from) && indexOf.has(r.to));
     const curves = routeEdges(
       drawn.map((r) => ({ from: indexOf.get(r.from)!, to: indexOf.get(r.to)! })),
-      (id) => positions[entities[Number(id.slice(1))].name],
+      // In Chen a line attaches to the corridor above and below the rectangle,
+      // so it starts clear of the attribute ovals standing at its sides.
+      (id) => {
+        const name = entities[Number(id.slice(1))].name;
+        return geometry.get(name)?.routingBox ?? positions[name];
+      },
     );
     return drawn.map((rel, i) => ({ rel, curve: curves[i] }));
-  }, [definition.relationships, entities, positions]);
+  }, [definition.relationships, entities, positions, geometry]);
 
   // The state canvas's chip placer: each label tries spots along its own line
   // until it is clear of every box and of the labels already down.
   const labels = useMemo(() => {
     const pending = edges
-      .filter(({ rel }) => rel.label)
-      .map(({ rel, curve }) => ({ event: rel.label!, at: curve.at }));
+      // Chen gives every relationship its diamond, named or not; a crow's foot line only carries a chip when it has a verb.
+      .filter(({ rel }) => chen || rel.label)
+      .map(({ rel, curve }) => ({ event: rel.label || "  ", at: curve.at, rel }));
     return placeLabels(pending, entities.map((e) => positions[e.name]));
-  }, [edges, entities, positions]);
+  }, [chen, edges, entities, positions]);
 
   const toCanvasPoint = useCallback((clientX: number, clientY: number): EdgePoint => {
     const rect = svgRef.current?.getBoundingClientRect();
@@ -319,6 +371,25 @@ export function EntityRelationshipCanvas({
       >
         <g transform={viewportTransform(viewport)}>
           {edges.map(({ rel, curve }, i) => {
+            if (chen) {
+              const [fromText, toText] = chenCardinalityText(rel.cardinality);
+              const a = curve.at(0.12);
+              const b = curve.at(0.88);
+              return (
+                <g key={`r${i}`} className="slc-erd-rel">
+                  {/* The router's line ends on the corridor; these carry it on to the rectangle itself. */}
+                  <path d={stubTo(geometry.get(rel.from)?.rect, curve.p0)} className="slc-erd-line" />
+                  <path d={stubTo(geometry.get(rel.to)?.rect, curve.p3)} className="slc-erd-line" />
+                  <path d={curve.path} className="slc-erd-line" />
+                  <text x={a.x + 9} y={a.y + 4} className="slc-erd-card">
+                    {fromText}
+                  </text>
+                  <text x={b.x + 9} y={b.y + 4} className="slc-erd-card">
+                    {toText}
+                  </text>
+                </g>
+              );
+            }
             const [fromEnd, toEnd] = ENDS[rel.cardinality] ?? ENDS["1:N"];
             return (
               <g key={`r${i}`} className="slc-erd-rel">
@@ -340,6 +411,77 @@ export function EntityRelationshipCanvas({
             ]
               .filter(Boolean)
               .join(" ");
+            const shape = geometry.get(entity.name);
+            if (shape) {
+              const { rect, ovals } = shape;
+              return (
+                <g
+                  key={entity.name}
+                  className={readOnly ? "slc-node--static" : "slc-node--draggable"}
+                  onPointerDown={(e) => onPointerDown(e, entity.name)}
+                  onContextMenu={(e) => {
+                    if (!onContextMenu) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onContextMenu(e.clientX, e.clientY, { kind: "entity", id: entity.name });
+                  }}
+                >
+                  {ovals.map((o) => (
+                    <path
+                      key={`l-${o.attribute.name}`}
+                      d={`M ${o.from.x} ${o.from.y} L ${o.to.x} ${o.to.y}`}
+                      className="slc-erd-attr-line"
+                    />
+                  ))}
+                  {ovals.map((o) => {
+                    const machines = stateOfList(o.attribute);
+                    const opens = machines.length > 0 && !!onOpenMachine;
+                    return (
+                      <g
+                        key={o.attribute.name}
+                        className={opens ? "slc-erd-state" : undefined}
+                        onPointerDown={opens ? (e) => e.stopPropagation() : undefined}
+                        onClick={opens ? () => onOpenMachine!(machines[0]) : undefined}
+                      >
+                        <title>{attributeTitle(o.attribute)}</title>
+                        <ellipse cx={o.cx} cy={o.cy} rx={o.rx} ry={o.ry} className="slc-erd-oval" />
+                        <text
+                          x={o.cx}
+                          y={o.cy + 4}
+                          textAnchor="middle"
+                          className={`slc-erd-oval-text${o.attribute.key === "pk" ? " slc-erd-oval-text--pk" : ""}${
+                            machines.length ? " slc-erd-row--state" : ""
+                          }`}
+                        >
+                          {machines.length ? "◉ " : ""}
+                          {o.attribute.name}
+                        </text>
+                      </g>
+                    );
+                  })}
+                  {entity.description && <title>{entity.description}</title>}
+                  <rect x={rect.x} y={rect.y} width={rect.width} height={rect.height} rx={2} className={boxClass} />
+                  {entity.weak && (
+                    <rect
+                      x={rect.x + 4}
+                      y={rect.y + 4}
+                      width={rect.width - 8}
+                      height={rect.height - 8}
+                      rx={1}
+                      className="slc-erd-weak"
+                    />
+                  )}
+                  <text
+                    x={rect.x + rect.width / 2}
+                    y={rect.y + rect.height / 2 + 5}
+                    textAnchor="middle"
+                    className="slc-node-name"
+                  >
+                    {entity.name}
+                  </text>
+                </g>
+              );
+            }
             return (
               <g
                 key={entity.name}
@@ -412,7 +554,25 @@ export function EntityRelationshipCanvas({
             );
           })}
 
-          {labels.map((spot, i) => (
+          {labels.map((spot, i) => {
+            if (!chen) return null;
+            const cx = spot.x + spot.width / 2;
+            const cy = spot.y + spot.height / 2;
+            const hw = chenDiamondHalfWidth(spot.label.rel.label ?? "");
+            const hh = CHEN.diamondHalfHeight;
+            return (
+              <g key={`d${i}`} pointerEvents="none">
+                <path
+                  d={`M ${cx - hw} ${cy} L ${cx} ${cy - hh} L ${cx + hw} ${cy} L ${cx} ${cy + hh} Z`}
+                  className="slc-erd-diamond"
+                />
+                <text x={cx} y={cy + 4} textAnchor="middle" className="slc-erd-rel-label">
+                  {spot.label.rel.label ?? ""}
+                </text>
+              </g>
+            );
+          })}
+          {!chen && labels.map((spot, i) => (
             <g key={`l${i}`} pointerEvents="none">
               <rect x={spot.x} y={spot.y} width={spot.width} height={spot.height} rx={4} className="slc-chip-plate" />
               <text x={spot.cx} y={spot.cy - 5} textAnchor="middle" className="slc-erd-rel-label">

@@ -456,6 +456,56 @@
   user-select: none;
 }
 
+/* Chen notation: ovals, diamonds, and the cardinality written beside the line. */
+
+.slc-erd-oval {
+  fill: var(--slc-node-fill);
+  stroke: var(--slc-node-stroke);
+  stroke-width: 1.2;
+}
+
+.slc-erd-oval-text {
+  fill: var(--slc-muted);
+  font-size: 11px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-erd-oval-text--pk {
+  fill: var(--slc-label);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.slc-erd-attr-line {
+  fill: none;
+  stroke: var(--slc-chip-stroke);
+  stroke-width: 1;
+}
+
+.slc-erd-diamond {
+  fill: var(--slc-chip-fill);
+  stroke: var(--slc-edge);
+  stroke-width: 1.5;
+}
+
+.slc-erd-weak {
+  fill: none;
+  stroke: var(--slc-node-stroke);
+  stroke-width: 1.2;
+  pointer-events: none;
+}
+
+.slc-erd-card {
+  fill: var(--slc-label);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-erd-state:hover .slc-erd-oval { stroke: var(--slc-accent); }
+
 .slc-erd-empty {
   position: absolute;
   inset: 0;

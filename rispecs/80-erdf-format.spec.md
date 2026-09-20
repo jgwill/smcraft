@@ -5,7 +5,7 @@
 
 **Spec ID**: 80
 **Version**: 1.0
-**Status**: all five slices landed. Shipped in `@miadi/stateloom-protocol` 0.1.6, `@miadi/stateloom` 0.1.4, `@miadi/stateloom-canvas` 0.1.2, `@miadi/stateloom-mcp` 0.2.4, `@miadi/stateloom-web` 0.1.6.
+**Status**: all five slices landed (protocol 0.1.6, hub 0.1.4, canvas 0.1.2, mcp 0.2.4, web 0.1.6). Chen notation as a second drawing, `weak` entities and `update_entity` follow in protocol 0.1.7, canvas 0.1.3, mcp 0.2.5, web 0.1.7.
 **Implementation**: TypeScript — `bridge-protocol/src/erd/`, `mcp/src/erd.ts`, `bridge-canvas/src/EntityRelationshipCanvas.tsx`, `web/src/components/erd/`
 
 ## Creative Intent
@@ -40,6 +40,7 @@ ERDF is a **sibling** of SMDF, never a section inside it. A machine is one behav
 |-------|------|-------------|
 | `name` | string | Unique entity identifier |
 | `description` | string | Human-readable purpose |
+| `weak` | boolean | Exists only through another entity (an order line, without its order). Chen draws it as a double rectangle |
 | `attributes` | ErdAttribute[] | The entity's fields |
 
 ### ErdAttribute
@@ -121,7 +122,7 @@ Link rules, reported by `checkLinks`:
 
 The loom weaves one active document, and its type is its extension. `set_project_file` takes either; the state-machine tools refuse to write over an ERD.
 
-**Build** — `create_erd(namespace, name, description?, path?, overwrite?)` (also makes it the active document), `add_entity(name, description?)`, `add_attribute(entity, name, type, key?, references?, nullable?, stateOf?, description?)`, `add_relationship(from, to, cardinality, label?, description?)`
+**Build** — `create_erd(namespace, name, description?, path?, overwrite?)` (also makes it the active document), `add_entity(name, description?, weak?)`, `update_entity(name, description?, weak?)`, `add_attribute(entity, name, type, key?, references?, nullable?, stateOf?, description?)`, `add_relationship(from, to, cardinality, label?, description?)`
 
 **Correct** — `remove_entity(name)` (takes its relationships with it), `remove_attribute(entity, name)`, `remove_relationship(from, to, label?)`
 
@@ -131,13 +132,29 @@ The loom weaves one active document, and its type is its extension. `set_project
 
 Every edit is written to disk, then mirrored to the bridge room as a whole document. The edits themselves are the pure functions in `bridge-protocol/src/erd/edit.ts`, which the canvas uses too.
 
+## Notation — one document, two drawings
+
+An ERDF holds data. How it is drawn is the viewer's choice and is never written into the document, so everything that reads an ERDF — the MCP tools, `checkLinks`, a future code generator — reads the same file whichever way it is being looked at.
+
+| | `crowsfoot` (default) | `chen` |
+|---|---|---|
+| entity | box with a header | rectangle; double rectangle when `weak` |
+| attribute | a row inside the box: `name : type`, `PK` / `UK` / `FK` badge | an oval beside the rectangle showing the name; primary key underlined |
+| relationship | a line; the verb on a chip | a diamond carrying the verb |
+| cardinality | bar ("one") or crow's foot ("many") at each end | `1` / `N` / `M` written beside the line |
+| best when | attribute lists are long — a logical or physical model | entities have a handful of attributes and the relationships are the subject — conceptualization |
+
+Chen shows less per attribute, and hides nothing: an oval's tooltip carries the type, keys, `references`, `stateOf` and description, and the designer's side panel is the same in both. `stateOf` works the same in both — the ◉ attribute opens its machine.
+
+`erdAutoLayout(def, { notation })` reserves the room each drawing needs. `erdChenGeometry(entity, box)` places the rectangle and its ovals: two columns at the sides, because relationship lines leave upward and downward, so a line never crosses an oval. Mermaid has no Chen form; `renderMermaidEr` stays crow's foot.
+
 ## Canvas and Designer
 
 **Layout** — `erdAutoLayout(def)` returns a box per entity. A box is as tall as its attribute list. The "one" side of a relationship sits above the "many" side; a parent drops to just above its nearest child; a line that spans several layers gets a lane of its own in each layer it crosses, so no box is placed where the line has to pass.
 
 **Canvas** — `<EntityRelationshipCanvas>` in `@miadi/stateloom-canvas` has the same contract as `<StateMachineCanvas>`: props in, callbacks out, the host owns definition, positions and viewport. Same gestures (wheel pans, ⌃/⌘ wheel zooms, drag pans or moves a box, two fingers pinch), same `--slc-*` theme variables. Relationship lines use the shared edge router and carry a bar ("one") or a crow's foot ("many") at each end; labels use the shared chip placer. An attribute with `stateOf` is drawn with a ◉ in the accent ink, and activating it calls `onOpenMachine(machine)`.
 
-**Designer** — `web/` opens the ERD workspace when the document ends in `.erdf.json` (by `?doc=`, or the serving process's default document) and the state designer otherwise; the choice is made before either mounts. The workspace loads through the same file API, joins the same hub room, and edits with the same pure functions the MCP tools call. Every edit is written to disk first and then pushed whole, because the agent's tools read the file before each edit. ◉ opens the `.smdf.json` beside the document whose `settings.name` matches. "Check links" runs L001–L004 against every machine beside the document. Dragged positions are kept in the browser, keyed by document path, and are not part of the ERDF.
+**Designer** — `web/` opens the ERD workspace when the document ends in `.erdf.json` (by `?doc=`, or the serving process's default document) and the state designer otherwise; the choice is made before either mounts. The workspace loads through the same file API, joins the same hub room, and edits with the same pure functions the MCP tools call. Every edit is written to disk first and then pushed whole, because the agent's tools read the file before each edit. ◉ opens the `.smdf.json` beside the document whose `settings.name` matches. "Check links" runs L001–L004 against every machine beside the document. A two-icon switch in the header (▤ crow's foot, ◇ Chen) chooses the notation; the choice is kept in the browser. Dragged positions are kept in the browser too, keyed by document path and notation, and are not part of the ERDF.
 
 **Hub** — a room is keyed by document path and never validates what it holds, so an ERDF rides the existing hub. The file watcher sends an ERD whole (`def:full`), never as a patch.
 
