@@ -101,3 +101,28 @@ test("chronicle: unknown episode and bare address are named errors; standalone p
   assert.equal(r.path, "/tmp/standalone.smdf.json");
   rmSync(root, { recursive: true, force: true });
 });
+
+// --- every loom type through the chronicle address (Spec 81/82, 2026-09-30) ---
+
+test("chronicle: an explicit .erdf/.sqdf/.sysdf/.smdf.json extension is kept; the type without .json gets it; bare stays .smdf.json", () => {
+  const { root, env } = fakeChronicle();
+  const dir = join(root, "2026-06-28-episode-103-film-preprod-report-phase-2", "diagrams");
+  try {
+    for (const name of ["data.erdf.json", "flow.sqdf.json", "whole.sysdf.json", "life.smdf.json"]) {
+      assert.equal(resolveChronicleUri(`miadi-chronicle://103/${name}`, env), join(dir, name));
+    }
+    assert.equal(resolveChronicleUri("miadi-chronicle://103/flow.sqdf", env), join(dir, "flow.sqdf.json"));
+    assert.equal(resolveChronicleUri("miadi-chronicle://103/whole.SYSDF", env), join(dir, "whole.SYSDF.json"));
+    assert.equal(resolveChronicleUri("miadi-chronicle://103/diagrams/data.erdf.json", env), join(dir, "data.erdf.json"));
+    assert.equal(resolveChronicleUri("miadi-chronicle://103/film-preprod", env), join(dir, "film-preprod.smdf.json"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("projectSwitch: the refusal of a non-.json path names the four document types", () => {
+  assert.throws(
+    () => resolveProjectSwitch("/tmp/flow.sqdf", "/prev/doc.smdf.json"),
+    /\.smdf\.json \(state machine\), \.erdf\.json \(ERD\), \.sqdf\.json \(sequence\) and \.sysdf\.json \(system\)/,
+  );
+});

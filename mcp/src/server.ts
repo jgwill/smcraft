@@ -18,18 +18,34 @@
  *   - load_definition: Load a definition from JSON
  *   - list_states: List all states in the current definition
  *   - list_events: List all events in the current definition
- *   - set_project_file: Choose which document is active (.smdf.json or .erdf.json)
+ *   - set_project_file: Choose which document is active — .smdf.json (state
+ *     machine), .erdf.json (ERD), .sqdf.json (sequence) or .sysdf.json (system)
  *   - get_project_file: Report the active document path and bridge status
  *
- * ERD tools (Spec 80, ./erd.ts) — the active document's type is its extension:
+ * The active document's type is its extension, and the tools for each type
+ * refuse to write over another type.
+ *
+ * ERD tools (Spec 80, ./erd.ts):
  *   - create_erd, add_entity, update_entity, add_attribute, add_relationship
  *   - remove_entity, remove_attribute, remove_relationship
  *   - validate_erd, check_links
  *
- * Notes (either document type): set_notes, get_notes — what a person or an
+ * Sequence tools (Spec 81, ./sequence.ts) — a usage scenario:
+ *   - create_sequence, add_participant, update_participant, remove_participant
+ *   - add_message, update_message, remove_message, move_message
+ *   - add_fragment, add_fragment_message, remove_fragment, validate_sequence
+ *
+ * System tools (Spec 82, ./system.ts) — the drawings of one thing, together:
+ *   - create_system, add_member, remove_member, add_actor, remove_actor
+ *   - set_reconcile_mode, check_system, replay_scenario, reconcile_scenario
+ *   - show: tell the canvases on a system which member and element to show
+ *   In reconcile mode auto, each sequence edit also updates the machines, the
+ *   ERD and the system it implies (./live.ts pushes the changes to their rooms).
+ *
+ * Notes (every document type): set_notes, get_notes — what a person or an
  * agent wrote down about the diagram or one of its shapes, saved in the file.
- *   get_definition, load_definition and render_diagram answer for an ERD when
- *   the active document is one.
+ *   get_definition, load_definition, render_diagram and check_links answer for
+ *   the active document's type; generate_rispec also writes a system's rispec.
  *
  * Resources:
  *   - smcraft://definition — Current state machine definition
@@ -60,10 +76,14 @@ import { tmpdir } from "os";
 import { createBridgeClient, type BridgeClient } from "@miadi/stateloom-client";
 import {
   collectNotes,
+  docKindOfPath,
   envAlias,
   isErdfPath,
+  isSqdfPath,
+  isSysdfPath,
   type EntityRelationshipDefinition,
   type PatchOp,
+  type SequenceDefinition,
   type StateMachineDefinition,
 } from "@miadi/stateloom-protocol";
 import { renderDiagramToFile, defaultOutputPath } from "@miadi/stateloom-cli/render";
@@ -79,6 +99,31 @@ import {
   formatNotes,
   type ErdHost,
 } from "./erd.js";
+import {
+  registerSequenceTools,
+  sequenceSummary,
+  sequenceGetDefinition,
+  sequenceLoadDefinition,
+  sequenceRender,
+  sequenceGetNotes,
+  sequenceSetNotes,
+  type SequenceHost,
+} from "./sequence.js";
+import {
+  registerSystemTools,
+  checkSystemReport,
+  reconcileAfterEdit,
+  reconcileModeLine,
+  systemSummary,
+  systemGetDefinition,
+  systemLoadDefinition,
+  systemRender,
+  systemGetNotes,
+  systemSetNotes,
+  systemRispec,
+  type SystemHost,
+} from "./system.js";
+import { liveBridge } from "./live.js";
 
 // STATELOOM_* read first, SMCRAFT_* legacy twin honored — the live MCP
 // registration bakes SMCRAFT_PROJECT_FILE and must keep working (2026-07-27
@@ -150,9 +195,18 @@ let PROJECT_FILE = resolve(
   envAlias("PROJECT_FILE") ?? "./statemachine.smdf.json"
 );
 
+const KIND_WORDS = { machine: "a state machine", erd: "an ERD", sequence: "a sequence", system: "a system" } as const;
+
+/** What the state-machine tools say when there is no machine to act on. */
+function noMachine(then = ""): string {
+  const kind = docKindOfPath(PROJECT_FILE);
+  if (kind === "machine") return `No state machine at ${PROJECT_FILE}.${then}`;
+  return `The active document ${PROJECT_FILE} is ${KIND_WORDS[kind]}, not a state machine. Use the ${kind === "erd" ? "ERD" : kind} tools on it, or set_project_file to a .smdf.json document.`;
+}
+
 function readDef(): Definition | null {
-  // An ERD is not a machine; the state-machine tools see no definition there.
-  if (isErdfPath(PROJECT_FILE)) return null;
+  // An ERD, a sequence or a system is not a machine; the state-machine tools see no definition there.
+  if (docKindOfPath(PROJECT_FILE) !== "machine") return null;
   if (!existsSync(PROJECT_FILE)) return null;
   try {
     const raw = readFileSync(PROJECT_FILE, "utf8");
@@ -165,13 +219,9 @@ function readDef(): Definition | null {
 }
 
 function writeDef(def: Definition): void {
-  // Never write a machine over an ERD: create_state_machine and load_definition
-  // write without reading first, so this is the one place that can refuse.
-  if (isErdfPath(PROJECT_FILE)) {
-    throw new Error(
-      `The active document ${PROJECT_FILE} is an ERD. Use the ERD tools on it, or set_project_file to a .smdf.json document for a state machine.`,
-    );
-  }
+  // Never write a machine over an ERD, a sequence or a system: create_state_machine
+  // and load_definition write without reading first, so this is the one place that can refuse.
+  if (docKindOfPath(PROJECT_FILE) !== "machine") throw new Error(noMachine());
   writeFileSync(PROJECT_FILE, JSON.stringify({ stateMachine: def }, null, 2), "utf8");
 }
 
@@ -311,6 +361,38 @@ const erdHost: ErdHost = {
   },
   emitFull: (def: EntityRelationshipDefinition) => bridgeEmitFull(def as unknown as Definition),
   outsideRoot: (path) => outsideRoot(path),
+  // From a sequence or a system, the links are the whole system's: check_system.
+  checkSystem: async () => checkSystemReport(systemHost),
+};
+
+// Pushes to rooms other than the active document's: a reconciled machine, an
+// ERD, a view on a system. Each is a short-lived client of its own (./live.ts).
+const live = liveBridge({ url: BRIDGE_URL, token: BRIDGE_TOKEN, name: AGENT_NAME ?? "mcp-agent" });
+
+// The system this server last created, set or checked — where `show` and the
+// system tools go when neither an argument nor the active document names one.
+let LAST_SYSTEM: string | undefined = isSysdfPath(PROJECT_FILE) ? PROJECT_FILE : undefined;
+
+const systemHost: SystemHost = {
+  projectFile: () => PROJECT_FILE,
+  outsideRoot: (path) => outsideRoot(path),
+  emitFull: (def) => bridgeEmitFull(def as Definition),
+  live,
+  reconcileOverride: () => envAlias("RECONCILE"),
+  validateMachine: (def) => validate(def as unknown as Definition),
+  machineSpec: (def, level) => machineSpecLines(def as unknown as Definition, level),
+  lastSystem: () => LAST_SYSTEM,
+  rememberSystem: (path) => {
+    LAST_SYSTEM = path;
+  },
+};
+
+const sequenceHost: SequenceHost = {
+  projectFile: () => PROJECT_FILE,
+  switchTo: (path) => erdHost.switchTo(path),
+  emitFull: (def: SequenceDefinition) => bridgeEmitFull(def as unknown as Definition),
+  outsideRoot: (path) => outsideRoot(path),
+  afterEdit: (path) => reconcileAfterEdit(systemHost, path),
 };
 
 function createEmpty(namespace: string, name: string): Definition {
@@ -646,31 +728,7 @@ function generateRispec(def: Definition, intent?: string): string {
   // Specifications
   lines.push("## S — Specifications");
   lines.push("");
-  lines.push("### States");
-  lines.push("");
-  for (const s of states) {
-    renderStateSpec(s, lines, 0);
-  }
-  lines.push("");
-
-  lines.push("### Events");
-  lines.push("");
-  for (const src of def.events) {
-    if (!src.events?.length) continue;
-    lines.push(`**${src.name}**`);
-    for (const e of src.events) {
-      lines.push(`- \`${e.id}\`${e.description ? ` — ${e.description}` : ""}`);
-    }
-    lines.push("");
-  }
-
-  lines.push("### Transitions (flat)");
-  lines.push("");
-  for (const t of collectTransitions(def.state)) {
-    const arrow = t.next ? `→ ${t.next}` : "→ (internal)";
-    lines.push(`- \`${t.from}\` --[${t.event}]-- ${arrow}${t.condition ? ` *(when: ${t.condition})*` : ""}`);
-  }
-  lines.push("");
+  lines.push(...machineSpecLines(def, 3));
 
   // Action Steps (medicine-wheel walk if South/East/North/West present)
   const mw = states.filter((s) => ["East", "South", "West", "North"].includes(s.name));
@@ -715,6 +773,42 @@ function generateRispec(def: Definition, intent?: string): string {
   lines.push("");
 
   return lines.join("\n");
+}
+
+/**
+ * A machine's states, events and flat transitions as markdown, headings at
+ * `level` — the Specifications of a machine's rispec, and each machine's
+ * Behaviour in a system's rispec.
+ */
+function machineSpecLines(def: Definition, level: number): string[] {
+  const h = "#".repeat(level);
+  const lines: string[] = [];
+  lines.push(`${h} States`);
+  lines.push("");
+  for (const s of def.state?.states ?? []) {
+    renderStateSpec(s, lines, 0);
+  }
+  lines.push("");
+
+  lines.push(`${h} Events`);
+  lines.push("");
+  for (const src of def.events ?? []) {
+    if (!src.events?.length) continue;
+    lines.push(`**${src.name}**`);
+    for (const e of src.events) {
+      lines.push(`- \`${e.id}\`${e.description ? ` — ${e.description}` : ""}`);
+    }
+    lines.push("");
+  }
+
+  lines.push(`${h} Transitions (flat)`);
+  lines.push("");
+  for (const t of def.state ? collectTransitions(def.state) : []) {
+    const arrow = t.next ? `→ ${t.next}` : "→ (internal)";
+    lines.push(`- \`${t.from}\` --[${t.event}]-- ${arrow}${t.condition ? ` *(when: ${t.condition})*` : ""}`);
+  }
+  lines.push("");
+  return lines;
 }
 
 function depth(s: StateDef, d = 0): number {
@@ -845,7 +939,7 @@ server.tool(
     const def = readDef();
     if (!def)
       return {
-        content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}. Use create_state_machine first.` }],
+        content: [{ type: "text", text: noMachine(" Use create_state_machine first.") }],
         isError: true,
       };
     const parentName = parent ?? "Root";
@@ -875,7 +969,7 @@ server.tool(
     const def = readDef();
     if (!def)
       return {
-        content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }],
+        content: [{ type: "text", text: noMachine() }],
         isError: true,
       };
     const source = def.events[0];
@@ -902,7 +996,7 @@ server.tool(
     const def = readDef();
     if (!def)
       return {
-        content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }],
+        content: [{ type: "text", text: noMachine() }],
         isError: true,
       };
     const target = findState(def.state, state);
@@ -929,7 +1023,7 @@ server.tool(
   async ({ name }) => {
     const def = readDef();
     if (!def)
-      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+      return { content: [{ type: "text", text: noMachine() }], isError: true };
     if (name === "Root")
       return { content: [{ type: "text", text: "Cannot remove Root state." }], isError: true };
     def.state = removeState(def.state, name);
@@ -946,7 +1040,7 @@ server.tool(
   async () => {
     const def = readDef();
     if (!def)
-      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+      return { content: [{ type: "text", text: noMachine() }], isError: true };
     const errors = validate(def);
     if (errors.length === 0)
       return { content: [{ type: "text", text: "✓ Definition is valid. No errors found." }] };
@@ -964,7 +1058,7 @@ server.tool(
   async ({ language }) => {
     const def = readDef();
     if (!def)
-      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+      return { content: [{ type: "text", text: noMachine() }], isError: true };
     const errors = validate(def);
     if (errors.length > 0) {
       const lines = errors.map((e) => `[${e.ruleId}] ${e.message}`).join("\n");
@@ -980,13 +1074,15 @@ server.tool(
 
 server.tool(
   "get_definition",
-  "Get the current definition as JSON — the state machine, or the ERD when the active document is a .erdf.json",
+  "Get the active document as JSON — a state machine, or the ERD, sequence or system when the active document is a .erdf.json, .sqdf.json or .sysdf.json",
   {},
   async () => {
     if (isErdfPath(PROJECT_FILE)) return erdGetDefinition(erdHost);
+    if (isSqdfPath(PROJECT_FILE)) return sequenceGetDefinition(sequenceHost);
+    if (isSysdfPath(PROJECT_FILE)) return systemGetDefinition(systemHost);
     const def = readDef();
     if (!def)
-      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+      return { content: [{ type: "text", text: noMachine() }], isError: true };
     return {
       content: [{ type: "text", text: JSON.stringify({ stateMachine: def }, null, 2) }],
     };
@@ -995,10 +1091,12 @@ server.tool(
 
 server.tool(
   "load_definition",
-  "Load a definition from JSON into the active document — a state machine, or an ERD when the active document is a .erdf.json",
+  "Load a definition from JSON into the active document — a state machine, or an ERD, a sequence or a system when the active document is a .erdf.json, .sqdf.json or .sysdf.json",
   { json: z.string() },
   async ({ json }) => {
     if (isErdfPath(PROJECT_FILE)) return erdLoadDefinition(erdHost, json);
+    if (isSqdfPath(PROJECT_FILE)) return sequenceLoadDefinition(sequenceHost, json);
+    if (isSysdfPath(PROJECT_FILE)) return systemLoadDefinition(systemHost, json);
     try {
       const parsed = JSON.parse(json);
       const def: Definition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
@@ -1027,7 +1125,7 @@ server.tool(
   async () => {
     const def = readDef();
     if (!def)
-      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+      return { content: [{ type: "text", text: noMachine() }], isError: true };
     const lines: string[] = [];
     const walk = (state: StateDef, depth: number) => {
       const indent = "  ".repeat(depth);
@@ -1051,7 +1149,7 @@ server.tool(
   async () => {
     const def = readDef();
     if (!def)
-      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+      return { content: [{ type: "text", text: noMachine() }], isError: true };
     const events = def.events.flatMap((src) =>
       src.events.map((e) => `${e.id}${e.description ? ` — ${e.description}` : ""}`)
     );
@@ -1063,7 +1161,7 @@ server.tool(
 
 server.tool(
   "set_project_file",
-  "Choose the active document the loom weaves — two modalities. STANDALONE: any .smdf.json path (a state machine) or .erdf.json path (an ERD — the ERD tools act on it). RELATIONAL: a chronicle address `miadi-chronicle://<episode>/<diagram>` resolving over $MIADI_CHRONICLE_ROOT to <episode-dir>/diagrams/<diagram>.smdf.json — an ambiguous episode number is a hard error naming the candidates. Disk persistence AND the live bridge room both re-point. A missing file is legitimate — naming it is how an episode's first diagram is created.",
+  "Choose the active document the loom weaves — two modalities. STANDALONE: a path whose extension says what it is: .smdf.json (a state machine), .erdf.json (an ERD — the ERD tools act on it), .sqdf.json (a sequence — the sequence tools act on it) or .sysdf.json (a system — the system tools, check_system and show act on it). RELATIONAL: a chronicle address `miadi-chronicle://<episode>/<diagram>` resolving over $MIADI_CHRONICLE_ROOT to <episode-dir>/diagrams/<diagram>.smdf.json; name another type by its extension (`miadi-chronicle://103/flow.sqdf.json`) — an ambiguous episode number is a hard error naming the candidates. Disk persistence AND the live bridge room both re-point. A missing file is legitimate — naming it is how an episode's first diagram is created.",
   { path: z.string() },
   async ({ path }) => {
     try {
@@ -1075,14 +1173,24 @@ server.tool(
         bindBridge(PROJECT_FILE);
         joinBridge();
       }
+      if (isSysdfPath(PROJECT_FILE)) LAST_SYSTEM = PROJECT_FILE;
       const def = r.exists ? readDef() : null;
-      const summary = isErdfPath(PROJECT_FILE)
-        ? erdSummary(PROJECT_FILE)
-        : def
-          ? `existing machine '${def.settings.name}' (${collectStateNames(def.state).length} states, ${collectEventIds(def).length} events)`
-          : r.exists
-            ? "file exists but is not a readable definition"
-            : "no file yet — create_state_machine or load_definition will write it";
+      const summary = [
+        isErdfPath(PROJECT_FILE)
+          ? erdSummary(PROJECT_FILE)
+          : isSqdfPath(PROJECT_FILE)
+            ? sequenceSummary(PROJECT_FILE)
+            : isSysdfPath(PROJECT_FILE)
+              ? systemSummary(PROJECT_FILE)
+              : def
+                ? `existing machine '${def.settings.name}' (${collectStateNames(def.state).length} states, ${collectEventIds(def).length} events)`
+                : r.exists
+                  ? "file exists but is not a readable definition"
+                  : "no file yet — create_state_machine or load_definition will write it",
+        reconcileModeLine(systemHost, PROJECT_FILE),
+      ]
+        .filter(Boolean)
+        .join("\n");
       const bridgeNote = BRIDGE_URL
         ? r.unchanged
           ? `bridge unchanged (${bridge?.status ?? "not configured"})`
@@ -1107,17 +1215,26 @@ server.tool(
 
 server.tool(
   "get_project_file",
-  "Report the active .smdf.json document path, whether it exists on disk, and live-bridge status",
+  "Report the active document's path and what it is (a .smdf.json state machine, .erdf.json ERD, .sqdf.json sequence or .sysdf.json system), whether it exists on disk, the reconcile mode for a sequence or a system, and live-bridge status",
   {},
   async () => {
     const def = readDef();
-    const summary = isErdfPath(PROJECT_FILE)
-      ? erdSummary(PROJECT_FILE)
-      : def
-        ? `machine '${def.settings.name}' (${collectStateNames(def.state).length} states, ${collectEventIds(def).length} events)`
-        : existsSync(PROJECT_FILE)
-          ? "file exists but is not a readable definition"
-          : "file does not exist yet";
+    const summary = [
+      isErdfPath(PROJECT_FILE)
+        ? erdSummary(PROJECT_FILE)
+        : isSqdfPath(PROJECT_FILE)
+          ? sequenceSummary(PROJECT_FILE)
+          : isSysdfPath(PROJECT_FILE)
+            ? systemSummary(PROJECT_FILE)
+            : def
+              ? `machine '${def.settings.name}' (${collectStateNames(def.state).length} states, ${collectEventIds(def).length} events)`
+              : existsSync(PROJECT_FILE)
+                ? "file exists but is not a readable definition"
+                : "file does not exist yet",
+      reconcileModeLine(systemHost, PROJECT_FILE),
+    ]
+      .filter(Boolean)
+      .join("\n");
     const bridgeNote = BRIDGE_URL
       ? `bridge: ${bridge?.status ?? "not initialized"} → ${BRIDGE_URL}`
       : "bridge not configured (STATELOOM_BRIDGE_URL unset)";
@@ -1131,12 +1248,13 @@ server.tool(
 
 server.tool(
   "generate_rispec",
-  "Generate a RISE rispec (markdown) from the current state machine. If the SMDF was sourced from a PDE (settings._source.pdeId/pdeFolder), the PDE's intent, directions, and ambiguities are folded in. Pass `intent` to override the desired outcome.",
-  { intent: z.string().optional() },
-  async ({ intent }) => {
+  "Generate a RISE rispec (markdown) from the current state machine. If the SMDF was sourced from a PDE (settings._source.pdeId/pdeFolder), the PDE's intent, directions, and ambiguities are folded in. Pass `intent` to override the desired outcome. When the active document is a system (.sysdf.json), or `system` names one, the rispec is the whole system's: Creative Intent, Data from its ERDs, Behaviour per machine, each scenario path as a Creative Advancement Scenario (from the replay), and Open questions. Returns markdown; writes nothing.",
+  { intent: z.string().optional(), system: z.string().optional() },
+  async ({ intent, system }) => {
+    if (system || isSysdfPath(PROJECT_FILE)) return systemRispec(systemHost, { system, intent });
     const def = readDef();
     if (!def)
-      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+      return { content: [{ type: "text", text: noMachine() }], isError: true };
     const md = generateRispec(def, intent);
     return { content: [{ type: "text", text: md }] };
   }
@@ -1169,7 +1287,7 @@ function openOnDesktop(path: string): string {
 
 server.tool(
   "render_diagram",
-  "Draw the current state machine as a picture. Writes the file next to the project document (or at `path`) and returns its absolute path — plus the image itself for png, so it can be looked at without leaving the conversation. Formats: png (raster, needs librsvg/Inkscape/ImageMagick/Chrome on the host), svg (needs nothing), mermaid, ascii. Pass stamp:true to keep every render instead of overwriting one file.",
+  "Draw the current state machine as a picture. Writes the file next to the project document (or at `path`) and returns its absolute path — plus the image itself for png, so it can be looked at without leaving the conversation. Formats: png (raster, needs librsvg/Inkscape/ImageMagick/Chrome on the host), svg (needs nothing), mermaid, ascii. Pass stamp:true to keep every render instead of overwriting one file. An ERD renders as mermaid (<name>.erd.mmd), a sequence as mermaid (<name>.seq.mmd), and a system as one markdown file of its members' mermaid (<name>.sys.md).",
   {
     format: z.enum(["png", "svg", "mermaid", "ascii"]).optional(),
     path: z.string().optional(),
@@ -1180,10 +1298,12 @@ server.tool(
   },
   async ({ format, path, scale, theme, stamp, open }) => {
     if (isErdfPath(PROJECT_FILE)) return erdRender(erdHost, { format, path, stamp });
+    if (isSqdfPath(PROJECT_FILE)) return sequenceRender(sequenceHost, { format, path, stamp });
+    if (isSysdfPath(PROJECT_FILE)) return systemRender(systemHost, { format, path, stamp });
     const def = readDef();
     if (!def)
       return {
-        content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }],
+        content: [{ type: "text", text: noMachine() }],
         isError: true,
       };
 
@@ -1251,18 +1371,22 @@ server.tool(
 );
 
 registerErdTools(server, erdHost);
+registerSequenceTools(server, sequenceHost);
+registerSystemTools(server, systemHost);
 
 // Notes — the same two tools for either document type.
 
 server.tool(
   "set_notes",
-  "Save working notes on the active diagram or on one of its shapes — what was said about it, an open question, a decision — so whoever opens the document next (a person or an agent) finds them. Omit `target` for the whole diagram; otherwise `target` is a state name (state machine) or an entity name (ERD). The text replaces what was there; an empty string clears it. Notes are kept in the document and are not part of the model: engines and code generation ignore them.",
+  "Save working notes on the active diagram or on one of its shapes — what was said about it, an open question, a decision — so whoever opens the document next (a person or an agent) finds them. Omit `target` for the whole diagram; otherwise `target` is a state name (state machine), an entity name (ERD), a participant name, a message ('9', 'f1.2') or 'fragment N' (sequence), or a member's path (system). The text replaces what was there; an empty string clears it. Notes are kept in the document and are not part of the model: engines and code generation ignore them.",
   { target: z.string().optional(), notes: z.string() },
   async ({ target, notes }) => {
     if (isErdfPath(PROJECT_FILE)) return erdSetNotes(erdHost, target, notes);
+    if (isSqdfPath(PROJECT_FILE)) return sequenceSetNotes(sequenceHost, target, notes);
+    if (isSysdfPath(PROJECT_FILE)) return systemSetNotes(systemHost, target, notes);
     const def = readDef();
     if (!def)
-      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+      return { content: [{ type: "text", text: noMachine() }], isError: true };
     const holder = target ? findState(def.state, target) : def.settings;
     if (!holder)
       return { content: [{ type: "text", text: `State '${target}' not found.` }], isError: true };
@@ -1289,9 +1413,11 @@ server.tool(
   {},
   async () => {
     if (isErdfPath(PROJECT_FILE)) return erdGetNotes(erdHost);
+    if (isSqdfPath(PROJECT_FILE)) return sequenceGetNotes(sequenceHost);
+    if (isSysdfPath(PROJECT_FILE)) return systemGetNotes(systemHost);
     const def = readDef();
     if (!def)
-      return { content: [{ type: "text", text: `No state machine at ${PROJECT_FILE}.` }], isError: true };
+      return { content: [{ type: "text", text: noMachine() }], isError: true };
     const entries = collectNotes(def as unknown as StateMachineDefinition);
     return { content: [{ type: "text", text: formatNotes(def.settings.name, PROJECT_FILE, entries) }] };
   }

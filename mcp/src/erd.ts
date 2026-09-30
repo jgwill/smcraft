@@ -29,6 +29,8 @@ import {
   ERD_CARDINALITIES,
   isErdDefinition,
   isErdfPath,
+  isSqdfPath,
+  isSysdfPath,
   removeAttribute,
   removeEntity,
   removeRelationship,
@@ -53,6 +55,8 @@ export interface ErdHost {
   emitFull(def: EntityRelationshipDefinition): void;
   /** The refusal for a path outside the permitted document root, if any. */
   outsideRoot(path: string): string | undefined;
+  /** check_links from a sequence or a system: the whole system's check (check_system). */
+  checkSystem?(): Promise<ToolResult>;
 }
 
 type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean };
@@ -349,10 +353,13 @@ export function registerErdTools(server: McpServer, host: ErdHost): void {
 
   server.tool(
     "check_links",
-    "Check the names a state machine uses for its data against an ERD (rules L001–L004): the class of each object a guard reads a field of must be an entity, each <instance>.<field> in a guard must be an attribute of it, and an attribute's stateOf must point at a machine built with that entity. With no arguments: when the active document is an ERD, every .smdf.json beside it is checked; when it is a state machine, pass erd_path.",
+    "Check the names a state machine uses for its data against an ERD (rules L001–L004): the class of each object a guard reads a field of must be an entity, each <instance>.<field> in a guard must be an attribute of it, and an attribute's stateOf must point at a machine built with that entity. With no arguments: when the active document is an ERD, every .smdf.json beside it is checked; when it is a state machine, pass erd_path; when it is a sequence or a system, the whole system is checked (check_system).",
     { erd_path: z.string().optional(), smdf_paths: z.array(z.string()).optional() },
     async ({ erd_path, smdf_paths }) => {
       const active = host.projectFile();
+      if (!erd_path && !smdf_paths?.length && host.checkSystem && (isSqdfPath(active) || isSysdfPath(active))) {
+        return host.checkSystem();
+      }
       const erdPath = erd_path ? resolve(erd_path) : isErdfPath(active) ? active : undefined;
       if (!erdPath) {
         return fail(`The active document ${active} is a state machine — pass erd_path, the .erdf.json to check it against.`);

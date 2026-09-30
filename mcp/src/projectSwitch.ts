@@ -1,6 +1,7 @@
 /**
  * Pure logic behind the `set_project_file` MCP tool (path power — the agent
- * chooses which `.smdf.json` document the loom weaves).
+ * chooses which document the loom weaves: a `.smdf.json`, `.erdf.json`,
+ * `.sqdf.json` or `.sysdf.json`).
  *
  * Two modalities, by William's orientation (2026-08-07): STANDALONE — a plain
  * path, no episode, just designing — and RELATIONAL — the document lives
@@ -31,8 +32,12 @@ export function chronicleRoot(env: Record<string, string | undefined> = process.
 }
 
 /**
- * Resolve `miadi-chronicle://<episode>/[diagrams/]<name>[.smdf.json]` to the
- * absolute path `<root>/<episode-dir>/diagrams/<name>.smdf.json`.
+ * Resolve `miadi-chronicle://<episode>/[diagrams/]<name>[.<type>.json]` to the
+ * absolute path `<root>/<episode-dir>/diagrams/<name>.<type>.json`. The loom
+ * weaves four types, told apart by extension: `.smdf.json` (state machine),
+ * `.erdf.json` (ERD), `.sqdf.json` (sequence), `.sysdf.json` (system). An
+ * explicit extension is kept; `.smdf`/`.erdf`/`.sqdf`/`.sysdf` without `.json`
+ * gets it; a bare name is a state machine, `<name>.smdf.json`, as it always was.
  *
  * Episode matching: exact folder name first; else a bare number matches
  * `-episode-NNN-` folders. Episode numbers are NOT unique in the chronicle
@@ -86,15 +91,21 @@ export function resolveChronicleUri(
     );
   }
 
-  const file = name.endsWith(".json") ? name : `${name}.smdf.json`;
-  return join(root, matches[0], "diagrams", file);
+  return join(root, matches[0], "diagrams", loomFileName(name));
+}
+
+/** `<name>` → `<name>.smdf.json`; a loom type without `.json` gets it; any `.json` is kept. */
+function loomFileName(name: string): string {
+  if (name.toLowerCase().endsWith(".json")) return name;
+  if (/\.(smdf|erdf|sqdf|sysdf)$/i.test(name)) return `${name}.json`;
+  return `${name}.smdf.json`;
 }
 
 export function resolveProjectSwitch(next: string, previous: string): SwitchResult {
   const path = CHRONICLE_SCHEME.test(next) ? resolveChronicleUri(next) : resolve(next);
   if (!path.endsWith(".json")) {
     throw new Error(
-      `project file must be a .json document (got '${path}') — the loom weaves .smdf.json files`,
+      `project file must be a .json document (got '${path}') — the loom weaves .smdf.json (state machine), .erdf.json (ERD), .sqdf.json (sequence) and .sysdf.json (system) files`,
     );
   }
   return {
