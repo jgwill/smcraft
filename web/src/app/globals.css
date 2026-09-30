@@ -84,6 +84,21 @@ body {
   padding-right: env(safe-area-inset-right);
 }
 
+/* The system strip (Spec 82) takes one row above whichever workspace is open;
+   the workspace gives that row back from its own full-screen height. */
+.system-frame {
+  --strip-h: 2.375rem;
+  padding-top: env(safe-area-inset-top);
+}
+.system-frame > .app-shell {
+  height: calc(100vh - var(--strip-h) - env(safe-area-inset-top));
+  height: calc(100dvh - var(--strip-h) - env(safe-area-inset-top));
+  padding-top: 0;
+}
+@media (min-width: 768px) {
+  .system-frame { --strip-h: 2.25rem; }
+}
+
 /* Phone only: hold content clear of the fixed tab dock. Zeroed at the `md`
    breakpoint because the dock is gone there and the sidebar is a real column. */
 .dock-offset {

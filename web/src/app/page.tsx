@@ -12,11 +12,17 @@ import DesignBridge from "@/components/DesignBridge";
 import UiScale from "@/components/UiScale";
 import { useDesignerStore } from "@/store/useDesignerStore";
 import ErdWorkspace from "@/components/erd/ErdWorkspace";
+import SequenceWorkspace from "@/components/sequence/SequenceWorkspace";
+import SystemWorkspace from "@/components/system/SystemWorkspace";
+import SystemStrip from "@/components/system/SystemStrip";
+import BoardBoundary from "@/components/BoardBoundary";
 import IssueIcon from "@/components/IssueIcon";
-import { isErdfPath } from "@miadi/stateloom-protocol";
+import { docKindOfPath, isSysdfPath, type DocKind } from "@miadi/stateloom-protocol";
 import { useRequestedDoc } from "@/lib/docParam";
+import { useMachineFocus } from "@/lib/machineFocus";
 import { loadRuntimeConfig } from "@/lib/runtimeConfig";
 import { useSheetDrag } from "@/lib/useSheetDrag";
+import { useUrlParam } from "@/lib/systemParam";
 
 type Tab = "properties" | "events" | "settings" | "validation";
 
@@ -48,32 +54,66 @@ function contextMenuPlacement(x: number, y: number): CSSProperties {
 }
 
 /**
- * The document's type is its extension (Spec 80): a `.erdf.json` opens the ERD
- * workspace, anything else the state designer. Decided before either mounts, so
- * the state designer's store and bridge never see an ERD: `?doc=` answers by its
- * extension, and without it the serving process names its default document.
+ * The document's type is its extension (Specs 80–82, `docKindOfPath`): a
+ * `.erdf.json` opens the ERD workspace, a `.sqdf.json` the sequence workspace,
+ * a `.sysdf.json` the system map, anything else the state designer. Decided
+ * before any of them mounts, so the state designer's store and bridge never see
+ * another kind: `?doc=` answers by its extension, and without it the serving
+ * process names its default document.
+ *
+ * With `?system=<.sysdf.json>` the document is read as a member of that system,
+ * and the system strip sits above whichever workspace is open.
  */
 export default function Home() {
   // `null` until its first effect has read the URL, and whenever there is no `?doc=`.
   const requested = useRequestedDoc();
-  const [defaultKind, setDefaultKind] = useState<"machine" | "erd" | null>(null);
+  const systemParam = useUrlParam("system");
+  const [defaultKind, setDefaultKind] = useState<DocKind | null>(null);
 
   useEffect(() => {
     let live = true;
     loadRuntimeConfig().then((c) => {
-      if (live) setDefaultKind(c.projectFile && isErdfPath(c.projectFile) ? "erd" : "machine");
+      if (live) setDefaultKind(c.projectFile ? docKindOfPath(c.projectFile) : "machine");
     });
     return () => {
       live = false;
     };
   }, []);
 
-  const kind = requested ? (isErdfPath(requested) ? "erd" : "machine") : defaultKind;
+  const kind = requested ? docKindOfPath(requested) : defaultKind;
   if (kind === null) return <div className="app-shell bg-gray-950" />;
-  return kind === "erd" ? <ErdWorkspace /> : <MachineDesigner />;
+  // Keyed by the document, so a switch between two documents of one kind starts
+  // that workspace clean. The state designer keeps its own store and re-keys its bridge.
+  const key = requested ?? "default";
+  const workspace =
+    kind === "erd" ? (
+      <ErdWorkspace key={key} />
+    ) : kind === "sequence" ? (
+      <SequenceWorkspace key={key} />
+    ) : kind === "system" ? (
+      <SystemWorkspace key={key} />
+    ) : (
+      <MachineDesigner />
+    );
+  // The last resort: whatever a malformed document breaks that the boards'
+  // own boundaries do not catch shows a message, not Next's "Application error".
+  const guarded = (
+    <BoardBoundary what="document" resetKey={requested}>
+      {workspace}
+    </BoardBoundary>
+  );
+  if (!systemParam || !isSysdfPath(systemParam)) return guarded;
+  return (
+    <div className="system-frame">
+      <SystemStrip systemPath={systemParam} />
+      {guarded}
+    </div>
+  );
 }
 
 function MachineDesigner() {
+  // `focus=` in, the selection out (Spec 82).
+  useMachineFocus();
   const [activeTab, setActiveTab] = useState<Tab>("properties");
   // Phone-only state. The panel column and the bottom sheet are the same
   // element: below `md` it is an overlay that starts closed so the canvas owns
@@ -122,7 +162,9 @@ function MachineDesigner() {
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* Canvas */}
         <div className="flex-1 overflow-hidden">
-          <Canvas />
+          <BoardBoundary what="state machine">
+            <Canvas />
+          </BoardBoundary>
         </div>
 
         {/* Scrim. Phone only — it is what makes "tap the canvas to dismiss"

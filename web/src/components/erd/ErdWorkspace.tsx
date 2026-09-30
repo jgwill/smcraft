@@ -37,6 +37,7 @@ import {
   emptyErd,
   erdAutoLayout,
   isErdDefinition,
+  parseFocus,
   removeAttribute,
   removeEntity,
   removeRelationship,
@@ -52,12 +53,15 @@ import {
   type StateMachineDefinition,
   type Viewport,
 } from "@miadi/stateloom-protocol";
+import BoardBoundary from "@/components/BoardBoundary";
 import DocSwitcher from "@/components/DocSwitcher";
 import IssueIcon from "@/components/IssueIcon";
 import LockIcon from "@/components/LockIcon";
 import { docQuery, navigateToDoc, useRequestedDoc } from "@/lib/docParam";
 import { loadRuntimeConfig } from "@/lib/runtimeConfig";
 import { useSheetDrag } from "@/lib/useSheetDrag";
+import { urlParam, useFocusRequest, writeFocus } from "@/lib/systemParam";
+import { safely } from "@/lib/safely";
 
 type Moved = Record<string, { x: number; y: number }>;
 type Tab = "entities" | "relations" | "notes" | "issues";
@@ -229,14 +233,20 @@ export default function ErdWorkspace() {
 
   const positions = useMemo<Record<string, LayoutBox>>(() => {
     if (!def) return {};
-    const derived = erdAutoLayout(def, { notation });
+    // A malformed document lays out as nothing rather than taking the page down; the board says why.
+    const derived = safely<Record<string, LayoutBox>>(() => erdAutoLayout(def, { notation }), {});
     for (const [name, at] of Object.entries(moved)) {
       if (derived[name]) derived[name] = { ...derived[name], ...at };
     }
     return derived;
   }, [def, moved, notation]);
 
-  const problems = useMemo(() => (def ? validateErd(def) : []), [def]);
+  const problems = useMemo<ErdValidationError[]>(() => {
+    if (!def) return [];
+    let failure = "";
+    const found = safely<ErdValidationError[] | null>(() => validateErd(def), null, (m) => (failure = m));
+    return found ?? [{ ruleId: "E000", message: `The document could not be checked (${failure}): a field is not the shape Spec 80 gives it` }];
+  }, [def]);
   const errorEntities = useMemo(
     () => problems.map((p) => (p.element ?? "").split(/[.[]/)[0]).filter(Boolean),
     [problems],
@@ -365,6 +375,23 @@ export default function ErdWorkspace() {
     sheet.close();
   };
 
+  // A focus from the URL, the system strip or an agent (Spec 82): select it and
+  // show it. `attribute:E.a` shows its entity. A person's selection becomes the
+  // focus in turn, so the strip can list what it links to.
+  const focusRequest = useFocusRequest();
+  const appliedFocus = useRef(-1);
+  useEffect(() => {
+    if (!def || appliedFocus.current === focusRequest.nonce) return;
+    appliedFocus.current = focusRequest.nonce;
+    const f = focusRequest.focus ? parseFocus(focusRequest.focus) : null;
+    const name = f?.kind === "entity" ? f.name : f?.kind === "attribute" ? f.name.split(".")[0] : null;
+    if (name && positions[name]) showOnBoard(name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [def, focusRequest, positions]);
+  useEffect(() => {
+    if (selection && !urlParam("focus")?.startsWith(`attribute:${selection}.`)) writeFocus(`entity:${selection}`);
+  }, [selection]);
+
   const openTab = (next: Tab): void => {
     // Tapping the tab you are already reading closes the sheet, so the dock is
     // both switcher and dismiss control.
@@ -486,6 +513,7 @@ export default function ErdWorkspace() {
       <div className="relative flex min-h-0 flex-1">
         <div ref={boardRef} className="relative min-w-0 flex-1 overflow-hidden">
           {def && (
+            <BoardBoundary what="diagram" resetKey={def}>
             <EntityRelationshipCanvas
               definition={def}
               notation={notation}
@@ -502,6 +530,7 @@ export default function ErdWorkspace() {
               onOpenMachine={openMachine}
               emptyHint="No entities yet — add one in the panel, or let an agent call add_entity."
             />
+            </BoardBoundary>
           )}
 
           {/* Status costs no layout: it is a line over the board's corner. */}
@@ -844,7 +873,7 @@ export default function ErdWorkspace() {
  * for instance — the box takes it, unless someone is typing in it: a save of
  * their own words coming back must never pull the text out from under them.
  */
-function NotesField({
+export function NotesField({
   label,
   value,
   placeholder,

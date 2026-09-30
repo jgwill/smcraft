@@ -521,3 +521,107 @@
   font-size: 16px;
   pointer-events: none;
 }
+
+/* ─── Sequence canvas (Spec 81) ───────────────────────────────────────────── */
+/* The same variables again: one theme skins all three boards. */
+
+.slc-sqd-name { font-size: 12px; }
+.slc-sqd-name--object { text-decoration: underline; }
+
+.slc-sqd-kind {
+  fill: var(--slc-faint);
+  font-size: 8.5px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-sqd-header--involved { stroke: var(--slc-accent-ink); stroke-width: 1.5; }
+
+.slc-sqd-participant,
+.slc-sqd-message { cursor: pointer; }
+
+.slc-sqd-lifeline {
+  fill: none;
+  stroke: var(--slc-node-stroke);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  pointer-events: none;
+}
+.slc-sqd-lifeline--selected { stroke: var(--slc-accent); stroke-width: 1.5; }
+
+/* Invisible, wide: what a finger actually hits. */
+.slc-sqd-hit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
+.slc-sqd-hitbox { fill: transparent; }
+
+.slc-sqd-line {
+  fill: none;
+  stroke: var(--slc-edge);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+.slc-sqd-line--reply { stroke-dasharray: 6 4; }
+.slc-sqd-line--optional { opacity: 0.8; }
+.slc-sqd-line--warn { stroke: var(--slc-draw-source); }
+.slc-sqd-line--error { stroke: var(--slc-danger); }
+.slc-sqd-line--selected { stroke: var(--slc-accent); stroke-width: 2; }
+
+.slc-sqd-head { fill: var(--slc-edge); stroke: var(--slc-edge); stroke-width: 1.2; stroke-linejoin: round; pointer-events: none; }
+.slc-sqd-head--open { fill: none; stroke-width: 1.5; }
+.slc-sqd-head--error { fill: var(--slc-danger); stroke: var(--slc-danger); }
+.slc-sqd-head--selected { fill: var(--slc-accent); stroke: var(--slc-accent); }
+.slc-sqd-head--open.slc-sqd-head--selected,
+.slc-sqd-head--open.slc-sqd-head--error { fill: none; }
+
+.slc-sqd-selected-plate { fill: var(--slc-accent-fill); opacity: 0.35; pointer-events: none; }
+
+.slc-sqd-ref-plate { fill: var(--slc-chip-fill); stroke: var(--slc-chip-stroke); stroke-width: 1; pointer-events: none; }
+.slc-sqd-ref-plate--selected { stroke: var(--slc-accent); }
+.slc-sqd-ref {
+  fill: var(--slc-muted);
+  font-size: 10px;
+  font-weight: 600;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-sqd-label {
+  fill: var(--slc-label);
+  font-size: 11px;
+  pointer-events: none;
+  user-select: none;
+}
+.slc-sqd-label--selected { fill: var(--slc-accent-ink); }
+.slc-sqd-label--error { fill: var(--slc-danger); }
+
+.slc-sqd-event { fill: var(--slc-accent-fill); stroke: var(--slc-accent); stroke-width: 0.8; pointer-events: none; }
+.slc-sqd-event-text {
+  fill: var(--slc-accent-ink);
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-sqd-opt { fill: none; stroke: var(--slc-faint); stroke-width: 1; stroke-dasharray: 2 2; pointer-events: none; }
+.slc-sqd-opt-text { fill: var(--slc-muted); font-size: 9.5px; font-style: italic; pointer-events: none; user-select: none; }
+
+.slc-sqd-state {
+  fill: var(--slc-entry);
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-sqd-frame { fill: none; stroke: var(--slc-composite); stroke-width: 1.2; pointer-events: none; }
+.slc-sqd-frame-tab { fill: var(--slc-composite-fill); stroke: var(--slc-composite); stroke-width: 1.2; pointer-events: none; }
+.slc-sqd-frame-heading { fill: var(--slc-muted); font-size: 11px; pointer-events: none; user-select: none; }
+.slc-sqd-frame-kind { fill: var(--slc-label); font-weight: 700; }
+
+.slc-sqd-branch {
+  fill: none;
+  stroke: var(--slc-composite);
+  stroke-width: 1;
+  stroke-dasharray: 1 3;
+  pointer-events: none;
+}

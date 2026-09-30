@@ -24,6 +24,14 @@ export type {
 export { EntityRelationshipCanvas } from "./EntityRelationshipCanvas.js";
 export type { EntityRelationshipCanvasProps, ErdCanvasTarget } from "./EntityRelationshipCanvas.js";
 
+export { SequenceCanvas, drawableSequence } from "./SequenceCanvas.js";
+export type {
+  SequenceCanvasProps,
+  SequenceCanvasTarget,
+  SequenceSelection,
+  SequenceTargetKind,
+} from "./SequenceCanvas.js";
+
 export { themeStyle, CANVAS_THEME_VARS } from "./theme.js";
 export type { CanvasTheme } from "./theme.js";
 
@@ -58,6 +66,7 @@ export {
   routeEdges,
   erdAutoLayout,
   erdEntitySize,
+  sequenceLayout,
   placeLabels,
   eventGlyph,
   guardText,
@@ -70,6 +79,8 @@ export type {
   LayoutBox,
   Point,
   ScaleLimits,
+  SequenceDefinition,
+  SequenceLayout,
   StateDef,
   StateMachineDefinition,
   TransitionDef,

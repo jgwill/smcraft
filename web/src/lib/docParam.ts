@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
  * byte-identical to the old behavior.
  */
 
-const DOC_CHANGE_EVENT = "stateloom:doc-change";
+export const DOC_CHANGE_EVENT = "stateloom:doc-change";
 
 export function requestedDoc(): string | null {
   if (typeof window === "undefined") return null;
@@ -29,6 +29,9 @@ export function navigateToDoc(doc: string | null): void {
   const url = new URL(window.location.href);
   if (doc) url.searchParams.set("doc", doc);
   else url.searchParams.delete("doc");
+  // A focus names an element of the document it was written for; it does not
+  // travel to another one. (`system=` does: the strip stays while you browse.)
+  url.searchParams.delete("focus");
   window.history.pushState({}, "", url);
   window.dispatchEvent(new Event(DOC_CHANGE_EVENT));
 }
