@@ -75,6 +75,8 @@ export function applyPatchOps(
   ops: PatchOp[],
 ): StateMachineDefinition {
   const next = clone(def);
+  // A machine written by hand may carry no `events` at all; every op below reads it.
+  if (!Array.isArray(next.events)) next.events = [];
 
   for (const op of ops) {
     switch (op.op) {

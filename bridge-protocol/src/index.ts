@@ -98,3 +98,66 @@ export { erdAutoLayout, erdEntitySize, erdRowText, ERD_BOX, ERD_LAYOUT_DEFAULTS 
 export type { ErdLayoutOptions } from "./erd/layout.js";
 export { diagramFileName, timeStamp, episodeOf } from "./exportName.js";
 export type { DiagramNameInput } from "./exportName.js";
+export * from "./sequence/definition.js";
+export { validateSequence } from "./sequence/validate.js";
+export type { SqdValidationError } from "./sequence/validate.js";
+export {
+  updateSqdSettings,
+  addParticipant,
+  updateParticipant,
+  removeParticipant,
+  renameParticipant,
+  moveParticipant,
+  addMessage,
+  updateMessage,
+  removeMessage,
+  moveMessage,
+  addFragment,
+  updateFragment,
+  removeFragment,
+  addFragmentMessage,
+  summarizeSequence,
+} from "./sequence/edit.js";
+export { sequenceLayout, SEQUENCE_LAYOUT_DEFAULTS } from "./sequence/layout.js";
+export type {
+  SequenceLayout,
+  SequenceLayoutOptions,
+  SequenceParticipantBox,
+  SequenceRow,
+  SequenceFragmentBox,
+} from "./sequence/layout.js";
+export { renderMermaidSequence } from "./render/mermaidSequence.js";
+export * from "./system/definition.js";
+export {
+  updateSystemSettings,
+  addMember,
+  updateMember,
+  removeMember,
+  addActor,
+  removeActor,
+  setReconcileMode,
+  summarizeSystem,
+} from "./system/edit.js";
+export { reconcileSystem, summarizeReconcile } from "./system/reconcileSystem.js";
+export type { SystemReconcile } from "./system/reconcileSystem.js";
+export { replayScenario, formatReplay, machineName } from "./system/replay.js";
+export type { ReplayReport, ReplayPath, ReplayStep, ReplayResult, ReplayPathKind } from "./system/replay.js";
+export { reconcileScenario } from "./system/reconcile.js";
+export type { ReconcileProposal, ReconcileResult } from "./system/reconcile.js";
+export {
+  checkSystem,
+  systemLinks,
+  linksOf,
+  membersByKind,
+  elementFocus,
+  parseFocus,
+} from "./system/check.js";
+export type {
+  LoadedMember,
+  SystemIssue,
+  SystemCheck,
+  SystemMembers,
+  ElementKind,
+  ElementRef,
+  SystemLink,
+} from "./system/check.js";

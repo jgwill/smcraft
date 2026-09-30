@@ -1,0 +1,167 @@
+{
+  "settings": {
+    "namespace": "Trading.Analysis",
+    "name": "ElliottWaveCountData",
+    "description": "The data ElliottWaveCountLifecycle acts on, from a wave label on the chart to the trading campaign that records the result. Drawn from jgt-analysis-intelligence src/models.py (ChartDrawing, AnalysisArtifact, TradeSetup, SetupArtifactLink, AnalysisStrategyLink), jgt-blueprint-api src/models.py (CampaignMandate, MandateDelegation) and jgt-strategy-api src/models.py (Campaign, TradingStrategy). Attributes whose description starts with 'planned' do not exist yet.",
+    "notes": "Revision 1, 2026-09-25, from Guillaume's comments G1-G17 on the proposal page. Episode 140 strategic entry, session c9ee574b-0165-44e9-8974-4e83a977ae55. A trading campaign is jgt-strategy-api's campaigns table (instrument, timeframe, direction; groups strategies; counts wins and losses). A project with a target amount to raise is something else: the Project Planner parked in /b/trading/jgt-projects. The blueprint prototype still carries that planner's Campaign (desire_statement, target_amount), CampaignOutcome, ResourcePool and Project tables; they are left out of this chain and their names are under review (action A10). The blueprint itself is a PROTOTYPE that never delivered anything working (Guillaume, 2026-09-24)."
+  },
+  "entities": [
+    {
+      "name": "WaveLabelMark",
+      "description": "One wave label Guillaume placed on the price chart: a chart_drawings row whose tool is wave_label. Its one anchor is the end point of the wave it names (caishen spec 80 WavePoint); the wave's start is the previous label's point. A mark, not evidence.",
+      "notes": "Named from specs 80-81 (label, wave point); no spec uses the word pivot, and the BOSf drift review removed it on 2026-09-03. Adding the tool to the store is one TOOL_ANCHORS entry: 'wave_label': 1.",
+      "attributes": [
+        { "name": "id", "type": "string(36)", "key": "pk", "description": "The chart's render key" },
+        { "name": "namespace", "type": "string(64)", "description": "Drawing context, e.g. 260925" },
+        { "name": "instrument", "type": "string(50)" },
+        { "name": "timeframe", "type": "string(20)", "description": "Also gives the degree (G13)" },
+        { "name": "tool", "type": "string(30)", "description": "planned value: wave_label" },
+        { "name": "anchors", "type": "json", "description": "[{time, price}] - one anchor, the wave's end point" },
+        { "name": "props", "type": "json", "description": "planned keys: label (1-5, A-E, X), role (primary | alternate)" },
+        { "name": "note", "type": "text", "nullable": true },
+        { "name": "author_kind", "type": "string(10)", "description": "human | agent, set by transport" },
+        { "name": "retired", "type": "bool" }
+      ]
+    },
+    {
+      "name": "AoMark",
+      "description": "An existing drawing on the AO pane (jgwill/jgtsrc#154): ao_divergence, ao_divergence_watch, ao_no_divergence, ao_arrow. Its price is the AO value on the timeframe it was drawn on.",
+      "notes": "Read as momentum corroboration of a count: W3 carries the highest AO peak of the impulse, W5 makes a new price extreme with a lower AO peak (caishen spec 86; rispecs/consensus-trade-decision.spec.md; jgt-data-server/rispecs/wave-analysis.spec.md).",
+      "attributes": [
+        { "name": "id", "type": "string(36)", "key": "pk" },
+        { "name": "timeframe", "type": "string(20)" },
+        { "name": "tool", "type": "string(30)", "description": "ao_divergence | ao_divergence_watch | ao_no_divergence | ao_arrow" },
+        { "name": "anchors", "type": "json", "description": "[{time, price = AO value}]" }
+      ]
+    },
+    {
+      "name": "WaveCount",
+      "description": "The published reading of one instrument and timeframe: an AnalysisArtifact whose artifact_type is wave_count. Agents read it; a TradeSetup cites it.",
+      "attributes": [
+        { "name": "id", "type": "string(36)", "key": "pk" },
+        { "name": "instrument", "type": "string(50)" },
+        { "name": "timeframe", "type": "string(20)" },
+        { "name": "artifact_type", "type": "string(20)", "description": "wave_count" },
+        { "name": "wave_label", "type": "string(100)", "description": "Primary count: the wave in progress" },
+        { "name": "wave_degree", "type": "string(50)", "description": "planned rule: derived from timeframe - M1 Cycle, W1 Primary, D1 Intermediate, H4 Minor, H1 Minute, m15 Minuette, m5 Subminuette" },
+        { "name": "wave_position", "type": "string(50)" },
+        { "name": "alternate_count", "type": "json", "nullable": true, "description": "Spec 80 WaveAlt + DirectionAlt" },
+        { "name": "key_invalidation_level", "type": "float", "nullable": true, "description": "planned rule: computed from Elliott's rules over the labels, never typed (G14)" },
+        { "name": "parent_artifact_id", "type": "string(36)", "references": "WaveCount.id", "nullable": true, "description": "The count one degree higher" },
+        { "name": "timeframe_rank", "type": "int", "nullable": true, "description": "M1=1 ... m5=8" },
+        { "name": "zone_status", "type": "string(20)" },
+        { "name": "provenance", "type": "json", "description": "planned keys: label_ids (the WaveLabelMark rows), ao_mark_ids, wave_identities" },
+        { "name": "reading_state", "type": "string(20)", "stateOf": "ElliottWaveCountLifecycle", "description": "planned: the Reading and Published state of this point of view; downstream states are held by their owners" },
+        { "name": "is_resolved", "type": "bool" }
+      ]
+    },
+    {
+      "name": "WaveIdentity",
+      "weak": true,
+      "description": "Spec 80's wave: start point, end point, label, type. Derived from consecutive labels at publish time and kept in WaveCount.provenance.",
+      "attributes": [
+        { "name": "start_time", "type": "datetime" },
+        { "name": "start_price", "type": "float" },
+        { "name": "end_time", "type": "datetime" },
+        { "name": "end_price", "type": "float", "description": "-1 means not settled yet" },
+        { "name": "is_completed", "type": "bool" },
+        { "name": "wave_label", "type": "int", "description": "ElliottWaveLabel wire value: 1..5, 11..15, -1, -100" }
+      ]
+    },
+    {
+      "name": "TradeSetup",
+      "description": "The typed setup an agent drafts when Guillaume asks for a blueprint from a count; the only door from analysis into the blueprint.",
+      "attributes": [
+        { "name": "setup_id", "type": "string(36)", "key": "pk" },
+        { "name": "instrument", "type": "string(50)" },
+        { "name": "direction", "type": "string(4)", "description": "BUY | SELL" },
+        { "name": "entry_zone", "type": "json" },
+        { "name": "valid_signal_types", "type": "json", "description": "e.g. fdbb" },
+        { "name": "invalidation", "type": "json", "description": "{kind, level?, rule?, source_artifact_id?} - planned kind: wave_count, level defaulting to the count's" },
+        { "name": "status", "type": "string(30)", "description": "draft | ready_for_authorization | superseded | invalidated" }
+      ]
+    },
+    {
+      "name": "SetupArtifactLink",
+      "weak": true,
+      "description": "Which analysis a setup was drafted from.",
+      "attributes": [
+        { "name": "setup_id", "type": "string(36)", "references": "TradeSetup.setup_id" },
+        { "name": "artifact_id", "type": "string(36)", "references": "WaveCount.id" }
+      ]
+    },
+    {
+      "name": "CampaignMandate",
+      "description": "jgt-blueprint-api prototype: what Guillaume authorized once - a copy of the count as it was, the invalidation level he chose, and a validity window.",
+      "attributes": [
+        { "name": "mandate_id", "type": "int", "key": "pk" },
+        { "name": "source_setup_id", "type": "string(36)", "key": "uk", "references": "TradeSetup.setup_id", "description": "Soft reference across databases" },
+        { "name": "source_artifact_ids", "type": "json", "description": "Carries the WaveCount id" },
+        { "name": "invalidation", "type": "json", "description": "Chosen at authorization, defaulting to the count's level (G14)" },
+        { "name": "campaign_id", "type": "int", "description": "Today references the prototype's own campaigns table, a Project Planner leftover, not jgt-strategy-api's trading campaign (A10)" },
+        { "name": "valid_until", "type": "datetime" },
+        { "name": "execution_mode", "type": "string(20)", "description": "practice | live" },
+        { "name": "authorized_by", "type": "string(50)" },
+        { "name": "state", "type": "string(20)", "description": "AUTHORIZED | ARMED | TRIGGERED | INVALIDATED | EXPIRED | COMPLETED | PAUSED" }
+      ]
+    },
+    {
+      "name": "MandateDelegation",
+      "description": "The exactly-once creation of a strategy when the mandate sees a breakout point.",
+      "attributes": [
+        { "name": "delegation_id", "type": "int", "key": "pk" },
+        { "name": "mandate_id", "type": "int", "references": "CampaignMandate.mandate_id" },
+        { "name": "breakout_price", "type": "float", "description": "planned: the fractal level the strategy breaks out of (G12)" },
+        { "name": "strategy_api_strategy_id", "type": "int", "references": "TradingStrategy.strategy_id", "nullable": true }
+      ]
+    },
+    {
+      "name": "TradingCampaign",
+      "description": "jgt-strategy-api campaigns: a directional intention on one instrument and timeframe that groups strategies and counts their wins and losses. 33 rows, 8 wins, 16 losses on 2026-09-25.",
+      "attributes": [
+        { "name": "campaign_id", "type": "int", "key": "pk" },
+        { "name": "campaign_name", "type": "string(255)" },
+        { "name": "instrument", "type": "string(50)" },
+        { "name": "timeframe", "type": "string(20)" },
+        { "name": "direction", "type": "string(10)", "description": "BULLISH | BEARISH" },
+        { "name": "max_strategies", "type": "int" },
+        { "name": "total_wins", "type": "int" },
+        { "name": "total_losses", "type": "int" }
+      ]
+    },
+    {
+      "name": "TradingStrategy",
+      "description": "jgt-strategy-api: the strategic entry. Full entity in /b/trading/diagrams/trading-strategy.erdf.json.",
+      "attributes": [
+        { "name": "strategy_id", "type": "int", "key": "pk" },
+        { "name": "campaign_id", "type": "int", "references": "TradingCampaign.campaign_id", "nullable": true },
+        { "name": "strategy_type", "type": "string", "description": "fdb_breakout (UI: BOS) | bosf_breakout (UI: BOSf, BOS with a fractal count, not implemented). Both use the FDB principle." },
+        { "name": "breakout_price", "type": "float" },
+        { "name": "strategy_state", "type": "int", "description": "State of the BOS or BOSf machine" }
+      ]
+    },
+    {
+      "name": "AnalysisStrategyLink",
+      "weak": true,
+      "description": "Keeps the count as the strategy's reason, so a trade review walks from an order back to the labels. 0 rows on 2026-09-24.",
+      "attributes": [
+        { "name": "analysis_id", "type": "string(36)", "references": "WaveCount.id" },
+        { "name": "strategy_id", "type": "int", "references": "TradingStrategy.strategy_id" }
+      ]
+    }
+  ],
+  "relationships": [
+    { "from": "WaveCount", "to": "WaveLabelMark", "cardinality": "1:N", "label": "is compiled from", "description": "provenance.label_ids at publish time" },
+    { "from": "WaveCount", "to": "AoMark", "cardinality": "N:M", "label": "is corroborated by", "description": "provenance.ao_mark_ids; confidence only, never the verdict" },
+    { "from": "WaveCount", "to": "WaveCount", "cardinality": "1:N", "label": "is the parent degree of" },
+    { "from": "WaveCount", "to": "WaveIdentity", "cardinality": "1:N", "label": "is traced by" },
+    { "from": "WaveCount", "to": "SetupArtifactLink", "cardinality": "1:N", "label": "is cited by" },
+    { "from": "TradeSetup", "to": "SetupArtifactLink", "cardinality": "1:N", "label": "is drafted from" },
+    { "from": "TradeSetup", "to": "CampaignMandate", "cardinality": "1:1", "label": "is authorized as" },
+    { "from": "CampaignMandate", "to": "MandateDelegation", "cardinality": "1:N", "label": "delegates through" },
+    { "from": "MandateDelegation", "to": "TradingStrategy", "cardinality": "1:1", "label": "creates" },
+    { "from": "TradingCampaign", "to": "TradingStrategy", "cardinality": "1:N", "label": "groups" },
+    { "from": "WaveCount", "to": "AnalysisStrategyLink", "cardinality": "1:N", "label": "is the reason in" },
+    { "from": "TradingStrategy", "to": "AnalysisStrategyLink", "cardinality": "1:N", "label": "keeps its reason in" }
+  ]
+}

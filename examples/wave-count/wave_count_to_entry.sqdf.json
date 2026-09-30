@@ -1,0 +1,44 @@
+{
+  "settings": {
+    "namespace": "jgt.trading",
+    "name": "WaveCountToEntry",
+    "description": "Guillaume labels a wave count on the chart and publishes it; when he asks, the count becomes a blueprint that watches for the breakout point and creates a BOS strategy there. Episode 140, 'Your scenario, after 1 and 2'. Prices are an example on EUR-USD H4.",
+    "notes": "Transcribed from the hand-drawn figure on the Episode 140 page (jgwill/smcraft#28). Message 13 fires the BOS strategy's own machine, which is not a member of this system."
+  },
+  "participants": [
+    { "name": "Guillaume", "actor": "Guillaume" },
+    { "name": "Chart", "service": "jgt-charting" },
+    { "name": "Analysis", "service": "jgt-analysis-intelligence :8085", "holds": ["WaveLabelMark", "WaveCount", "TradeSetup", "SetupArtifactLink", "AnalysisStrategyLink"] },
+    { "name": "Agent", "actor": "Agent", "description": "Laskmi or Mia, through the analysis MCP" },
+    { "name": "Blueprint", "service": "jgt-blueprint-api :8086", "holds": ["CampaignMandate", "MandateDelegation"] },
+    { "name": "Strategy", "service": "jgt-strategy-api :8083", "holds": ["TradingStrategy", "TradingCampaign"] },
+    { "name": "Market", "object": "market" }
+  ],
+  "messages": [
+    { "from": "Guillaume", "to": "Chart", "label": "labels 1 and 2", "event": "LabelWave" },
+    { "from": "Chart", "to": "Analysis", "label": "saves two wave_label marks", "carries": "WaveLabelMark" },
+    { "from": "Chart", "to": "Chart", "label": "level 1.0645: 2 may not pass 1's start" },
+    { "from": "Guillaume", "to": "Chart", "label": "Publish", "event": "PublishCount" },
+    { "from": "Chart", "to": "Analysis", "label": "wave_count · Minor · parent D1", "carries": "WaveCount" },
+    { "from": "Analysis", "to": "Analysis", "label": "3 next · tradable · AO near zero", "event": "CountEvaluated", "state": "Published_Tradable" },
+    { "from": "Guillaume", "to": "Agent", "label": "make a blueprint from this count", "event": "RequestBlueprint", "optional": true },
+    { "from": "Agent", "to": "Analysis", "label": "drafts setup: BUY, 3 next", "carries": "TradeSetup" },
+    { "from": "Guillaume", "to": "Blueprint", "label": "authorizes · keeps level 1.0645 · mandate watches", "event": "Authorize", "carries": "CampaignMandate" },
+    { "from": "Market", "to": "Blueprint", "label": "fractal high 1.0724 forms", "event": "BreakoutPointIdentified" },
+    { "from": "Blueprint", "to": "Strategy", "label": "creates BOS at 1.0724", "event": "StrategyCreated", "carries": "TradingStrategy", "state": "StrategicEntry" },
+    { "from": "Strategy", "to": "Analysis", "label": "keeps the count as its reason", "carries": "AnalysisStrategyLink" },
+    { "from": "Market", "to": "Strategy", "label": "breakout, FDB", "notes": "The BOS strategy's own machine hears this; it is not a member of this system." }
+  ],
+  "fragments": [
+    {
+      "kind": "alt",
+      "label": "the market settles the count first",
+      "after": 11,
+      "messages": [
+        { "from": "Market", "to": "Blueprint", "label": "price reaches 1.0645", "event": "InvalidationReached" },
+        { "from": "Blueprint", "to": "Analysis", "label": "mandate and unfilled BOS cancelled by name" },
+        { "from": "Analysis", "to": "Guillaume", "label": "count re-read: the alternate becomes primary", "event": "SwapCompleted" }
+      ]
+    }
+  ]
+}
