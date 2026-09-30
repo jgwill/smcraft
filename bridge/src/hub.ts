@@ -23,6 +23,7 @@ import {
   type Presence,
   type PatchEnvelope,
   type FullEnvelope,
+  type ViewEnvelope,
 } from "@miadi/stateloom-protocol";
 import { normalizeDocId, readDefFile, mtimeOf } from "./docio.js";
 import { watchRoom, type RoomWatcher } from "./watcher.js";
@@ -283,6 +284,22 @@ export function startBridge(opts: StartBridgeOpts = {}): Promise<BridgeHandle> {
       const merged: LivePresence = { ...current, ...payload };
       room.presence.set(socket.id, merged);
       io.to(room.docId).emit(EV.PRESENCE_UPDATE, { clientId: socket.id, ...payload });
+    });
+
+    // A view (Spec 82): which member of a system a canvas should open and what
+    // to focus. Relayed to the room the envelope names — the system file's —
+    // and kept nowhere: it is not a document change, so no seq, no ring, no
+    // disk. The sender need not have joined that room (an agent works in a
+    // member's room and points the system's canvas), so the token is checked
+    // here as it is on join.
+    socket.on(EV.VIEW_IN, (env: ViewEnvelope) => {
+      if (token && socket.handshake.auth?.token !== token) {
+        socket.emit(EV.ERROR, { message: "bridge: invalid or missing auth token" });
+        return;
+      }
+      if (!env || typeof env.docId !== "string" || !env.docId) return;
+      const docId = normalizeDocId(env.docId);
+      io.to(docId).emit(EV.VIEW_OUT, { ...env, docId, origin: env.origin || socket.id });
     });
 
     function leave(): void {

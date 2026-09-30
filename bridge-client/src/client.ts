@@ -16,6 +16,7 @@ import {
   type DocSnapshot,
   type PatchEnvelope,
   type FullEnvelope,
+  type ViewEnvelope,
   EV,
 } from "@miadi/stateloom-protocol";
 
@@ -44,7 +45,7 @@ export interface AckPayload {
   [k: string]: unknown;
 }
 
-export type BridgeEvent = 'patch' | 'full' | 'ack' | 'presence' | 'error' | 'status';
+export type BridgeEvent = 'patch' | 'full' | 'ack' | 'presence' | 'error' | 'status' | 'view';
 
 export interface BridgeClient {
   connect(): Promise<void>;
@@ -53,12 +54,20 @@ export interface BridgeClient {
   emitFull(def: StateMachineDefinition, mtime?: number): void;
   request(sinceSeq?: number): void;
   updatePresence(p: { cursor?: unknown; selection?: unknown }): void;
+  /**
+   * Ask the canvases open on a system to show a member and focus an element
+   * (Spec 82). `docId` is the system file; it defaults to this client's own
+   * document. Needs a connection, not a join.
+   */
+  emitView(view: Omit<ViewEnvelope, 'origin' | 'docId'> & { docId?: string; origin?: string }): Promise<void>;
   on(event: 'patch', h: (e: PatchEnvelope) => void): () => void;
   on(event: 'full', h: (e: FullEnvelope) => void): () => void;
   on(event: 'ack', h: (e: AckPayload) => void): () => void;
   on(event: 'presence', h: (list: Presence[]) => void): () => void;
   on(event: 'error', h: (e: { code: string; message: string }) => void): () => void;
   on(event: 'status', h: (s: BridgeStatus) => void): () => void;
+  /** A view relayed to this client's room (it must have joined the system's room). */
+  on(event: 'view', h: (e: ViewEnvelope) => void): () => void;
   get status(): BridgeStatus;
   get lastSeq(): number;
   get presence(): Presence[];
@@ -102,6 +111,7 @@ export function createBridgeClient(opts: BridgeClientOptions): BridgeClient {
     presence: new Set(),
     error: new Set(),
     status: new Set(),
+    view: new Set(),
   };
 
   function fire(event: BridgeEvent, arg?: unknown): void {
@@ -157,6 +167,9 @@ export function createBridgeClient(opts: BridgeClientOptions): BridgeClient {
   });
   socket.on(EV.ACK, (env: AckPayload) => {
     fire('ack', env);
+  });
+  socket.on(EV.VIEW_OUT, (env: ViewEnvelope) => {
+    fire('view', env);
   });
 
   // --- hub-originated error frames ---
@@ -252,6 +265,11 @@ export function createBridgeClient(opts: BridgeClientOptions): BridgeClient {
     });
   }
 
+  async function emitView(view: Omit<ViewEnvelope, 'origin' | 'docId'> & { docId?: string; origin?: string }): Promise<void> {
+    await connect();
+    socket.emit(EV.VIEW_IN, { ...view, docId: view.docId ?? docId, origin: view.origin ?? (name || role) });
+  }
+
   function on(event: BridgeEvent, handler: (arg: never) => void): () => void {
     const set = listeners[event];
     const h = handler as unknown as (...args: unknown[]) => void;
@@ -274,6 +292,7 @@ export function createBridgeClient(opts: BridgeClientOptions): BridgeClient {
     emitFull,
     request,
     updatePresence,
+    emitView,
     on: on as BridgeClient['on'],
     disconnect,
     get status() {
