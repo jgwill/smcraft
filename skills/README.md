@@ -15,6 +15,8 @@ has never seen this repository can load one and act.
 | `stateloom-docker` | The whole loom in containers: one image, four roles, **one published port**. `stateloom docker up`, the `jgwill/stateloom` image, compose, the same-origin gateway that makes a containerised canvas connect without being told the network, MCP over HTTP with a bearer token, and the document mount. | `stateloom skills install stateloom-docker` |
 | `stateloom-design` | Designing a machine conversationally through the 17 MCP tools — tool order, building a hierarchy, reading validation output, the mistakes that produce V003/V004 errors, and the notes a person leaves on a diagram (`get_notes` / `set_notes`). | `stateloom skills install stateloom-design` |
 | `stateloom-erd` | Designing the DATA beside the machines: an entity-relationship diagram in a sibling `.erdf.json` — entities, attributes, keys, cardinality, weak entities, the E001–E005 rules, `check_links` (what a machine names that the data does not have), `stateOf`, and the two notations (crow's foot, Chen) that are a view and never data. | `stateloom skills install stateloom-erd` |
+| `stateloom-sequence` | Telling a usage scenario in a sibling `.sqdf.json`: participants (actors, services, a machine's objects, holders of entities), ordered messages that fire events, carry entities and name the state that follows, `alt`/`opt`/`loop` fragments with an explicit branch point, and the S001–S006 rules. | `stateloom skills install stateloom-sequence` |
+| `stateloom-system` | The drawings as one system in a `.sysdf.json`: members and actors, `check_system` (Y001–Y004, L001–L008), the replay of each scenario through the machines, reconcile in `propose` or `auto` mode (the scenario updates the machines, the ERD and the actors), `show` to point the live canvas, and one rispec from a whole system. | `stateloom skills install stateloom-system` |
 | `stateloom-live-loop` | The real-time bridge: agent and human editing one board at once. Hub, rooms keyed by absolute path, presence, `smcx watch`, the web canvas, persist-then-emit, external-edit detection, and diagnosing `○ no disk`. | `stateloom skills install stateloom-live-loop` |
 | `stateloom-render` | Drawing the machine from all three surfaces (CLI, MCP, web), the four formats, the PNG rasterizer fallback chain, and `--stamp` export naming. | `stateloom skills install stateloom-render` |
 | `stateloom-codegen` | SMDF → validated → generated Python (or TypeScript), the runtime the generated code imports, and how to run the result. | `stateloom skills install stateloom-codegen` |
@@ -50,6 +52,8 @@ stateloom-docker ─── or ─── stateloom-setup
                                 │
    ┌────────────────────────────┤
    ├── stateloom-erd ─────── (the data beside the machines; pairs with stateloom-design)
+   ├── stateloom-sequence ── (the scenarios; walk through the machines)
+   ├── stateloom-system ──── (all of them as one system; after design, erd, sequence)
    ├── stateloom-design ──┬── stateloom-render
    │                      ├── stateloom-codegen
    │                      └── stateloom-rispec

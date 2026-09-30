@@ -1,6 +1,6 @@
 {
   "name": "@miadi/stateloom-web-source",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "private": true,
   "//": [
     "This is the designer's SOURCE and is never published — hence private: true.",

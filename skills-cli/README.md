@@ -68,6 +68,8 @@ unreachable at that exact moment.
 | `stateloom-docker` | the loom in containers: one image, four roles, one published port, MCP over HTTP, and the same-origin gateway that makes it work anywhere |
 | `stateloom-design` | designing a machine conversationally through the 17 MCP tools — call order, hierarchy, reading validation output, notes |
 | `stateloom-erd` | designing the data beside the machines: an entity-relationship diagram in a sibling `.erdf.json`, the link check against the machines, and the crow's foot / Chen notations |
+| `stateloom-sequence` | telling a usage scenario in a sibling `.sqdf.json`: participants, ordered messages that fire a machine's events, carry entities and say which state follows, and `alt`/`opt`/`loop` fragments with their branch point |
+| `stateloom-system` | the drawings as one system (`.sysdf.json`): every name that crosses between them checked, each scenario replayed through the machines, the machines and the ERD brought level by the scenario (propose or auto), and the live canvas pointed at a drawing and an element |
 | `stateloom-live-loop` | the real-time bridge: agent and human on the same board, presence, persist-then-emit, diagnosing divergence |
 | `stateloom-render` | drawing the machine from the CLI, the MCP server or the web canvas — four formats, rasterizer fallback, stamped export names |
 | `stateloom-codegen` | SMDF → validated → generated Python / TypeScript, and running the result against the runtime |

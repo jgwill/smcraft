@@ -1,6 +1,6 @@
 {
   "name": "@miadi/stateloom-client",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Framework-agnostic socket.io-client wrapper for the smcraft real-time design bridge (join/patch/full/presence + auto-resync)",
   "repository": {
     "type": "git",

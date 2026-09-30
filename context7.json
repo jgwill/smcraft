@@ -1,7 +1,7 @@
 {
   "$schema": "https://context7.com/schema/context7.json",
   "projectTitle": "SMCraft / Stateloom",
-  "description": "Design, validate, generate and run hierarchical state machines and ERDs. One format (SMDF/ERDF) shared live by an engine, codegen, an MCP server, a CLI, a socket hub and a browser canvas.",
+  "description": "Design, validate, generate and run hierarchical state machines, the ERDs they act on, and the sequences that walk through them, joined as one system (SMDF/ERDF/SQDF/SYSDF) and shared live by an engine, codegen, an MCP server, a CLI, a socket hub and a browser canvas.",
   "excludeFolders": [
     "archive",
     "archived",
@@ -48,7 +48,8 @@
     "A board is live while it is open: an agent, a terminal and a browser edit one document together. Call get_notes and check presence before rearranging someone else's diagram. Notes are for the next human; engines ignore them.",
     "STATELOOM_PROJECT_FILE must be absolute. Two processes resolving one relative path against two working directories is the exact defect this prevents, and the divergence is silent — nothing errors, the boards just differ.",
     "Validation rule ids are not shared between implementations. The MCP server's V001 is not the engine's V001, and the TypeScript engine carries seven of the format's fourteen rules. Read the message, never the number.",
-    "Revise the rispec in the same commit as the code. rispecs/70-80 are read as current by agents that cannot check them against source, so a spec left behind does not go quiet — it becomes a confident wrong answer.",
+    "Revise the rispec in the same commit as the code. rispecs/70-82 are read as current by agents that cannot check them against source, so a spec left behind does not go quiet — it becomes a confident wrong answer.",
+    "A sequence (.sqdf.json) and a state machine tell the same story two ways. In a system (.sysdf.json) run check_system after editing either; when the system's reconcile mode is auto, a sequence edit has already changed the machines, the ERD and the actors, and its one-line result says which.",
     "Creating is not problem-solving and problem-solving is not creating.",
     "You definition of the word 'structure' is usually wrong, read carefully the guidances",
     "Structural tension is not a gap to be filled",

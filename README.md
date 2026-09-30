@@ -7,19 +7,23 @@ One declarative format — SMDF — read by an engine, a code generator, an MCP 
 a terminal CLI, a socket.io hub and a browser canvas. An agent, a person at a shell
 and a person at a canvas can all edit the same document while it is open.
 
+Beside the state machines the loom holds the data they act on (ERDF), the usage
+scenarios that walk through them (SQDF), and a system document (SYSDF) that joins all of
+them as one system — checked against each other, and kept level by the scenarios.
+
 ## Packages
 
 | Package | Install | Directory | What it is |
 |---|---|---|---|
 | [`@miadi/stateloom-engine`](https://www.npmjs.com/package/@miadi/stateloom-engine) | `npm i @miadi/stateloom-engine` | `ts/` | The engine: SMDF parser, validator, hierarchical runtime, the `Machine` SMDF interpreter, TypeScript codegen. Renamed from `smcraft`, which is deprecated on npm |
 | [`miadi-stateloom-engine`](https://pypi.org/project/miadi-stateloom-engine/) | `pip install miadi-stateloom-engine` | `py/` | The Python twin: the full validator V001–V014, Python codegen, and the `smcg` CLI |
-| [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | `npm i @miadi/stateloom-protocol` | `bridge-protocol/` | Zero-dependency foundation: patch ops, diff/apply, envelopes, layout, edge routing, ASCII/Mermaid render, export naming — and the ERD format: types, validator, link check, layout |
+| [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | `npm i @miadi/stateloom-protocol` | `bridge-protocol/` | Zero-dependency foundation: patch ops, diff/apply, envelopes, layout, edge routing, ASCII/Mermaid render, export naming — and the ERD, sequence and system formats: types, validators, the links between drawings, the scenario replay and reconcile, layouts |
 | [`@miadi/stateloom-client`](https://www.npmjs.com/package/@miadi/stateloom-client) | `npm i @miadi/stateloom-client` | `bridge-client/` | Framework-agnostic socket.io-client wrapper: join / patch / full / presence with auto-resync |
 | [`@miadi/stateloom`](https://www.npmjs.com/package/@miadi/stateloom) | `npm i @miadi/stateloom` | `bridge/` | The socket.io hub. Bin `smcraft-bridge` |
 | [`@miadi/stateloom-react`](https://www.npmjs.com/package/@miadi/stateloom-react) | `npm i @miadi/stateloom-react` | `bridge-react/` | React 19 binding: `useSmcraftBridge`, session core |
-| [`@miadi/stateloom-canvas`](https://www.npmjs.com/package/@miadi/stateloom-canvas) | `npm i @miadi/stateloom-canvas` | `bridge-canvas/` | The design surfaces: `<StateMachineCanvas>` and `<EntityRelationshipCanvas>` (crow's foot or Chen) — pan, zoom, drag, routed edges, touch gestures. Props in, callbacks out, CSS-variable themed |
+| [`@miadi/stateloom-canvas`](https://www.npmjs.com/package/@miadi/stateloom-canvas) | `npm i @miadi/stateloom-canvas` | `bridge-canvas/` | The design surfaces: `<StateMachineCanvas>`, `<EntityRelationshipCanvas>` (crow's foot or Chen) and `<SequenceCanvas>` — pan, zoom, drag, routed edges, touch gestures. Props in, callbacks out, CSS-variable themed |
 | [`@miadi/stateloom-cli`](https://www.npmjs.com/package/@miadi/stateloom-cli) | `npm i -g @miadi/stateloom-cli` | `cli/` | Bin `smcx` — drive the loom from a terminal |
-| [`@miadi/stateloom-mcp`](https://www.npmjs.com/package/@miadi/stateloom-mcp) | `npx -y @miadi/stateloom-mcp` | `mcp/` | The MCP server: 17 state-machine tools and 10 ERD tools. Bins `stateloom-mcp` and legacy `smcraft-mcp` |
+| [`@miadi/stateloom-mcp`](https://www.npmjs.com/package/@miadi/stateloom-mcp) | `npx -y @miadi/stateloom-mcp` | `mcp/` | The MCP server: 51 tools — 17 state-machine, 10 ERD, 14 sequence, 10 system. Bins `stateloom-mcp` and legacy `smcraft-mcp` |
 | [`@miadi/stateloom-skills`](https://www.npmjs.com/package/@miadi/stateloom-skills) | `npx -y @miadi/stateloom-skills` | `skills-cli/` | Bin `stateloom` — installs agent skills into `.claude/skills/` |
 | [`@miadi/stateloom-web`](https://www.npmjs.com/package/@miadi/stateloom-web) | `npx -y @miadi/stateloom-web` | `web/` → `web-dist/` | The visual designer (Next.js), prebuilt. `web/` stays private; `web-dist/` ships its standalone build |
 | [`jgwill/stateloom`](https://hub.docker.com/r/jgwill/stateloom) | `docker run -p 4598:8080 jgwill/stateloom` | `Dockerfile`, `docker/` | The whole loom as one image: hub, canvas, MCP and CLI behind a single port |
@@ -202,6 +206,8 @@ Full specs in [`rispecs/`](./rispecs/):
 | [78](./rispecs/78-forgewright-episode-rendering.plan.md) | Forgewright episode rendering (plan) |
 | [79](./rispecs/79-layout-persistence.plan.md) | Layout persistence for the live canvas (plan) |
 | [80](./rispecs/80-erdf-format.spec.md) | ERDF format — the entity-relationship sibling, rules E001–E005, link rules L001–L004 |
+| [81](./rispecs/81-sqdf-format.spec.md) | SQDF format — the sequence (usage scenario) sibling, rules S001–S006 |
+| [82](./rispecs/82-sysdf-system.spec.md) | SYSDF — the drawings as one system: checks Y001–Y004 and L005–L008, the scenario replay, reconcile and its `propose` / `auto` mode, the canvas view |
 
 Specs 60-63 in the upstream `caishen` repo define the C# StateForge contracts this
 reimplements.
@@ -289,7 +295,7 @@ recommendation). Handoff history lives in `docs/handoffs/`.
 }
 ```
 
-## Two diagram types, one loom
+## Four documents, one system
 
 A **state machine** (`.smdf.json`) describes one behaviour. An **entity-relationship
 diagram** (`.erdf.json`, [Spec 80](./rispecs/80-erdf-format.spec.md)) describes the data
@@ -303,6 +309,24 @@ The same MCP server, hub and designer serve both; the document's type is its ext
 ERD is drawn in crow's foot or in Chen notation — the viewer's choice, never written to the
 file. Both diagram types carry **notes** on the diagram and on each shape (`get_notes`,
 `set_notes`), saved in the document for whoever opens it next.
+
+A **sequence** (`.sqdf.json`, [Spec 81](./rispecs/81-sqdf-format.spec.md)) tells a usage
+scenario: participants, and messages in order. A message may fire an event of a machine,
+carry an entity, and say which state follows; an `alt`, `opt` or `loop` fragment says after
+which message it branches.
+
+A **system** (`.sysdf.json`, [Spec 82](./rispecs/82-sysdf-system.spec.md)) names the
+drawings of one thing being built and the actors its scenarios share. `check_system` checks
+every name that crosses between them; `replay_scenario` walks each scenario through the
+machines by the runtime's own rules and names where a walk stops — a sequence and a state
+machine are two ways to tell the same story. `reconcile_scenario` brings the machines, the
+ERD and the actors level with the scenarios, and in the system's **`auto`** mode every
+sequence edit does it at once, so the person who opens a machine finds it already updated.
+`show` points the canvases open on a system at a drawing and an element.
+
+In the designer a system opens as a map of its drawings; every drawing opened from it
+carries a strip to switch to the others and follow the selected element across them. Worked
+example: [`examples/wave-count/`](./examples/wave-count/), the Episode 140 wave count.
 
 ## For agents
 

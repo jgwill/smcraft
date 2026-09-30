@@ -4,17 +4,17 @@
 
 **Engine (npm):** `@miadi/stateloom-engine` 0.4.4 — renamed from `smcraft`, which is deprecated on npm — parser, validator, runtime, SMDF interpreter, TypeScript codegen
 **Engine (PyPI):** `miadi-stateloom-engine` 0.2.1 — the Python twin, Python codegen, CLI `smcg`
-**Protocol:** `@miadi/stateloom-protocol` 0.1.8 — also carries the ERD format (types, validator, link check, layout)
-**Client:** `@miadi/stateloom-client` 0.1.2
-**Hub:** `@miadi/stateloom` 0.1.4 — bin `smcraft-bridge`
+**Protocol:** `@miadi/stateloom-protocol` 0.1.9 — also carries the ERD, sequence and system formats (types, validators, links between drawings, the scenario replay and reconcile, layouts)
+**Client:** `@miadi/stateloom-client` 0.1.3 — `emitView` / `on('view')`
+**Hub:** `@miadi/stateloom` 0.1.5 — bin `smcraft-bridge`; relays `view:show`
 **React:** `@miadi/stateloom-react` 0.1.6
-**Canvas:** `@miadi/stateloom-canvas` 0.1.4 — `<StateMachineCanvas>` and `<EntityRelationshipCanvas>`, the design surfaces as mountable components
+**Canvas:** `@miadi/stateloom-canvas` 0.1.5 — `<StateMachineCanvas>`, `<EntityRelationshipCanvas>` and `<SequenceCanvas>`, the design surfaces as mountable components
 **CLI:** `@miadi/stateloom-cli` 0.1.3 — bin `smcx`
-**MCP:** `@miadi/stateloom-mcp` 0.2.6 — bins `stateloom-mcp`, `smcraft-mcp`; 17 state-machine tools and 10 ERD tools
-**Skills:** `@miadi/stateloom-skills` 0.3.2 — bin `stateloom`
-**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.1.9, bin `stateloom-web`
+**MCP:** `@miadi/stateloom-mcp` 0.3.0 — bins `stateloom-mcp`, `smcraft-mcp`; 51 tools: 17 state-machine, 10 ERD, 14 sequence, 10 system
+**Skills:** `@miadi/stateloom-skills` 0.4.0 — bin `stateloom`
+**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.2.0, bin `stateloom-web`
 **Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
-**RISE Specs:** 70–80
+**RISE Specs:** 70–82
 **Repository:** https://github.com/jgwill/smcraft
 **Published at:** https://docs.smcraft.jgwill.com
 
@@ -303,6 +303,65 @@ The sibling of SMDF. A `.smdf.json` describes one behaviour; a `.erdf.json` desc
 
 **Transport** — an ERD has no PatchOp vocabulary; it always travels whole (`def:full`). The hub never validates what a room holds, so an ERDF rides the same hub, room keyed by path.
 
+## 2c. SQDF — the Sequence Definition Format
+
+The third sibling: a usage scenario, told as who sends what to whom, in order. Full spec: [81 — SQDF Format](./rispecs/81-sqdf-format.spec.md). Implementation: `bridge-protocol/src/sequence/`.
+
+```json
+{
+  "settings": { "namespace": "jgt.trading", "name": "WaveCountToEntry", "description": "…", "notes": "…" },
+  "participants": [
+    { "name": "Guillaume", "actor": "Guillaume" },
+    { "name": "Analysis", "service": ":8085", "holds": ["WaveCount"] },
+    { "name": "Market", "object": "market" }
+  ],
+  "messages": [
+    { "from": "Guillaume", "to": "Blueprint", "label": "authorizes", "event": "Authorize", "carries": "CampaignMandate" },
+    { "from": "Blueprint", "to": "Strategy", "label": "creates BOS", "event": "StrategyCreated", "state": "StrategicEntry" }
+  ],
+  "fragments": [ { "kind": "alt", "label": "the market settles the count first", "after": 11, "messages": [ … ] } ]
+}
+```
+
+- **Participant** — `name`, and what it is: `actor` (an actor of the system), `service` (free text), `object` (a machine's `settings.objects[].instance`), `holds` (entities).
+- **Message** — `from`, `to`, `label`; optionally `event` (fired in every member machine that defines it, or only in `machine`), `carries` (an entity), `state` (the state the machine is in afterwards — checked by the replay, and what lets reconcile add a missing transition), `optional`, `reply`. A message may do none of these: some only move data.
+- **Fragment** — `kind` `alt` (instead of the main messages after `after`) | `opt` (may happen, then the main messages continue) | `loop` (repeats, then they continue), `label`, `after` (the main message it branches after, `0` = before the first), `messages`.
+- **Addresses** — `"9"` is main message 9; `"f1.2"` the second message of the first fragment. Tools, the replay, the canvas and a `focus` all use them.
+
+**Validation** — `validateSequence(def)`: S001 `settings.name` · S002 participant names unique and non-empty · S003 each message's ends are participants · S004 each message has a label · S005 fragment kind and `after` in range · S006 a fragment holds a message.
+
+**Edits** — `addParticipant`, `updateParticipant`, `removeParticipant` (takes its messages), `addMessage`, `updateMessage`, `removeMessage`, `moveMessage`, `addFragment`, `updateFragment`, `removeFragment`, `addFragmentMessage`, `updateSqdSettings`: pure, 0-based, and each keeps every fragment on the message it branches after.
+
+**Rendering** — `renderMermaidSequence(def)`: actors as `actor`, the event after each label, an optional message in its own `opt`, an `alt` at its branch point with `else as written` holding the path it replaces. `sequenceLayout(def)` is the geometry every canvas shares.
+
+**Transport** — whole (`def:full`), as an ERD.
+
+## 2d. SYSDF — the drawings as one system
+
+A `.sysdf.json` names the members of one system (ERDs, machines, sequences — never another system; paths relative to the system file, the only document that holds paths) and the actors its scenarios share. Full spec: [82 — SYSDF](./rispecs/82-sysdf-system.spec.md). Implementation: `bridge-protocol/src/system/`.
+
+```json
+{
+  "settings": { "namespace": "jgt.trading", "name": "ElliottWaveCount", "reconcile": "propose" },
+  "members": [ { "path": "elliott_wave_count.erdf.json" }, { "path": "elliott_wave_count.smdf.json" }, { "path": "wave_count_to_entry.sqdf.json" } ],
+  "actors": [ { "name": "Guillaume", "kind": "person" }, { "name": "Agent", "kind": "agent" } ]
+}
+```
+
+**Checks** — `checkSystem(system, members)`: Y001 name and namespace · Y002 member paths present, unique, of a member kind · Y003 a member reads, and holds what its extension says · Y004 actors unique and of a known kind · Y005 no two machines share a name · each ERD's E rules and each sequence's S rules · L001–L004 for every machine against the entities of every ERD · L005 a message's event is an event of a member machine · L006 a participant's actor, object and held entities exist · L007 a message's carried entity exists · L008 (warning) each scenario path is a walk the machines accept, and a message's `state` names a state some machine has. Only the first stop of each machine on each path is reported; later stops are counted.
+
+**The replay** — `replayScenario(seq, machines)` follows `ts/src/machine.ts`: start in the first enterable leaf; look an event up on the leaf, then each ancestor; no `nextState` stays; a composite enters its first non-history child down to a leaf; a `final` state ends the machine. Guards are not evaluated, so the walk keeps the set of states a guard could lead to; a message is the scenario's claim that its event is handled, so refusing states are dropped when others accept, and `state` narrows the set. Paths: `main`, `main without optional messages`, and one per fragment. Steps: `moved`, `stayed`, `refused`, `unknown-event`, `ended`, `state-mismatch`, `data`. `formatReplay(report)` prints it.
+
+**Reconcile** — `reconcileScenario(seq, machines)` proposes, as PatchOps, what the scenario says: an event no machine defines (added to the sender's source, created when missing) and a refused transition when the message names the `state` that follows (adding the state under the root when missing). `reconcileSystem(system, members)` does it for every scenario and adds entities carried or held (to the ERD, with a note saying which message asked), actors (to the system), and a participant's object when one machine and one held entity say which. The rest is returned as `unresolved`, in words. Nothing is removed or rewritten. `summarizeReconcile(result, mode)` is the one line a tool shows.
+
+**The mode** — `settings.reconcile`: `propose` (default: list the changes, wait for `reconcile_scenario apply:true`) or `auto` (every sequence edit applies them at once and answers in one line). `reconcileModeOf(def, override)`; `STATELOOM_RECONCILE` overrides per session.
+
+**Links as data** — `systemLinks(members)` gives the same crossings as `{from, to, rule, text, back}` between `{member, kind, name}` references (`entity`, `attribute`, `machine`, `object`, `event`, `state`, `participant`, `message`), plus `message → state` from the replay's main path. `linksOf(links, member, "<kind>:<name>")` reads them from one element's side.
+
+**The view** — `ViewEnvelope { docId, member?, focus?, origin, note? }` over `view:show`: the hub relays it to the system file's room and keeps nothing; the sender need not have joined; the token is checked as on join. `emitView` and `on('view')` in `@miadi/stateloom-client`.
+
+Worked example: `examples/wave-count/` — the Episode 140 wave count: 0 errors, and two L008 warnings that are known and intended.
+
 ---
 
 ## 3. Python Package Deep Dive (`miadi-stateloom-engine` 0.2.1, PyPI)
@@ -580,7 +639,7 @@ Generates the TypeScript equivalent of the Python output: state enum, base state
 
 Spec 77 is the contract; this section is what shipped.
 
-### 5.1 `@miadi/stateloom-protocol` 0.1.8
+### 5.1 `@miadi/stateloom-protocol` 0.1.9
 
 Zero runtime dependencies. Everything else in the loom depends on it, and it depends on nothing — which is why the same layout, the same edge routing and the same file names appear on every surface without any of them importing each other.
 
@@ -647,7 +706,7 @@ export const EV = {
 
 **Notes:** `collectNotes(def)` → `NoteEntry[]` for either document type, the diagram's own note first. Notes live in the document (`settings.notes`, `notes` on a shape) and are ignored by every engine, validator and generator — they are for the next person to open the board.
 
-### 5.2 `@miadi/stateloom-client` 0.1.2
+### 5.2 `@miadi/stateloom-client` 0.1.3
 
 ```typescript
 import { createBridgeClient, type BridgeClient, type BridgeStatus } from "@miadi/stateloom-client";
@@ -655,7 +714,7 @@ import { createBridgeClient, type BridgeClient, type BridgeStatus } from "@miadi
 
 A framework-agnostic socket.io-client wrapper: join a room, send patches, send a full definition, receive both, track presence, and auto-resync when a sequence gap says this client missed something. No React, no DOM.
 
-### 5.3 `@miadi/stateloom` 0.1.4 — the hub
+### 5.3 `@miadi/stateloom` 0.1.5 — the hub
 
 ```bash
 npx -y @miadi/stateloom            # bin: smcraft-bridge
@@ -722,7 +781,7 @@ Every mutation is **durable-first**: persist to disk, then emit to the hub. The 
 
 `render` reads the durable `.smdf.json` straight off disk: no hub, no browser, no agent needed. It prints the absolute path it wrote.
 
-### 5.6 `@miadi/stateloom-canvas` 0.1.4 — the boards as components
+### 5.6 `@miadi/stateloom-canvas` 0.1.5 — the boards as components
 
 ```typescript
 import { StateMachineCanvas } from "@miadi/stateloom-canvas";
@@ -738,7 +797,7 @@ lets the designer and forgewright render the same board from different state. Ev
 Peer dependency `react ^19`. Depends on `stateloom-protocol` for layout, edge routing and label
 placement, so a canvas and a `smcx render` of the same document agree on where the boxes are.
 
-### 5.7 `@miadi/stateloom-mcp` 0.2.6 — see §6
+### 5.7 `@miadi/stateloom-mcp` 0.3.0 — see §6
 
 The MCP server is a bridge client like any other. It depends on `stateloom-cli` (for the render path), `stateloom-client` and `stateloom-protocol`.
 
@@ -852,6 +911,14 @@ The active document's type is its extension. `set_project_file` takes a `.smdf.j
 
 `create_erd(namespace, name, description?, path?, overwrite?)` — writes `<name>.erdf.json` beside the active document and makes it the active one · `add_entity(name, description?, weak?)` · `update_entity(name, description?, weak?)` · `add_attribute(entity, name, type, key?, references?, nullable?, stateOf?, description?)` · `add_relationship(from, to, cardinality, label?, description?)` · `remove_entity(name)` (takes its relationships with it) · `remove_attribute(entity, name)` · `remove_relationship(from, to, label?)` · `validate_erd()` · `check_links(erd_path?, smdf_paths?)` — with no arguments from an active ERD, every `.smdf.json` in the same folder is checked.
 
+### Sequence tools — the scenarios
+
+`set_project_file` also takes a `.sqdf.json` and a `.sysdf.json`; the state and ERD tools refuse to write over either. `create_sequence(namespace, name, description?, path?, overwrite?)` (makes it active) · `add_participant(name, actor? | service? | object?, holds?, description?, at?)` · `update_participant` · `rename_participant(name, to)` · `move_participant(name, to)` · `remove_participant` · `add_message(from, to, label, event?, carries?, state?, machine?, optional?, reply?, at?)` · `update_message(ref, …)` · `remove_message(ref)` · `move_message(ref, to)` · `add_fragment(kind, label, after, messages?)` · `add_fragment_message(fragment, …)` · `remove_fragment(fragment)` · `validate_sequence()`. Refs are `"9"` / `"f1.2"`; `at`, `to` and fragment numbers count from 1. When the sequence belongs to a system, every edit ends with one reconcile line: in `propose` mode the count of changes proposed, in `auto` mode what was applied.
+
+### System tools — the drawings as one system
+
+`create_system(namespace, name, description?, path?, members?)` · `add_member(path)` (stored relative to the system file when beneath it) · `remove_member` · `add_actor(name, kind, description?, wheelNode?)` · `remove_actor` · `set_reconcile_mode(mode)` · `check_system(system?)` — issues by rule, errors first, each machine's own V rules included, then one replay line per path · `replay_scenario(sequence?, system?)` · `reconcile_scenario(sequence?, system?, apply?)` — a dry run by default; `apply: true` writes each changed machine and patches its room, writes ERDs and the system and sends them whole · `show(member?, focus?, note?, system?)` — the canvases open on the system switch member and select the element. The system a tool acts on: the argument, else the active system, else the last one used, else a `.sysdf.json` beside the active document that lists it. `generate_rispec` with a system active writes one rispec: data, behaviour per machine, each scenario path as a Creative Advancement Scenario, and L008 findings and open items as questions.
+
 ### Design session protocol
 1. **Point** — `set_project_file` (or let `STATELOOM_PROJECT_FILE` do it)
 2. **Initialize** — `create_state_machine` or `load_definition`
@@ -864,7 +931,7 @@ The active document's type is its extension. `set_project_file` takes a `.smdf.j
 
 ## 7. Agent Skills
 
-`@miadi/stateloom-skills` 0.3.2, bin `stateloom` (alias `stateloom-skills`).
+`@miadi/stateloom-skills` 0.4.0, bin `stateloom` (alias `stateloom-skills`).
 
 ```bash
 npx -y @miadi/stateloom-skills skills list
@@ -874,12 +941,14 @@ npx -y @miadi/stateloom-skills skills install --all
 
 `install` copies a ready-to-use `SKILL.md` into `.claude/skills/`, so an agent that has never seen this system arrives already knowing how to drive it. The sources live in `./skills/` in this repository and are synced into the package at build/pack time.
 
-Ten skills, one per surface of the system:
+Twelve skills, one per surface of the system:
 
 - `stateloom-setup` — stand it all up from nothing
 - `stateloom-docker` — the same loom as one container image behind one port
 - `stateloom-design` — design a machine through the MCP tools, and read or leave notes on it
 - `stateloom-erd` — design the data beside the machines: a `.erdf.json` entity-relationship diagram, its rules, `check_links` against the machines, `stateOf`, and the two notations that are a view and never data
+- `stateloom-sequence` — tell a usage scenario in a `.sqdf.json`: participants, messages that fire a machine's events, carry entities and name the state that follows, and fragments with their branch point
+- `stateloom-system` — the drawings as one system: `check_system`, the replay, reconcile in `propose` or `auto` mode, `show` to point the canvas, and one rispec from a whole system
 - `stateloom-live-loop` — agent and human on one board
 - `stateloom-render` — draw it, from any of the three surfaces
 - `stateloom-codegen` — SMDF → Python / TypeScript
