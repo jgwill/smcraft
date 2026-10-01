@@ -70,6 +70,7 @@ import {
   type SystemDefinition,
   type SystemIssue,
   type SystemReconcile,
+  normalizeNotes
 } from "@miadi/stateloom-protocol";
 import { stampedOutputPath } from "@miadi/stateloom-cli/render";
 import { formatNotes } from "./erd.js";
@@ -108,7 +109,7 @@ const STOPPED: readonly ReplayStep["result"][] = ["refused", "unknown-event", "e
 export function readSystem(path: string): SystemDefinition | null {
   if (!existsSync(path)) return null;
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    const parsed = normalizeNotes(JSON.parse(readFileSync(path, "utf8")));
     return isSystemDefinition(parsed) ? parsed : null;
   } catch {
     return null;
@@ -165,7 +166,7 @@ function loadMember(host: SystemHost, path: string, absolute: string): LoadedMem
   } catch {
     return { path, kind, def: null, error: "it is not valid JSON" };
   }
-  const def = kind === "machine" ? (parsed?.stateMachine ?? parsed?.StateMachine ?? parsed) : parsed;
+  const def = normalizeNotes(kind === "machine" ? (parsed?.stateMachine ?? parsed?.StateMachine ?? parsed) : parsed);
   return { path, kind, def };
 }
 

@@ -85,6 +85,7 @@ import {
   type PatchOp,
   type SequenceDefinition,
   type StateMachineDefinition,
+  normalizeNotes,
 } from "@miadi/stateloom-protocol";
 import { renderDiagramToFile, defaultOutputPath } from "@miadi/stateloom-cli/render";
 import { resolveProjectSwitch } from "./projectSwitch.js";
@@ -213,7 +214,7 @@ function readDef(): Definition | null {
   try {
     const raw = readFileSync(PROJECT_FILE, "utf8");
     const parsed = JSON.parse(raw);
-    return parsed.stateMachine ?? parsed.StateMachine ?? parsed;
+    return normalizeNotes(parsed.stateMachine ?? parsed.StateMachine ?? parsed);
   } catch (e) {
     console.error(`[smcraft-mcp] Failed to read ${PROJECT_FILE}:`, e);
     return null;
@@ -224,7 +225,16 @@ function writeDef(def: Definition): void {
   // Never write a machine over an ERD, a sequence or a system: create_state_machine
   // and load_definition write without reading first, so this is the one place that can refuse.
   if (docKindOfPath(PROJECT_FILE) !== "machine") throw new Error(noMachine());
-  writeFileSync(PROJECT_FILE, JSON.stringify({ stateMachine: def }, null, 2), "utf8");
+  // Keep the file's own shape: a machine written bare stays bare, so one edit is
+  // a small diff and not the whole file re-indented under `stateMachine`.
+  let bare = false;
+  try {
+    const current = JSON.parse(readFileSync(PROJECT_FILE, "utf8"));
+    bare = !!current && typeof current === "object" && "state" in current && !("stateMachine" in current) && !("StateMachine" in current);
+  } catch {
+    // A new or unreadable file is written in the loom's own shape.
+  }
+  writeFileSync(PROJECT_FILE, JSON.stringify(bare ? def : { stateMachine: def }, null, 2) + (bare ? "\n" : ""), "utf8");
 }
 
 // ─── Optional real-time design bridge (env-gated, best-effort) ───────

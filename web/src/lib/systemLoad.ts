@@ -24,6 +24,7 @@ import {
   type StateMachineDefinition,
   type SystemDefinition,
   type SystemReconcile,
+  normalizeNotes,
 } from "@miadi/stateloom-protocol";
 import { createBridgeClient } from "@miadi/stateloom-client";
 import { docQuery } from "./docParam";
@@ -94,7 +95,7 @@ export async function loadSystem(systemPath: string): Promise<LoadedSystem> {
   if (!read.exists || !read.content) return { ...empty, error: `${systemPath} does not exist` };
   let def: SystemDefinition | null = null;
   try {
-    const parsed = JSON.parse(read.content);
+    const parsed = normalizeNotes(JSON.parse(read.content));
     if (isSystemDefinition(parsed)) def = parsed;
   } catch {
     // Reported below.
@@ -119,9 +120,9 @@ export async function loadSystem(systemPath: string): Promise<LoadedSystem> {
           const parsed = JSON.parse(doc.content);
           if (kind === "machine" && parsed && (parsed.stateMachine || parsed.StateMachine)) {
             wrapped[m.path] = true;
-            return { path: m.path, kind, def: parsed.stateMachine ?? parsed.StateMachine };
+            return { path: m.path, kind, def: normalizeNotes(parsed.stateMachine ?? parsed.StateMachine) };
           }
-          return { path: m.path, kind, def: parsed };
+          return { path: m.path, kind, def: normalizeNotes(parsed) };
         } catch (e) {
           return { path: m.path, kind, def: null, error: `not JSON: ${e instanceof Error ? e.message : String(e)}` };
         }

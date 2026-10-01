@@ -11,7 +11,7 @@
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import type { StateMachineDefinition } from "@miadi/stateloom-protocol";
+import { normalizeNotes, type StateMachineDefinition } from "@miadi/stateloom-protocol";
 
 /** Normalize a docId to an absolute path — the canonical room key. */
 export function normalizeDocId(docId: string): string {
@@ -25,7 +25,7 @@ export function readDefFile(file: string): StateMachineDefinition | null {
     const raw = readFileSync(file, "utf8");
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const def = (parsed.stateMachine ?? parsed.StateMachine ?? parsed) as StateMachineDefinition;
-    return def;
+    return normalizeNotes(def);
   } catch {
     return null;
   }

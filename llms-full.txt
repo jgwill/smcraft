@@ -4,15 +4,15 @@
 
 **Engine (npm):** `@miadi/stateloom-engine` 0.4.4 — renamed from `smcraft`, which is deprecated on npm — parser, validator, runtime, SMDF interpreter, TypeScript codegen
 **Engine (PyPI):** `miadi-stateloom-engine` 0.2.1 — the Python twin, Python codegen, CLI `smcg`
-**Protocol:** `@miadi/stateloom-protocol` 0.1.10 — also carries the ERD, sequence and system formats (types, validators, links between drawings, the scenario replay and reconcile, layouts)
+**Protocol:** `@miadi/stateloom-protocol` 0.1.11 — also carries the ERD, sequence and system formats (types, validators, links between drawings, the scenario replay and reconcile, layouts)
 **Client:** `@miadi/stateloom-client` 0.1.3 — `emitView` / `on('view')`
-**Hub:** `@miadi/stateloom` 0.1.5 — bin `smcraft-bridge`; relays `view:show`
+**Hub:** `@miadi/stateloom` 0.1.6 — bin `smcraft-bridge`; relays `view:show`
 **React:** `@miadi/stateloom-react` 0.1.6
 **Canvas:** `@miadi/stateloom-canvas` 0.1.5 — `<StateMachineCanvas>`, `<EntityRelationshipCanvas>` and `<SequenceCanvas>`, the design surfaces as mountable components
 **CLI:** `@miadi/stateloom-cli` 0.1.3 — bin `smcx`
-**MCP:** `@miadi/stateloom-mcp` 0.3.1 — bins `stateloom-mcp`, `smcraft-mcp`; 52 tools: 18 state-machine, 10 ERD, 14 sequence, 10 system
+**MCP:** `@miadi/stateloom-mcp` 0.3.2 — bins `stateloom-mcp`, `smcraft-mcp`; 52 tools: 18 state-machine, 10 ERD, 14 sequence, 10 system
 **Skills:** `@miadi/stateloom-skills` 0.4.2 — bin `stateloom`
-**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.2.1, bin `stateloom-web`
+**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.2.2, bin `stateloom-web`
 **Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
 **RISE Specs:** 70–82
 **Repository:** https://github.com/jgwill/smcraft
@@ -299,7 +299,7 @@ The sibling of SMDF. A `.smdf.json` describes one behaviour; a `.erdf.json` desc
 
 **Notation is a view, never data.** `ErdNotation = "crowsfoot" | "chen"`. Crow's foot lists attributes as rows inside the entity box; Chen draws a rectangle (double when `weak`), an oval per attribute with the primary key underlined, a diamond per relationship, and `1`/`N`/`M` beside the line. The choice is the viewer's and is never written to the file, so every reader — tools, link check, a code generator — reads the same document. `erdAutoLayout(def, { notation })` lays out for either; `renderMermaidEr(def)` gives a Mermaid `erDiagram` (crow's foot; Mermaid has no Chen).
 
-**Notes** — both formats carry `settings.notes` and `notes` on a shape (a state, an entity): what a person or an agent wrote down while discussing the diagram, for whoever opens it next. Engines and codegen ignore them. `collectNotes(def)` reads them all, the diagram's own first. In the live diff an erased note travels as `""` and `applyPatchOps` removes the key.
+**Notes** — both formats carry `settings.notes` and `notes` on a shape (a state, an entity): what a person or an agent wrote down while discussing the diagram, for whoever opens it next. Engines and codegen ignore them. `collectNotes(def)` reads them all, the diagram's own first. A note is a string; a list of paragraphs written by hand is read as text (`noteText`), and every tool normalizes notes when it loads a document (`normalizeNotes`). In the live diff an erased note travels as `""` and `applyPatchOps` removes the key.
 
 **Transport** — an ERD has no PatchOp vocabulary; it always travels whole (`def:full`). The hub never validates what a room holds, so an ERDF rides the same hub, room keyed by path.
 
@@ -639,7 +639,7 @@ Generates the TypeScript equivalent of the Python output: state enum, base state
 
 Spec 77 is the contract; this section is what shipped.
 
-### 5.1 `@miadi/stateloom-protocol` 0.1.10
+### 5.1 `@miadi/stateloom-protocol` 0.1.11
 
 Zero runtime dependencies. Everything else in the loom depends on it, and it depends on nothing — which is why the same layout, the same edge routing and the same file names appear on every surface without any of them importing each other.
 
@@ -714,7 +714,7 @@ import { createBridgeClient, type BridgeClient, type BridgeStatus } from "@miadi
 
 A framework-agnostic socket.io-client wrapper: join a room, send patches, send a full definition, receive both, track presence, and auto-resync when a sequence gap says this client missed something. No React, no DOM.
 
-### 5.3 `@miadi/stateloom` 0.1.5 — the hub
+### 5.3 `@miadi/stateloom` 0.1.6 — the hub
 
 ```bash
 npx -y @miadi/stateloom            # bin: smcraft-bridge
@@ -797,7 +797,7 @@ lets the designer and forgewright render the same board from different state. Ev
 Peer dependency `react ^19`. Depends on `stateloom-protocol` for layout, edge routing and label
 placement, so a canvas and a `smcx render` of the same document agree on where the boxes are.
 
-### 5.7 `@miadi/stateloom-mcp` 0.3.1 — see §6
+### 5.7 `@miadi/stateloom-mcp` 0.3.2 — see §6
 
 The MCP server is a bridge client like any other. It depends on `stateloom-cli` (for the render path), `stateloom-client` and `stateloom-protocol`.
 

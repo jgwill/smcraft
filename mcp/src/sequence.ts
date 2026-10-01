@@ -46,6 +46,7 @@ import {
   type SequenceDefinition,
   type SqdFragmentKind,
   type SqdMessage,
+  normalizeNotes
 } from "@miadi/stateloom-protocol";
 import { stampedOutputPath } from "@miadi/stateloom-cli/render";
 import { formatNotes } from "./erd.js";
@@ -75,7 +76,7 @@ const KIND_WORDS = { machine: "a state machine", erd: "an ERD", sequence: "a seq
 export function readSequence(path: string): SequenceDefinition | null {
   if (!existsSync(path)) return null;
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    const parsed = normalizeNotes(JSON.parse(readFileSync(path, "utf8")));
     return isSequenceDefinition(parsed) ? parsed : null;
   } catch {
     return null;

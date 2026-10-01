@@ -43,6 +43,7 @@ import {
   type ErdCardinality,
   type ErdValidationError,
   type StateMachineDefinition,
+  normalizeNotes
 } from "@miadi/stateloom-protocol";
 import { stampedOutputPath } from "@miadi/stateloom-cli/render";
 
@@ -67,7 +68,7 @@ const fail = (text: string): ToolResult => ({ content: [{ type: "text", text }],
 export function readErd(path: string): EntityRelationshipDefinition | null {
   if (!existsSync(path)) return null;
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    const parsed = normalizeNotes(JSON.parse(readFileSync(path, "utf8")));
     return isErdDefinition(parsed) ? parsed : null;
   } catch {
     return null;
@@ -203,7 +204,7 @@ function readSmdf(path: string): StateMachineDefinition | null {
   if (!existsSync(path)) return null;
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8"));
-    const def = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
+    const def = normalizeNotes(parsed.stateMachine ?? parsed.StateMachine ?? parsed);
     return def && typeof def === "object" && def.state ? (def as StateMachineDefinition) : null;
   } catch {
     return null;

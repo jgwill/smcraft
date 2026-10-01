@@ -60,3 +60,28 @@ test("an ERD carries notes the same way", () => {
   assert.deepEqual(collectNotes(erd), []);
   assert.ok(!("notes" in erd.settings) && !("notes" in erd.entities[0]));
 });
+
+// ── Notes written as a list (found 2026-10-01 in /b/trading/diagrams) ───────
+import { noteText, normalizeNotes } from "../notes.js";
+
+test("a note written as a list of paragraphs reads as text, and every reader is spared it", () => {
+  assert.equal(noteText(["first", "second"]), "first\n\nsecond");
+  assert.equal(noteText("plain"), "plain");
+  assert.equal(noteText(undefined), undefined);
+  assert.equal(noteText({ a: 1 }), '{"a":1}');
+  const machine = {
+    settings: { namespace: "t", name: "M", asynchronous: false, notes: ["Revision 1.", "One point of view."] },
+    events: [],
+    state: { name: "Root", states: [{ name: "A", notes: ["x", "y"] }, { name: "B", notes: "kept" }] },
+  };
+  const n = normalizeNotes(machine) as unknown as typeof machine & { settings: { notes: string } };
+  assert.equal(n.settings.notes, "Revision 1.\n\nOne point of view.");
+  assert.equal((n.state.states[0] as { notes: unknown }).notes, "x\n\ny");
+  assert.equal(n.state.states[1].notes, "kept");
+  assert.notEqual(n, machine, "a new document when something changed");
+  assert.deepEqual(machine.settings.notes, ["Revision 1.", "One point of view."], "input untouched");
+  const clean = { settings: { namespace: "t", name: "M", notes: "fine" }, entities: [], relationships: [] };
+  assert.equal(normalizeNotes(clean), clean, "the same object when nothing changed");
+  const notesOf = collectNotes(machine as never);
+  assert.deepEqual(notesOf.map((x) => x.target), [null, "A", "B"]);
+});

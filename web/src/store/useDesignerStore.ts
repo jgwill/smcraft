@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { applyPatchOps } from "@miadi/stateloom-protocol";
+import { applyPatchOps, normalizeNotes } from "@miadi/stateloom-protocol";
 import type { PatchOp, Presence } from "@miadi/stateloom-protocol";
 import { autoLayout as deriveLayout, IDENTITY_VIEWPORT } from "@miadi/stateloom-react";
 import type { Viewport } from "@miadi/stateloom-react";
@@ -350,6 +350,13 @@ function autoLayout(def: StateMachineDefinition, existing: DesignerLayout): Desi
 
 const MAX_UNDO = 50;
 
+/**
+ * Whether the document on disk was written bare (no `stateMachine` wrapper).
+ * Module state, not store state: it says how to write the file back, nothing
+ * the interface shows.
+ */
+let bareShape = false;
+
 export const useDesignerStore = create<DesignerState>((set, get) => ({
   definition: createEmptyDefinition(),
   layout: autoLayout(createEmptyDefinition(), createDefaultLayout()),
@@ -667,7 +674,8 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   loadFromJson: (json, fileName) => {
     try {
       const parsed = JSON.parse(json);
-      const def: StateMachineDefinition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
+      const def: StateMachineDefinition = normalizeNotes(parsed.stateMachine ?? parsed.StateMachine ?? parsed);
+      bareShape = !!parsed && typeof parsed === "object" && "state" in parsed && !("stateMachine" in parsed) && !("StateMachine" in parsed);
       const layout = autoLayout(def, createDefaultLayout());
       const rootName = def.state?.name ?? "Root";
       set({
@@ -689,13 +697,15 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
 
   exportJson: () => {
     const { definition } = get();
-    return JSON.stringify({ stateMachine: definition }, null, 2);
+    // A file that was written bare stays bare, so a save is a small diff.
+    return JSON.stringify(bareShape ? definition : { stateMachine: definition }, null, 2);
   },
 
   applyRemote: (json, mtime, fileName) => {
     try {
       const parsed = JSON.parse(json);
-      const def: StateMachineDefinition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
+      const def: StateMachineDefinition = normalizeNotes(parsed.stateMachine ?? parsed.StateMachine ?? parsed);
+      bareShape = !!parsed && typeof parsed === "object" && "state" in parsed && !("stateMachine" in parsed) && !("StateMachine" in parsed);
       const layout = autoLayout(def, get().layout);
       const rootName = def.state?.name ?? "Root";
 

@@ -52,6 +52,7 @@ import {
   type LayoutBox,
   type StateMachineDefinition,
   type Viewport,
+  normalizeNotes,
 } from "@miadi/stateloom-protocol";
 import BoardBoundary from "@/components/BoardBoundary";
 import DocSwitcher from "@/components/DocSwitcher";
@@ -124,7 +125,7 @@ async function siblingMachines(docPath: string): Promise<Machine[]> {
     try {
       const body = await (await fetch(`/api/file${docQuery(path)}`, { cache: "no-store" })).json();
       const parsed = JSON.parse(body.content ?? "null");
-      const def = parsed?.stateMachine ?? parsed?.StateMachine ?? parsed;
+      const def = normalizeNotes(parsed?.stateMachine ?? parsed?.StateMachine ?? parsed);
       if (def?.state) machines.push({ path, def });
     } catch {
       // An unreadable sibling is skipped; it is not this document's problem.
@@ -186,7 +187,7 @@ export default function ErdWorkspace() {
       const path: string = body.path ?? "";
       let loaded: EntityRelationshipDefinition | null = null;
       try {
-        const parsed = body.content ? JSON.parse(body.content) : null;
+        const parsed = body.content ? normalizeNotes(JSON.parse(body.content)) : null;
         if (isErdDefinition(parsed)) loaded = { ...parsed, relationships: parsed.relationships ?? [] };
       } catch {
         // Falls through to the unreadable-document message below.

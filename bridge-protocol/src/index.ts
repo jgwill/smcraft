@@ -92,7 +92,7 @@ export {
 } from "./erd/chen.js";
 export type { ChenGeometry, ChenOval } from "./erd/chen.js";
 export { renderMermaidEr } from "./render/mermaidEr.js";
-export { collectNotes } from "./notes.js";
+export { collectNotes, noteText, normalizeNotes } from "./notes.js";
 export type { NoteEntry } from "./notes.js";
 export { erdAutoLayout, erdEntitySize, erdRowText, ERD_BOX, ERD_LAYOUT_DEFAULTS } from "./erd/layout.js";
 export type { ErdLayoutOptions } from "./erd/layout.js";

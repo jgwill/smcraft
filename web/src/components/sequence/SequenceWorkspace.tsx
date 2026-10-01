@@ -58,6 +58,7 @@ import {
   type SqdMessage,
   type StateMachineDefinition,
   type Viewport,
+  normalizeNotes,
 } from "@miadi/stateloom-protocol";
 import DocSwitcher from "@/components/DocSwitcher";
 import IssueIcon from "@/components/IssueIcon";
@@ -141,7 +142,7 @@ export default function SequenceWorkspace() {
       const path: string = body.path ?? "";
       let loaded: SequenceDefinition | null = null;
       try {
-        const parsed = body.content ? JSON.parse(body.content) : null;
+        const parsed = body.content ? normalizeNotes(JSON.parse(body.content)) : null;
         if (isSequenceDefinition(parsed)) loaded = parsed;
       } catch {
         // Falls through to the message below.
