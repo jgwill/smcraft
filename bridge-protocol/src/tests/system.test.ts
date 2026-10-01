@@ -487,3 +487,24 @@ test("R16: a blank held entity is skipped, not thrown on", () => {
   const seq: SequenceDefinition = { ...tell(m("a")), participants: [{ name: "P", holds: [" "] }, { name: "Q" }] };
   assert.doesNotThrow(() => reconcileSystem(null, [{ path: "s.sqdf.json", kind: "sequence", def: seq }]));
 });
+
+test("L009: a state that is not final and has no way out is named; a prompt rides the live diff", async () => {
+  const M = machine("M", ["go"], {
+    name: "Root",
+    states: [{ name: "A", transitions: [{ event: "go", nextState: "Waiting" }] }, { name: "Waiting" }, { name: "Done", kind: "final" }],
+  });
+  const warnings = checkSystem(null, [{ path: "m.smdf.json", kind: "machine", def: M }]).issues.filter((i) => i.ruleId === "L009");
+  assert.deepEqual(warnings.map((w) => w.element), ["state:Waiting"]);
+  const inherits = machine("M", ["go"], { name: "Root", transitions: [{ event: "go", nextState: "A" }], states: [{ name: "A" }] });
+  assert.equal(checkSystem(null, [{ path: "m.smdf.json", kind: "machine", def: inherits }]).issues.filter((i) => i.ruleId === "L009").length, 0, "a transition on an ancestor is a way out");
+  assert.equal(checkSystem(SYSTEM, loadAll()).issues.filter((i) => i.ruleId === "L009").length, 0, "the worked example has none");
+
+  const { diffDefinition } = await import("../diff.js");
+  const withPrompt = structuredClone(M);
+  withPrompt.state.states![1].prompt = "Hold the rendezvous; reopen the discussion when price reaches it.";
+  const ops = diffDefinition(M, withPrompt);
+  assert.deepEqual(ops, [{ op: "state.update", name: "Waiting", patch: { prompt: "Hold the rendezvous; reopen the discussion when price reaches it." } }]);
+  assert.equal(applyPatchOps(M, ops).state.states![1].prompt, withPrompt.state.states![1].prompt);
+  const cleared = applyPatchOps(withPrompt, [{ op: "state.update", name: "Waiting", patch: { prompt: "" } }]);
+  assert.equal("prompt" in cleared.state.states![1], false);
+});

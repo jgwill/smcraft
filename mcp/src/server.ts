@@ -147,6 +147,8 @@ interface StateDef {
   kind?: "normal" | "final" | "history";
   description?: string;
   notes?: string;
+  /** What an agent resolves while the machine is in this state; engines and codegen ignore it. */
+  prompt?: string;
   transitions?: TransitionDef[];
   states?: StateDef[];
   onEntry?: string;
@@ -837,6 +839,10 @@ function renderStateSpec(s: StateDef, lines: string[], depthLevel: number): void
   const indent = "  ".repeat(depthLevel);
   const kind = s.kind && s.kind !== "normal" ? ` *(${s.kind})*` : "";
   lines.push(`${indent}- **${s.name}**${kind}${s.description ? ` — ${s.description}` : ""}`);
+  if (s.prompt?.trim()) {
+    lines.push(`${indent}  - *the agent resolves here:*`);
+    for (const line of s.prompt.trim().split("\n")) lines.push(`${indent}    > ${line}`);
+  }
   for (const t of s.transitions ?? []) {
     lines.push(`${indent}  - on \`${t.event}\` ${t.nextState ? `→ \`${t.nextState}\`` : "(internal)"}`);
   }
@@ -928,14 +934,15 @@ server.tool(
 
 server.tool(
   "add_state",
-  "Add a state to the state machine. Parent defaults to Root.",
+  "Add a state to the state machine. Parent defaults to Root. `prompt` is what an agent is asked to resolve while the machine is in this state (see set_prompt).",
   {
     name: z.string(),
     parent: z.string().optional(),
     kind: z.enum(["normal", "final", "history"]).optional(),
     description: z.string().optional(),
+    prompt: z.string().optional(),
   },
-  async ({ name, parent, kind, description }) => {
+  async ({ name, parent, kind, description, prompt }) => {
     const def = readDef();
     if (!def)
       return {
@@ -950,13 +957,33 @@ server.tool(
         isError: true,
       };
     if (!parentState.states) parentState.states = [];
-    parentState.states.push({ name, kind: kind ?? "normal", description });
+    const added: StateDef = { name, kind: kind ?? "normal", description, ...(prompt?.trim() ? { prompt } : {}) };
+    parentState.states.push(added);
     writeDef(def);
     bridgeEmitPatch([
-      { op: "state.add", parent: parentName, state: { name, kind: kind ?? "normal", description } },
+      { op: "state.add", parent: parentName, state: { name, kind: kind ?? "normal", description, ...(added.prompt ? { prompt: added.prompt } : {}) } },
     ]);
     return {
       content: [{ type: "text", text: `Added state '${name}' under '${parentName}' (${kind ?? "normal"}).` }],
+    };
+  }
+);
+
+server.tool(
+  "set_prompt",
+  "Say what an agent is asked to resolve while the machine is in a state: the instruction it receives when the state is entered — an opening message, the frame of every later turn. `description` says what the state is and notes are the conversation about it; the prompt is what to do in it. The text replaces what was there; an empty string clears it. Engines and code generation ignore it; get_definition and generate_rispec show it.",
+  { state: z.string(), prompt: z.string() },
+  async ({ state, prompt }) => {
+    const def = readDef();
+    if (!def) return { content: [{ type: "text", text: noMachine() }], isError: true };
+    const target = findState(def.state, state);
+    if (!target) return { content: [{ type: "text", text: `State '${state}' not found.` }], isError: true };
+    if (prompt.trim()) target.prompt = prompt;
+    else delete target.prompt;
+    writeDef(def);
+    bridgeEmitPatch([{ op: "state.update", name: state, patch: { prompt: prompt.trim() ? prompt : "" } }]);
+    return {
+      content: [{ type: "text", text: prompt.trim() ? `Prompt set on '${state}' (${prompt.length} characters).` : `Prompt cleared on '${state}'.` }],
     };
   }
 );

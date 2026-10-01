@@ -14,6 +14,7 @@
  * - L005: a message's event is an event of a member machine.
  * - L006: a participant's actor, object and held entities exist.
  * - L007: a message's carried entity exists.
+ * - L009 (warning): a state that is not final and has no way out.
  * - L008: the replay — each path of each scenario is a walk the machines
  *   accept. Reported as warnings: a scenario ahead of its machines is how new
  *   behaviour is designed, and `reconcileScenario` proposes the catch-up.
@@ -161,6 +162,23 @@ export function checkSystem(system: SystemDefinition | null, members: readonly L
     for (const { member, def } of machines) for (const e of checkLinks(def, erd)) err(e.ruleId, e.message, member, e.element);
     const names = machines.map(({ def }, i) => machineName(def, i));
     for (const { member, def } of erds) for (const e of checkStateOf(def, names)) err(e.ruleId, e.message, member, e.element);
+  }
+
+  // ── L009: a state with no way out ─────────────────────────────────────────
+  // A leaf that is not final, with no transition on it or on any state around
+  // it, holds the machine for ever. It is usually a state a scenario added and
+  // nobody has yet said how it ends — the next instance's question.
+  for (const { member, def } of machines) {
+    const walk = (s: StateMachineDefinition["state"] | undefined, inherited: boolean): void => {
+      if (!s) return;
+      const exits = inherited || (s.transitions ?? []).length > 0;
+      const children = s.states ?? [];
+      if (!children.length && !s.parallel && s !== def.state && s.kind !== "final" && s.kind !== "history" && !exits) {
+        warn("L009", `${machineName(def)}: ${s.name} has no way out and is not final; say how the machine leaves it, or mark it final`, member, `state:${s.name}`);
+      }
+      for (const c of children) walk(c, exits);
+    };
+    walk(def.state, false);
   }
 
   // ── L005–L008: scenarios against the machines and the data ────────────────

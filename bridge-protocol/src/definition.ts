@@ -113,6 +113,14 @@ export interface StateDef {
   description?: string;
   /** Working notes about this state (see `SettingsModel.notes`). `description` says what the state IS; notes are the conversation about it. */
   notes?: string;
+  /**
+   * What an agent is asked to resolve while the machine is in this state — the
+   * instruction it receives when the state is entered (an opening message, the
+   * frame of every later turn). `description` says what the state is, `notes`
+   * are the conversation about it, `prompt` is what to do in it. Engines and
+   * code generation ignore it; agents and the system rispec read it.
+   */
+  prompt?: string;
   onEntry?: { actions: ActionDef[] };
   onExit?: { actions: ActionDef[] };
   transitions?: TransitionDef[];

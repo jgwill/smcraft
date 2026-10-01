@@ -4,15 +4,15 @@
 
 **Engine (npm):** `@miadi/stateloom-engine` 0.4.4 — renamed from `smcraft`, which is deprecated on npm — parser, validator, runtime, SMDF interpreter, TypeScript codegen
 **Engine (PyPI):** `miadi-stateloom-engine` 0.2.1 — the Python twin, Python codegen, CLI `smcg`
-**Protocol:** `@miadi/stateloom-protocol` 0.1.9 — also carries the ERD, sequence and system formats (types, validators, links between drawings, the scenario replay and reconcile, layouts)
+**Protocol:** `@miadi/stateloom-protocol` 0.1.10 — also carries the ERD, sequence and system formats (types, validators, links between drawings, the scenario replay and reconcile, layouts)
 **Client:** `@miadi/stateloom-client` 0.1.3 — `emitView` / `on('view')`
 **Hub:** `@miadi/stateloom` 0.1.5 — bin `smcraft-bridge`; relays `view:show`
 **React:** `@miadi/stateloom-react` 0.1.6
 **Canvas:** `@miadi/stateloom-canvas` 0.1.5 — `<StateMachineCanvas>`, `<EntityRelationshipCanvas>` and `<SequenceCanvas>`, the design surfaces as mountable components
 **CLI:** `@miadi/stateloom-cli` 0.1.3 — bin `smcx`
-**MCP:** `@miadi/stateloom-mcp` 0.3.0 — bins `stateloom-mcp`, `smcraft-mcp`; 51 tools: 17 state-machine, 10 ERD, 14 sequence, 10 system
-**Skills:** `@miadi/stateloom-skills` 0.4.1 — bin `stateloom`
-**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.2.0, bin `stateloom-web`
+**MCP:** `@miadi/stateloom-mcp` 0.3.1 — bins `stateloom-mcp`, `smcraft-mcp`; 52 tools: 18 state-machine, 10 ERD, 14 sequence, 10 system
+**Skills:** `@miadi/stateloom-skills` 0.4.2 — bin `stateloom`
+**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.2.1, bin `stateloom-web`
 **Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
 **RISE Specs:** 70–82
 **Repository:** https://github.com/jgwill/smcraft
@@ -348,7 +348,7 @@ A `.sysdf.json` names the members of one system (ERDs, machines, sequences — n
 }
 ```
 
-**Checks** — `checkSystem(system, members)`: Y001 name and namespace · Y002 member paths present, unique, of a member kind · Y003 a member reads, and holds what its extension says · Y004 actors unique and of a known kind · Y005 no two machines share a name · each ERD's E rules and each sequence's S rules · L001–L004 for every machine against the entities of every ERD · L005 a message's event is an event of a member machine · L006 a participant's actor, object and held entities exist · L007 a message's carried entity exists · L008 (warning) each scenario path is a walk the machines accept, and a message's `state` names a state some machine has. Only the first stop of each machine on each path is reported; later stops are counted.
+**Checks** — `checkSystem(system, members)`: Y001 name and namespace · Y002 member paths present, unique, of a member kind · Y003 a member reads, and holds what its extension says · Y004 actors unique and of a known kind · Y005 no two machines share a name · each ERD's E rules and each sequence's S rules · L001–L004 for every machine against the entities of every ERD · L005 a message's event is an event of a member machine · L006 a participant's actor, object and held entities exist · L007 a message's carried entity exists · L008 (warning) each scenario path is a walk the machines accept, and a message's `state` names a state some machine has · L009 (warning) a state that is not final has a way out. Only the first stop of each machine on each path is reported; later stops are counted.
 
 **The replay** — `replayScenario(seq, machines)` follows `ts/src/machine.ts`: start in the first enterable leaf; look an event up on the leaf, then each ancestor; no `nextState` stays; a composite enters its first non-history child down to a leaf; a `final` state ends the machine. Guards are not evaluated, so the walk keeps the set of states a guard could lead to; a message is the scenario's claim that its event is handled, so refusing states are dropped when others accept, and `state` narrows the set. Paths: `main`, `main without optional messages`, and one per fragment. Steps: `moved`, `stayed`, `refused`, `unknown-event`, `ended`, `state-mismatch`, `data`. `formatReplay(report)` prints it.
 
@@ -639,7 +639,7 @@ Generates the TypeScript equivalent of the Python output: state enum, base state
 
 Spec 77 is the contract; this section is what shipped.
 
-### 5.1 `@miadi/stateloom-protocol` 0.1.9
+### 5.1 `@miadi/stateloom-protocol` 0.1.10
 
 Zero runtime dependencies. Everything else in the loom depends on it, and it depends on nothing — which is why the same layout, the same edge routing and the same file names appear on every surface without any of them importing each other.
 
@@ -797,7 +797,7 @@ lets the designer and forgewright render the same board from different state. Ev
 Peer dependency `react ^19`. Depends on `stateloom-protocol` for layout, edge routing and label
 placement, so a canvas and a `smcx render` of the same document agree on where the boxes are.
 
-### 5.7 `@miadi/stateloom-mcp` 0.3.0 — see §6
+### 5.7 `@miadi/stateloom-mcp` 0.3.1 — see §6
 
 The MCP server is a bridge client like any other. It depends on `stateloom-cli` (for the render path), `stateloom-client` and `stateloom-protocol`.
 
@@ -931,7 +931,7 @@ The active document's type is its extension. `set_project_file` takes a `.smdf.j
 
 ## 7. Agent Skills
 
-`@miadi/stateloom-skills` 0.4.1, bin `stateloom` (alias `stateloom-skills`).
+`@miadi/stateloom-skills` 0.4.2, bin `stateloom` (alias `stateloom-skills`).
 
 ```bash
 npx -y @miadi/stateloom-skills skills list

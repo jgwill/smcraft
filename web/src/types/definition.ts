@@ -101,6 +101,8 @@ export interface StateDef {
   description?: string;
   /** Working notes about this state: the conversation about it, where `description` says what it is. */
   notes?: string;
+  /** What an agent is asked to resolve while the machine is in this state. Ignored by engines and codegen. */
+  prompt?: string;
   onEntry?: { actions: ActionDef[] };
   onExit?: { actions: ActionDef[] };
   transitions?: TransitionDef[];

@@ -27,7 +27,7 @@ we're creating what we're creating here."
 If there is one, `get_notes` on it and open it on the canvas before you design anything — it is
 the last instance's hand-off, and its L008 warnings are the open work.
 
-**During a design discussion:** draw as you talk. Tell the person's scenario as a sequence,
+**During a design discussion:** draw as you talk. When a state is one where an agent has work to do (open a discussion, hold a question), write what it resolves there with `set_prompt` — the state machine then carries the prompting, not a page that drifts from it. Tell the person's scenario as a sequence,
 let reconcile build the machine it implies (`auto` mode), and `show` the person the drawing you
 mean instead of describing it.
 
@@ -75,6 +75,7 @@ Errors first, then warnings, then the replay per path.
 | L006 | a participant's actor, object and held entities exist |
 | L007 | a message's carried entity exists |
 | L008 (warning) | each scenario path is a walk the machines accept |
+| L009 (warning) | a state that is not final has a way out — usually a state a scenario just added |
 
 L008 is a warning on purpose: a scenario ahead of its machines is how new behaviour is
 designed. Only the first stop of each machine on each path is reported; the stops after it

@@ -252,6 +252,10 @@ function diffStates(
       patch.notes = state.notes ?? ""; // "" erases — see diffSettings
       changed = true;
     }
+    if (!eq(before.prompt, state.prompt)) {
+      patch.prompt = state.prompt ?? ""; // "" erases, as notes do
+      changed = true;
+    }
     if (changed) ops.push({ op: 'state.update', name: state.name, patch });
 
     diffActions(state.name, 'onEntry', before.onEntry?.actions ?? [], state.onEntry?.actions ?? [], ops);

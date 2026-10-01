@@ -72,6 +72,7 @@ Measured on 2026-10-01 against that session's prompt (a new "discussion" state r
 | L006 | A participant's `actor` is an actor of the system, its `object` a machine object, its `holds` entities | error |
 | L007 | A message's `carries` is an entity | error |
 | L008 | Each path of each scenario is a walk the machines accept; a `state` names a state some machine has | warning |
+| L009 | A state that is not final has a way out (a transition on it or on a state around it) | warning |
 
 A machine's own V rules live with the engine; the MCP adds them to `check_system`. L008 is a warning because a scenario ahead of its machines is how new behaviour is designed. Only the first stop of each machine on each path is reported; the stops after it are counted, since they are usually its consequence.
 

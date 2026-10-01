@@ -100,6 +100,7 @@ export function applyPatchOps(
         const state = requireState(next.state, op.name, 'state.update');
         Object.assign(state, op.patch);
         if (state.notes === "") delete state.notes;
+        if (state.prompt === "") delete state.prompt;
         break;
       }
 

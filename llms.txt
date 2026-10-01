@@ -66,7 +66,7 @@ State classification is derived from structure, not declared: leaf (no children)
 
 Full schema: [Spec 70 — SMDF Format](./rispecs/70-smdf-format.spec.md)
 
-## MCP server — 51 tools: 17 state-machine, 10 ERD, 14 sequence, 10 system
+## MCP server — 52 tools: 18 state-machine, 10 ERD, 14 sequence, 10 system
 
 `@miadi/stateloom-mcp`, stdio by default (Streamable HTTP optional — see Transport below). Registration:
 
@@ -92,6 +92,8 @@ Full schema: [Spec 70 — SMDF Format](./rispecs/70-smdf-format.spec.md)
 **Act** — `validate_definition()`, `generate_code(language)`, `generate_rispec(intent?)`, `render_diagram(format?, path?, scale?, theme?, stamp?, open?)`
 
 **Document** — `set_project_file(path)`, `get_project_file()`
+
+**Prompts** — `set_prompt(state, prompt)` (and `prompt` on `add_state`): what an agent resolves while the machine is in that state; engines ignore it, `generate_rispec` prints it.
 
 **Notes** (either document type) — `get_notes()`, `set_notes(target?, notes)`: working notes on the diagram or on one state / entity, saved in the document (`settings.notes`, `notes` on a shape) for whoever opens it next. Read them before changing a diagram someone else worked on. Engines and codegen ignore them
 
@@ -135,7 +137,7 @@ From `@miadi/stateloom-protocol`: `validateSequence`, `renderMermaidSequence`, `
 
 A `.sysdf.json` names a system's members (`.erdf.json`, `.smdf.json`, `.sqdf.json`, paths relative to the system file — the only document that holds paths) and `actors[]` (`person` | `agent` | `service` | `external`). `settings.reconcile` is `propose` (default) or `auto`.
 
-**System tools** — `create_system`, `add_member`, `remove_member`, `add_actor`, `remove_actor`, `set_reconcile_mode(mode)`, `check_system()` (Y001–Y004, each member's own rules, L001–L004, and L005 event / L006 participant / L007 carried entity / L008 replay), `replay_scenario()`, `reconcile_scenario(apply?)`, `show(member?, focus?, note?)`. `generate_rispec` with a system active writes one rispec, each scenario path a Creative Advancement Scenario.
+**System tools** — `create_system`, `add_member`, `remove_member`, `add_actor`, `remove_actor`, `set_reconcile_mode(mode)`, `check_system()` (Y001–Y004, each member's own rules, L001–L004, and L005 event / L006 participant / L007 carried entity / L008 replay, L009 a state with no way out), `replay_scenario()`, `reconcile_scenario(apply?)`, `show(member?, focus?, note?)`. `generate_rispec` with a system active writes one rispec, each scenario path a Creative Advancement Scenario.
 
 **The replay** walks each message's event through every member machine that defines it, by the runtime's rules (leaf, then ancestors; composites enter their first non-history child; `final` ends the machine), keeping the set of states unevaluated guards could lead to. **Reconcile** adds what a scenario implies — an event no machine defines, a transition a machine refuses when the message names the `state` that follows, entities a message carries or a participant holds, actors — and never removes. In **`auto`** mode every sequence edit applies it at once and answers in one line (`STATELOOM_RECONCILE` overrides the mode per session). **`show`** relays a `view:show` through the hub to the canvases open on the system: which member, which element (`entity:X`, `state:X`, `event:X`, `message:9`…); nothing is written.
 

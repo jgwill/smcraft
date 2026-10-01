@@ -321,3 +321,20 @@ Every mutating tool persists to disk and then emits to the hub, so a human watch
 designer sees each state bloom as you add it. Design in small, narratable steps rather than
 one `load_definition` dump — the human is reading the board while you work. That loop is the
 subject of the `stateloom-live-loop` skill.
+
+---
+
+## Prompts on states — what an agent resolves there
+
+When the machine describes work an agent does (a discussion it opens, a question it holds, a
+watch it keeps), say what the agent resolves in each such state:
+
+```
+set_prompt { "state": "Talking", "prompt": "Hold one question: where are we at this degree, and is this a moment to act. End each turn with a question or a proposed conclusion." }
+add_state  { "name": "Open", "prompt": "Open the discussion in the instrument's topic …" }
+```
+
+`description` says what the state is, notes are the conversation about it, the **prompt** is
+what to do in it. Engines and code generation ignore it; `get_definition` returns it,
+`generate_rispec` prints it under the state ("the agent resolves here"), and the designer
+edits it in the state's properties. An empty string clears it.

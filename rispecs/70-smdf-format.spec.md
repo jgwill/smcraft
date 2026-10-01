@@ -46,6 +46,7 @@ A node in the state hierarchy tree. Properties:
 | `parallel` | ParallelDef | Orthogonal regions (parallel state) |
 | `description` | string | Human-readable purpose |
 | `notes` | string | Working notes about this state — what a person or an agent wrote down while discussing it, for whoever opens the document next. `settings.notes` carries the same for the whole diagram. Not part of the machine: parsers, engines and the code generator ignore it. MCP: `get_notes`, `set_notes` |
+| `prompt` | string | What an agent is asked to resolve while the machine is in this state — the instruction it receives when the state is entered. `description` says what the state is, `notes` are the conversation about it, `prompt` is what to do in it. Engines and code generation ignore it; `set_prompt` writes it and `generate_rispec` shows it |
 
 **State Classification (derived):**
 - **Leaf**: `states == [] AND parallel == None`

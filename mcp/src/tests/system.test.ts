@@ -83,7 +83,9 @@ test("a new event and a new state: L005 in check_system, a dry run that writes n
 
     const clean = await r.call("check_system");
     assert.doesNotMatch(clean.text, /L005/);
-    assert.match(clean.text, /0 error\(s\), 2 warning\(s\)/);
+    // The new state the scenario added has no way out yet: L009 says so, for the next instance.
+    assert.match(clean.text, /0 error\(s\), 3 warning\(s\)/);
+    assert.match(clean.text, /L009 ×1\n.*Fulfilled has no way out and is not final/);
   } finally {
     await r.close();
   }
