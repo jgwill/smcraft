@@ -20,6 +20,20 @@ One system out of the drawings of one thing being built: its data, its behaviour
 3. A scenario is replayed through the machines, and where the walk stops is named
 4. The changes a scenario implies are proposed, or applied at once when the system's mode is `auto`
 5. A canvas shows one member at a time, follows an element to the others, and obeys an agent's `show`
+6. A session that does not finish leaves a system behind — the drawings, the scenarios told so far, and notes that say why — so the next instance continues from it instead of from a transcript
+
+## Why a system: the discussion, and the session that does not finish
+
+Guillaume, 2026-10-01, after the first release, watching a trading session where counting waves "doesn't work" and he wanted to talk it through with his agent:
+
+> "I think what we built is going to be what that agent needs to have a discussion with me, giving me good representations and design and do the work that he has to do. And I'm thinking that what we created is exactly for this type of session that I'm never capable of actually fully complete and bring to completion, or at least leave a system and a set of diagrams and things for future instances, which is going to be really good information regarding why we're creating what we're creating here."
+
+Two uses follow, and they shape the format:
+
+- **The system is what the agent and the person talk over.** A session that discusses a design draws it as it goes: the scenario as the person tells it, the machine the scenario implies (reconcile builds it), the data it carries. The person reads drawings on the canvas, not a description of drawings; the agent points at what it means with `show`.
+- **The system is what an unfinished session hands on.** Most sessions end before the work does. A transcript is long and only says what was said; a system says what was being built: which machines, which scenarios walk through them, where a walk still stops (L008 warnings are the next instance's to-do), and — in `settings.notes` and each drawing's notes — the question that started it and what was decided. The next instance opens the system and its notes before it designs anything.
+
+Measured on 2026-10-01 against that session's prompt (a new "discussion" state reached from a button beside Publish): starting from an empty machine and the scenario alone, `reconcileSystem` in `auto` mode built the new machine's five states and their transitions, added the two entities to the ERD and the agent to the actors, and the replay then named a real design question — the "trade it" outcome asks for a blueprint before the count is evaluated, which the existing lifecycle refuses.
 
 ## Core Concepts
 
@@ -126,6 +140,12 @@ A chronicle root (`STATELOOM_CHRONICLE_ROOT`) admits only `<root>/<episode>/diag
 **Current Reality**: Three files beside each other, grouped only by their folder; the scenario was a picture
 **Natural Progression**: `create_system` names the three; `check_system` finds no error and two warnings — without its optional message 7 the scenario stops at message 9, and the alternative that begins after message 11 is refused from `StrategicEntry`
 **Resolution**: `examples/wave-count/elliott_wave_count.sysdf.json`, whose findings are the two the proposal page named by reading the files by hand
+
+### Scenario: A Session That Does Not Finish Leaves a System
+**Desired Outcome**: The next instance continues the design from what the last one built, and knows why
+**Current Reality**: A session ends mid-discussion; what it understood lives in a transcript nobody rereads, and the next instance starts over from the person's memory
+**Natural Progression**: As the discussion goes, the agent keeps a `.sysdf.json` beside the work: the scenario as told, the machines reconcile builds from it, notes on the system with the question that started it and what was decided; before stopping it runs `check_system` and leaves the warnings as they are
+**Resolution**: The next instance opens the system, reads its notes, and sees on the map where the walk still stops — the open work, in the shape of the thing being built
 
 ### Scenario: An Agent Designs by Telling the Story
 **Desired Outcome**: A new behaviour lands in the machine without a person approving each step

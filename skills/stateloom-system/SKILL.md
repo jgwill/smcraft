@@ -1,6 +1,6 @@
 ---
 name: stateloom-system
-description: Treat a system's drawings as one system through the stateloom MCP tools — a .sysdf.json that names its ERD, state machines and sequences and the actors they share. Use when calling create_system, add_member, remove_member, add_actor, remove_actor, set_reconcile_mode, check_system, replay_scenario, reconcile_scenario or show; checking every name that crosses between drawings (Y001-Y004, L001-L008); replaying a scenario through the machines; letting a scenario update the machines, the ERD and the actors (propose or auto mode); pointing the live canvas at a member and an element while talking to a person; or generating one RISE rispec from a whole system.
+description: Treat a system's drawings as one system — what an agent and a person talk over, and what a session that does not finish hands to the next instance — through the stateloom MCP tools — a .sysdf.json that names its ERD, state machines and sequences and the actors they share. Use when calling create_system, add_member, remove_member, add_actor, remove_actor, set_reconcile_mode, check_system, replay_scenario, reconcile_scenario or show; checking every name that crosses between drawings (Y001-Y004, L001-L008); replaying a scenario through the machines; letting a scenario update the machines, the ERD and the actors (propose or auto mode); pointing the live canvas at a member and an element while talking to a person; or generating one RISE rispec from a whole system; also when arriving in a repo that may hold a .sysdf.json from an earlier session, or before ending a design discussion that is not finished.
 ---
 
 # One system, many drawings
@@ -12,6 +12,34 @@ paths; the drawings keep linking to each other by name.
 
 Full specification: `rispecs/82-sysdf-system.spec.md` in `jgwill/smcraft`. Worked example:
 `examples/wave-count/elliott_wave_count.sysdf.json` (Episode 140).
+
+---
+
+## Why it exists — read this before anything else
+
+A system is what an agent and a person **talk over**, and what a session that does not finish
+**hands on**. Guillaume (2026-10-01): "what we created is exactly for this type of session that
+I'm never capable of actually fully complete … or at least leave a system and a set of diagrams
+and things for future instances, which is going to be really good information regarding why
+we're creating what we're creating here."
+
+**Arriving in a repo:** look for a `.sysdf.json` near the work (`find . -name '*.sysdf.json'`).
+If there is one, `get_notes` on it and open it on the canvas before you design anything — it is
+the last instance's hand-off, and its L008 warnings are the open work.
+
+**During a design discussion:** draw as you talk. Tell the person's scenario as a sequence,
+let reconcile build the machine it implies (`auto` mode), and `show` the person the drawing you
+mean instead of describing it.
+
+**Before the session ends — even unfinished:**
+
+1. The system exists beside the diagrams it joins (or in the episode's `diagrams/` room).
+2. The scenario discussed is in a `.sqdf.json`, even partial; open alternatives are `alt`
+   fragments, not prose.
+3. `set_notes` on the system: the question that started it, what was decided, what is still
+   open, and who decided — in plain words, for an instance that was not here.
+4. `check_system`: leave its warnings as they are. They are the next instance's to-do list.
+5. Give the person the canvas link to the map.
 
 ---
 

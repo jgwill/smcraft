@@ -131,6 +131,8 @@ From `@miadi/stateloom-protocol`: `validateSequence`, `renderMermaidSequence`, `
 
 ## SYSDF — the drawings as one system
 
+**Why it exists:** a system is what an agent and a person talk over while designing, and what a session that does not finish hands to the next instance. Arriving in a repo, look for a `.sysdf.json` and read its notes (`get_notes`) before designing; before ending an unfinished design session, leave the scenario as a sequence, the notes saying what was decided and what is open, and the `check_system` warnings as the next instance's to-do.
+
 A `.sysdf.json` names a system's members (`.erdf.json`, `.smdf.json`, `.sqdf.json`, paths relative to the system file — the only document that holds paths) and `actors[]` (`person` | `agent` | `service` | `external`). `settings.reconcile` is `propose` (default) or `auto`.
 
 **System tools** — `create_system`, `add_member`, `remove_member`, `add_actor`, `remove_actor`, `set_reconcile_mode(mode)`, `check_system()` (Y001–Y004, each member's own rules, L001–L004, and L005 event / L006 participant / L007 carried entity / L008 replay), `replay_scenario()`, `reconcile_scenario(apply?)`, `show(member?, focus?, note?)`. `generate_rispec` with a system active writes one rispec, each scenario path a Creative Advancement Scenario.

@@ -324,6 +324,11 @@ ERD and the actors level with the scenarios, and in the system's **`auto`** mode
 sequence edit does it at once, so the person who opens a machine finds it already updated.
 `show` points the canvases open on a system at a drawing and an element.
 
+A system is what an agent and a person talk over while they design, and what a session that
+does not finish leaves for the next one: the drawings, the scenarios told so far, the places
+the walk still stops, and notes that say why the work exists. The next instance opens the
+system before it designs anything.
+
 In the designer a system opens as a map of its drawings; every drawing opened from it
 carries a strip to switch to the others and follow the selected element across them. Worked
 example: [`examples/wave-count/`](./examples/wave-count/), the Episode 140 wave count.

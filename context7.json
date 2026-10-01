@@ -50,6 +50,7 @@
     "Validation rule ids are not shared between implementations. The MCP server's V001 is not the engine's V001, and the TypeScript engine carries seven of the format's fourteen rules. Read the message, never the number.",
     "Revise the rispec in the same commit as the code. rispecs/70-82 are read as current by agents that cannot check them against source, so a spec left behind does not go quiet — it becomes a confident wrong answer.",
     "A sequence (.sqdf.json) and a state machine tell the same story two ways. In a system (.sysdf.json) run check_system after editing either; when the system's reconcile mode is auto, a sequence edit has already changed the machines, the ERD and the actors, and its one-line result says which.",
+    "A .sysdf.json is the hand-off of a design session that did not finish. Before designing in a repo, look for one and read its notes; before ending an unfinished design, leave the scenario as a sequence, notes saying what was decided and what is open, and the check_system warnings in place.",
     "Creating is not problem-solving and problem-solving is not creating.",
     "You definition of the word 'structure' is usually wrong, read carefully the guidances",
     "Structural tension is not a gap to be filled",
