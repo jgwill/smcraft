@@ -226,7 +226,11 @@ export function reconcileScenario(
       const reasons: string[] = [];
       const rootIsLeaf = leaf === machine.state?.name && !(machine.state?.states ?? []).length;
       if (!has) {
-        ops.push({ op: "state.add", parent: null, state: { name: message.state, transitions: [] } });
+        ops.push({
+          op: "state.add",
+          parent: null,
+          state: { name: message.state, ...(message.label?.trim() ? { description: `Reached when: ${message.label.trim()}` } : {}), transitions: [] },
+        });
         reasons.push(rootIsLeaf ? `gains its first state, ${message.state}` : `adds the state ${message.state}`);
       }
       if (rootIsLeaf) {

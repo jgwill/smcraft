@@ -49,6 +49,7 @@ test("renderMermaid: a composite's children live inside its block", () => {
   const out = renderMermaid(NESTED);
   const inside = blockOf(out, "Shooting");
   assert.deepEqual(inside, [
+    "[*] --> Setup",
     "Setup --> Rolling : ROLL",
     "Rolling --> Checking : CUT",
     "Checking --> Setup : RETAKE",
@@ -70,11 +71,11 @@ test("renderMermaid: a state no edge names is still declared", () => {
     state: { name: "Root", states: [{ name: "Alone" }, { name: "AlsoAlone" }] },
   };
   const out = renderMermaid(lonely);
-  assert.ok(out.includes("\n    Alone"), out);
+  assert.ok(out.includes("\n    [*] --> Alone"), "the first child is where the machine starts\n" + out);
   assert.ok(out.includes("\n    AlsoAlone"), out);
 });
 
-test("renderMermaid: guards ride the label, targetless transitions draw nothing", () => {
+test("renderMermaid: guards ride the label, a targetless transition is a loop that stays", () => {
   const guarded: StateMachineDefinition = {
     settings: { namespace: "demo", name: "m", asynchronous: false },
     events: [],
@@ -94,9 +95,16 @@ test("renderMermaid: guards ride the label, targetless transitions draw nothing"
   };
   const out = renderMermaid(guarded);
   assert.ok(out.includes("A --> B : go [ready]"), out);
-  assert.ok(!out.includes("ping"), "a transition with no target has no edge to draw");
+  assert.ok(out.includes("A --> A : ping (stays)"), "a transition with no target is drawn, and says it stays\n" + out);
 });
 
 test("renderMermaid: deterministic", () => {
   assert.equal(renderMermaid(NESTED), renderMermaid(NESTED));
+});
+
+test("renderMermaid: each level starts at [*], and a final state ends at [*]", () => {
+  const out = renderMermaid(NESTED);
+  assert.ok(out.includes("\n    [*] --> Prep"), out);
+  assert.ok(out.includes("\n    Wrapped --> [*]"), out);
+  assert.equal(blockOf(out, "Shooting")[0], "[*] --> Setup");
 });

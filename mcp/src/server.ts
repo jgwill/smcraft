@@ -981,6 +981,31 @@ server.tool(
 );
 
 server.tool(
+  "remove_transition",
+  "Remove a state's transitions on an event — only those to `nextState` when it is given (use \"\" for a transition that stays). Everything else on the state is kept. Says how many were removed.",
+  { state: z.string(), event: z.string(), nextState: z.string().optional() },
+  async ({ state, event, nextState }) => {
+    const def = readDef();
+    if (!def) return { content: [{ type: "text", text: noMachine() }], isError: true };
+    const target = findState(def.state, state);
+    if (!target) return { content: [{ type: "text", text: `State '${state}' not found.` }], isError: true };
+    const all = target.transitions ?? [];
+    const matches = (t: TransitionDef) =>
+      t.event === event && (nextState === undefined || (nextState === "" ? !t.nextState : t.nextState === nextState));
+    const indices = all.map((t, i) => (matches(t) ? i : -1)).filter((i) => i >= 0);
+    if (!indices.length) {
+      const have = all.map((t) => `${t.event}${t.nextState ? ` → ${t.nextState}` : " (stays)"}`).join(", ") || "none";
+      return { content: [{ type: "text", text: `No transition on '${event}'${nextState === undefined ? "" : ` to '${nextState || "(stays)"}'`} from '${state}'. It has: ${have}.` }], isError: true };
+    }
+    target.transitions = all.filter((t) => !matches(t));
+    writeDef(def);
+    // Positional ops, highest index first, so each index still names the right one.
+    bridgeEmitPatch([...indices].reverse().map((index) => ({ op: "transition.remove" as const, state, index })));
+    return { content: [{ type: "text", text: `Removed ${indices.length} transition(s) on '${event}' from '${state}'.` }] };
+  }
+);
+
+server.tool(
   "add_object",
   "Declare an object the machine is constructed with: `instance` is the name guards use (`walk` in `walk.state`), `class` is its type — an ERD entity when it is data. Fixes L001/L003 without rewriting the machine. Refused when the instance already exists.",
   { instance: z.string(), class: z.string() },

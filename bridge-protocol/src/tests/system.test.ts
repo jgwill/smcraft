@@ -217,7 +217,7 @@ test("reconcile: a new event and a new state in the scenario become the machine'
   assert.equal(result.proposals.length, 1);
   assert.deepEqual(result.proposals[0].ops, [
     { op: "eventSource.add", source: { name: "PersonEvents", events: [{ id: "Slam", description: "slam" }] } },
-    { op: "state.add", parent: null, state: { name: "Cracked", transitions: [] } },
+    { op: "state.add", parent: null, state: { name: "Cracked", description: "Reached when: slam", transitions: [] } },
     { op: "transition.add", state: "Opened", transition: { event: "Slam", nextState: "Cracked", description: "slam" } },
   ]);
   assert.match(result.proposals[0].reasons[1], /goes from Opened to Cracked on "Slam", because message 2 \(main\) says so/);
@@ -425,7 +425,7 @@ test("R6: an empty machine gains its first state, not a transition every state w
   const Empty = machine("M", ["start"], { name: "Root", states: [] });
   const r = reconcileScenario(tell(m("start", { state: "Idle" }), m("go", { state: "Running" })), [Empty]);
   const ops = r.proposals[0].ops;
-  assert.deepEqual(ops[0], { op: "state.add", parent: null, state: { name: "Idle", transitions: [] } });
+  assert.deepEqual(ops[0], { op: "state.add", parent: null, state: { name: "Idle", description: "Reached when: start", transitions: [] } });
   assert.equal(ops.some((o) => o.op === "transition.add" && o.state === "Root"), false, JSON.stringify(ops));
   assert.equal(r.after.paths[0].accepted, true, formatReplay(r.after));
 });

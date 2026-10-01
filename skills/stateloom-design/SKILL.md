@@ -352,7 +352,8 @@ creates it.
 ## Describing what is already there
 
 `update_state { "name": "Talking", "description": "…", "kind": "normal", "prompt": "…" }` and
-`update_event { "id": "Replies", "description": "…" }` change one state or event in place —
+`update_event { "id": "Replies", "description": "…" }` change one state or event in place, and
+`remove_transition { "state": "Talking", "event": "Conclude", "nextState": "Concluded_Relabel" }` takes one out —
 omitted fields stay. Use them instead of rewriting the machine with `load_definition` after a
 scenario built states in auto mode. (Reconcile already gives each event and transition it adds
 the words of the message that implied it.)

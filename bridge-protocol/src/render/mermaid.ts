@@ -3,7 +3,11 @@
  *
  * Every transition becomes an `A --> B : event` edge (guards appended as
  * ` [cond]`), and a state that owns children becomes a `state Name { … }` block
- * holding the edges between those children.
+ * holding the edges between those children. Each level starts at `[*]` (the
+ * first enterable child, as the runtime enters it), a final state leads to
+ * `[*]`, and a transition that stays is a loop marked "(stays)" — the three
+ * things a reader could not otherwise see (found 2026-10-01 by the trading
+ * session that drew AnalysisDiscussion).
  *
  * Where the edge is written is the whole game. Mermaid decides nesting by
  * scope: a state first mentioned outside a block belongs outside it, no matter
@@ -40,15 +44,34 @@ function renderLevel(parent: StateDef, depth: number, lines: string[]): void {
   const pad = "    ".repeat(depth + 1);
   const mentioned = new Set<string>();
 
+  // Where this level starts: the runtime enters the first child that is not a
+  // history state, so the drawing says so with mermaid's start marker.
+  const initial = children.find((c) => c.kind !== "history");
+  if (initial) {
+    lines.push(`${pad}[*] --> ${initial.name}`);
+    mentioned.add(initial.name);
+  }
   for (const child of children) {
     for (const t of child.transitions ?? []) {
-      // A transition with no target fires without moving; mermaid has no edge
-      // shape for it, and inventing one would draw a journey nobody takes.
-      if (!t.nextState) continue;
       const label = t.condition ? `${t.event} [${t.condition}]` : t.event;
+      // A transition with no target fires and stays (an internal transition).
+      // It is drawn as a loop marked "stays", so the event is not lost from the
+      // picture and nobody reads it as a journey to somewhere else.
+      if (!t.nextState) {
+        lines.push(`${pad}${child.name} --> ${child.name} : ${label} (stays)`);
+        mentioned.add(child.name);
+        continue;
+      }
       lines.push(`${pad}${child.name} --> ${t.nextState} : ${label}`);
       mentioned.add(child.name);
       mentioned.add(t.nextState);
+    }
+  }
+  // Where it ends: a final state leads to mermaid's end marker.
+  for (const child of children) {
+    if (child.kind === "final") {
+      lines.push(`${pad}${child.name} --> [*]`);
+      mentioned.add(child.name);
     }
   }
 
