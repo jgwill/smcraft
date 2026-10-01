@@ -11,7 +11,7 @@
 **Canvas:** `@miadi/stateloom-canvas` 0.1.5 — `<StateMachineCanvas>`, `<EntityRelationshipCanvas>` and `<SequenceCanvas>`, the design surfaces as mountable components
 **CLI:** `@miadi/stateloom-cli` 0.1.4 — bin `smcx`
 **MCP:** `@miadi/stateloom-mcp` 0.3.5 — bins `stateloom-mcp`, `smcraft-mcp`; 56 tools: 22 state-machine, 10 ERD, 14 sequence, 10 system
-**Skills:** `@miadi/stateloom-skills` 0.4.5 — bin `stateloom`
+**Skills:** `@miadi/stateloom-skills` 0.4.6 — bin `stateloom`
 **Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.2.5, bin `stateloom-web`
 **Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
 **RISE Specs:** 70–82
@@ -931,7 +931,7 @@ The active document's type is its extension. `set_project_file` takes a `.smdf.j
 
 ## 7. Agent Skills
 
-`@miadi/stateloom-skills` 0.4.5, bin `stateloom` (alias `stateloom-skills`).
+`@miadi/stateloom-skills` 0.4.6, bin `stateloom` (alias `stateloom-skills`).
 
 ```bash
 npx -y @miadi/stateloom-skills skills list

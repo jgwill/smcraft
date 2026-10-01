@@ -130,6 +130,26 @@ Wrap those three lines (plus a `tailscale cert` refresh) in a script and run it 
 timer that re-runs `tailscale cert` so the certificate never quietly expires. Enable
 lingering (`loginctl enable-linger "$USER"`) or none of it starts at boot.
 
+**`After=tailscaled.service` is not enough.** At boot the unit can run before tailscaled has
+its network map: `tailscale serve` then answers `500 Internal Server Error: no netmap
+available`, a script without `set -e` still exits 0, and the service is simply not served —
+on 2026-09-28 that left `loomino` dark for three days with the unit reporting success. Start
+the script by waiting for the backend, fail on any serve error, and let systemd retry:
+
+```bash
+for _ in $(seq 1 90); do
+    state=$(tailscale status --json 2>/dev/null | sed -n 's/.*"BackendState": *"\([A-Za-z]*\)".*/\1/p' | head -1)
+    [ "$state" = "Running" ] && break
+    sleep 2
+done
+set -e
+# … the serve lines …
+```
+
+and in the unit, `Restart=on-failure` with `RestartSec=20`. **Verify after a reboot:**
+`tailscale serve status | grep -A2 svc:<service>` must list both endpoints — the unit being
+"active" proves nothing.
+
 ---
 
 ## Step 5 — Approve the host
