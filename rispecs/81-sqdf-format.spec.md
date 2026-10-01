@@ -115,6 +115,8 @@ When the sequence belongs to a system whose reconcile mode is `auto` (Spec 82), 
 
 `<SequenceCanvas>` in `@miadi/stateloom-canvas` has the contract of the other canvases: props in, callbacks out, the host owns definition and viewport, the same gestures and `--slc-*` theme. The sequence workspace in `web/` opens for a `.sqdf.json`, edits with the pure functions above, writes to disk and then pushes the whole document to its hub room. On a phone it keeps the ERD workspace's shape: one-row header, the board first, the panel as a bottom sheet behind a dock (Participants, Messages, Notes, Issues), drawn outline icons.
 
+**List and Diagram** (web 0.2.6). A sequence with more than two or three participants is wider than a phone at any size its words can be read at: the drawing shows two lifelines, and a message between two others is a line whose label is off the screen (found 2026-10-01 on `DiscussionFromChart`, seven participants). So the board has a second view, the **list**: every message a row in story order, with who sends it to whom, the label in full, and what it does (the event, its machine, the state after, what it carries). Each fragment is a framed group under `ALT · after 11` and its label, each participant keeps one colour, and a check's finding is printed under the row it names. A header switch (List | Diagram) changes views; a phone opens on the list, a wider screen on the diagram, and a choice made with the switch is remembered in that browser. A focus (`message:8`) scrolls the list to its row and selects it; tapping a row selects it as tapping the arrow does, and **Show in the diagram** switches to the drawing centred on that message.
+
 ## Creative Advancement Scenarios
 
 ### Scenario: A Scenario Drawn by Hand Becomes a Document

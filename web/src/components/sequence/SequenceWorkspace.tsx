@@ -10,6 +10,10 @@
  * controls on the board, the panel a bottom sheet behind a dock on a phone and
  * a right column on a desktop.
  *
+ * On a phone it opens as a list (`SequenceReading`): a sequence wider than the
+ * screen cannot be read as a drawing there. List and Diagram switch in the
+ * header, and the choice is remembered in this browser.
+ *
  * Inside a system (`?system=` in the URL), the Issues tab adds the system's
  * findings for this scenario — the names it uses that no member defines, and
  * the replay of each path against the machines — and the fields that name an
@@ -65,6 +69,7 @@ import IssueIcon from "@/components/IssueIcon";
 import { NotesField } from "@/components/erd/ErdWorkspace";
 import { FieldForm, panelButton as button, panelHeading as heading, type FormValues } from "@/components/forms";
 import KindIcon from "@/components/system/KindIcon";
+import SequenceReading, { readingRowId, type ReadingIssue } from "@/components/sequence/SequenceReading";
 import { docQuery, useRequestedDoc } from "@/lib/docParam";
 import { loadRuntimeConfig } from "@/lib/runtimeConfig";
 import { useSheetDrag } from "@/lib/useSheetDrag";
@@ -73,6 +78,8 @@ import { stripNote, useFocusRequest, useUrlParam, writeFocus } from "@/lib/syste
 import { memberOfDoc, notifySystemChanged, reconcileNow, systemVocabulary, useSystem } from "@/lib/systemLoad";
 
 type Tab = "participants" | "messages" | "notes" | "issues";
+type ViewMode = "diagram" | "list";
+const VIEW_KEY = "stateloom.sequence.view";
 type Edit = (def: SequenceDefinition) => SequenceDefinition;
 
 const KINDS = ["", "actor", "service", "object"] as const;
@@ -124,6 +131,30 @@ export default function SequenceWorkspace() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [panelHidden, setPanelHidden] = useState(false);
+  // Diagram until the browser says otherwise: a remembered choice, else a list on a phone.
+  const [mode, setModeState] = useState<ViewMode>("diagram");
+  const modeRef = useRef<ViewMode>("diagram");
+  useEffect(() => {
+    let remembered: string | null = null;
+    try {
+      remembered = window.localStorage.getItem(VIEW_KEY);
+    } catch {
+      // Storage refused (a private window): fall back to the screen width.
+    }
+    const next: ViewMode =
+      remembered === "list" || remembered === "diagram" ? remembered : window.matchMedia("(max-width: 767px)").matches ? "list" : "diagram";
+    modeRef.current = next;
+    setModeState(next);
+  }, []);
+  const setMode = useCallback((next: ViewMode) => {
+    modeRef.current = next;
+    setModeState(next);
+    try {
+      window.localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      // Not remembered; the switch still works.
+    }
+  }, []);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const sheet = useSheetDrag({ onClose: () => setSheetOpen(false), restVh: 62, tallVh: 92 });
   const [peers, setPeers] = useState(0);
@@ -224,6 +255,24 @@ export default function SequenceWorkspace() {
     [memberIssues],
   );
 
+  // The same findings, by focus string, for the list to print under each row.
+  const readingIssues = useMemo(() => {
+    const out = new Map<string, ReadingIssue[]>();
+    const add = (element: string | undefined, issue: ReadingIssue) => {
+      const key = !element
+        ? ""
+        : /^(message|participant):/.test(element)
+          ? element
+          : view?.participants.some((p) => p.name === element)
+            ? `participant:${element}`
+            : "";
+      if (key) out.set(key, [...(out.get(key) ?? []), issue]);
+    };
+    problems.forEach((p) => add(p.element, { severity: "error", text: p.message }));
+    memberIssues.forEach((i) => add(i.element, { severity: i.severity === "error" ? "error" : "warning", text: i.message }));
+    return out;
+  }, [problems, memberIssues, view]);
+
   const boardSize = (): { width: number; height: number } => {
     const rect = boardRef.current?.getBoundingClientRect();
     return { width: rect?.width ?? 0, height: rect?.height ?? 0 };
@@ -262,6 +311,17 @@ export default function SequenceWorkspace() {
     [layout, centreOn],
   );
 
+  /** Bring a target into view in whichever view is showing. */
+  const reveal = useCallback(
+    (target: SequenceSelection) => {
+      if (modeRef.current === "diagram") return showSelection(target);
+      requestAnimationFrame(() =>
+        document.getElementById(readingRowId(target))?.scrollIntoView({ block: "center", behavior: "smooth" }),
+      );
+    },
+    [showSelection],
+  );
+
   const select = useCallback((target: SequenceSelection | null) => {
     setSelection(target);
     if (target) writeFocus(`${target.kind}:${target.id}`);
@@ -279,21 +339,21 @@ export default function SequenceWorkspace() {
     if (!target) return setStatus(`${focusRequest.focus} is not in this sequence`, "warn");
     firstView.current = false;
     setSelection(target);
-    showSelection(target);
-  }, [def, view, layout, focusRequest, showSelection, setStatus]);
+    reveal(target);
+  }, [def, view, layout, focusRequest, reveal, setStatus]);
 
   // The first view: the whole drawing when it can be read that way, else its
   // top-left corner at a readable size (a phone showing seven lifelines at a
   // quarter of their size shows nothing).
   useEffect(() => {
-    if (!layout || !firstView.current) return;
+    if (!layout || !firstView.current || mode !== "diagram") return;
     const { width, height } = boardSize();
     if (!width) return;
     firstView.current = false;
     const fit = Math.min((width - 32) / layout.width, (height - 32) / layout.height);
     if (fit >= 0.5 || layout.participants.length === 0) setFitKey((k) => (k ?? 0) + 1);
     else setViewport({ x: 8, y: 8, scale: 0.6 });
-  }, [layout]);
+  }, [layout, mode]);
 
   const apply = useCallback(
     async (edit: Edit) => {
@@ -361,7 +421,7 @@ export default function SequenceWorkspace() {
     if (!f || (f.kind !== "message" && f.kind !== "participant")) return;
     const target: SequenceSelection = { kind: f.kind, id: f.name };
     select(target);
-    showSelection(target);
+    reveal(target);
     sheet.close();
   };
 
@@ -420,6 +480,29 @@ export default function SequenceWorkspace() {
           {def?.settings.name ?? fileName}
           <span className="hidden text-gray-600 lg:inline"> · {fileName}</span>
         </span>
+        <div className="flex shrink-0 overflow-hidden rounded border border-gray-700 text-[12px] leading-none" role="group" aria-label="View">
+          {(
+            [
+              ["list", "List", "Read the messages in order, one under the other"],
+              ["diagram", "Diagram", "The lifelines and arrows"],
+            ] as const
+          ).map(([id, label, title]) => (
+            <button
+              key={id}
+              title={title}
+              aria-pressed={mode === id}
+              onClick={() => {
+                if (mode === id) return;
+                if (selection) firstView.current = false;
+                setMode(id);
+                if (selection) requestAnimationFrame(() => reveal(selection));
+              }}
+              className={`px-2.5 py-1.5 ${mode === id ? "bg-gray-700 text-gray-100" : "bg-gray-800 text-gray-400 hover:text-gray-200"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="hidden shrink-0 items-center gap-2 md:flex">
           <button className={button} onClick={copyMermaid}>
             Copy mermaid
@@ -463,7 +546,23 @@ export default function SequenceWorkspace() {
 
       <div className="relative flex min-h-0 flex-1">
         <div ref={boardRef} className="relative min-w-0 flex-1 overflow-hidden">
-          {def && layout && (
+          {def && layout && mode === "list" && view && (
+            <BoardBoundary what="sequence" resetKey={def}>
+              <SequenceReading
+                definition={view}
+                selection={selection}
+                issues={readingIssues}
+                onSelect={(target) => select(target)}
+                onShowInDiagram={(target) => {
+                  // The message is the first view, not the drawing's corner.
+                  firstView.current = false;
+                  setMode("diagram");
+                  requestAnimationFrame(() => showSelection(target));
+                }}
+              />
+            </BoardBoundary>
+          )}
+          {def && layout && mode === "diagram" && (
             <BoardBoundary what="sequence" resetKey={def}>
             <SequenceCanvas
               definition={view!}
@@ -482,9 +581,9 @@ export default function SequenceWorkspace() {
           )}
 
           <div
-            className={`pointer-events-none absolute left-2 top-2 flex max-w-[75%] items-center gap-1.5 rounded bg-gray-950/70 px-1.5 py-0.5 text-[11px] ${
+            className={`pointer-events-none absolute left-2 top-2 max-w-[75%] items-center gap-1.5 rounded bg-gray-950/70 px-1.5 py-0.5 text-[11px] ${
               status.tone === "warn" ? "text-amber-300" : "text-gray-500"
-            }`}
+            } ${mode === "list" && statusQuiet && status.tone === "ok" ? "hidden" : "flex"}`}
             role="status"
           >
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${status.tone === "warn" ? "bg-amber-400" : "bg-emerald-500"}`} />
@@ -494,7 +593,11 @@ export default function SequenceWorkspace() {
             </span>
           </div>
 
-          <div className="absolute bottom-3 right-3 flex flex-col overflow-hidden rounded-lg border border-gray-700 bg-gray-900/90 shadow-lg backdrop-blur">
+          <div
+            className={`absolute bottom-3 right-3 flex-col overflow-hidden rounded-lg border border-gray-700 bg-gray-900/90 shadow-lg backdrop-blur ${
+              mode === "diagram" ? "flex" : "hidden"
+            }`}
+          >
             {(
               [
                 ["＋", "Zoom in", () => zoomBy(1.25)],
@@ -582,7 +685,7 @@ export default function SequenceWorkspace() {
                       className={`${button} ${selection?.kind === "participant" && selection.id === p.name ? "border-blue-500 text-blue-300" : ""}`}
                       onClick={() => {
                         select({ kind: "participant", id: p.name });
-                        showSelection({ kind: "participant", id: p.name });
+                        reveal({ kind: "participant", id: p.name });
                       }}
                       title={participantKind(p) || "participant"}
                     >
@@ -620,7 +723,7 @@ export default function SequenceWorkspace() {
                   <>
                     <div className={`${heading} flex items-center justify-between gap-2`}>
                       <span className="truncate text-sm normal-case tracking-normal text-gray-200">{selectedParticipant.name}</span>
-                      <button className={`${button} normal-case tracking-normal`} onClick={() => showSelection({ kind: "participant", id: selectedParticipant.name })}>
+                      <button className={`${button} normal-case tracking-normal`} onClick={() => reveal({ kind: "participant", id: selectedParticipant.name })}>
                         ◎ Show on board
                       </button>
                     </div>
@@ -720,7 +823,7 @@ export default function SequenceWorkspace() {
                           }`}
                           onClick={() => {
                             select({ kind: "message", id: ref });
-                            showSelection({ kind: "message", id: ref });
+                            reveal({ kind: "message", id: ref });
                           }}
                           title={`${m.from} → ${m.to}: ${m.label}`}
                         >
@@ -767,7 +870,7 @@ export default function SequenceWorkspace() {
                             </button>
                           </>
                         )}
-                        <button className={button} onClick={() => showSelection(selection!)}>
+                        <button className={button} onClick={() => reveal(selection!)}>
                           ◎ Show
                         </button>
                       </span>

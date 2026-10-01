@@ -12,7 +12,7 @@
 **CLI:** `@miadi/stateloom-cli` 0.1.4 — bin `smcx`
 **MCP:** `@miadi/stateloom-mcp` 0.3.5 — bins `stateloom-mcp`, `smcraft-mcp`; 56 tools: 22 state-machine, 10 ERD, 14 sequence, 10 system
 **Skills:** `@miadi/stateloom-skills` 0.4.6 — bin `stateloom`
-**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.2.5, bin `stateloom-web`
+**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.2.6, bin `stateloom-web`
 **Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
 **RISE Specs:** 70–82
 **Repository:** https://github.com/jgwill/smcraft
