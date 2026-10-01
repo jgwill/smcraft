@@ -33,6 +33,24 @@ Two uses follow, and they shape the format:
 - **The system is what the agent and the person talk over.** A session that discusses a design draws it as it goes: the scenario as the person tells it, the machine the scenario implies (reconcile builds it), the data it carries. The person reads drawings on the canvas, not a description of drawings; the agent points at what it means with `show`.
 - **The system is what an unfinished session hands on.** Most sessions end before the work does. A transcript is long and only says what was said; a system says what was being built: which machines, which scenarios walk through them, where a walk still stops (L008 warnings are the next instance's to-do), and — in `settings.notes` and each drawing's notes — the question that started it and what was decided. The next instance opens the system and its notes before it designs anything.
 
+**What a design input carries, when it is good.** Guillaume's prompt to that session named, in
+his own words, every part the loom holds — and he said why: "the quality of my prompt is because I
+know that we will have the tool to actually represent that in adequate diagramming." Read as a
+teaching for anyone giving a design input to a model:
+
+| what his prompt said | what the loom holds it in |
+|---|---|
+| "I'm counting waves and it doesn't work" — where he is | the current state of the existing machine (`ElliottWaveCountLifecycle`) |
+| "give it a name of that new state machine" | a new member machine (`AnalysisDiscussion`) |
+| "describing the event that leads us toward there" | the entering event (`AskToDiscuss`) |
+| "what's going to be the actual scenario, the sequence" | a `.sqdf.json`, each message naming its event and the state that follows |
+| "prompting that correspond to what we want to resolve in that state" | the state's `prompt` (`set_prompt`) |
+| "the events that are going to be possible to transition back to existing states, or new other states" | `alt` fragments firing the existing machine's own events, checked by the replay |
+| "requirements for implementing it ourselves or delegating" | the system rispec, and the notes a session leaves |
+
+An input that names these seven things can be drawn, checked and handed on; one that leaves any
+of them out leaves the model to guess it.
+
 Measured on 2026-10-01 against that session's prompt (a new "discussion" state reached from a button beside Publish): starting from an empty machine and the scenario alone, `reconcileSystem` in `auto` mode built the new machine's five states and their transitions, added the two entities to the ERD and the agent to the actors, and the replay then named a real design question — the "trade it" outcome asks for a blueprint before the count is evaluated, which the existing lifecycle refuses.
 
 ## Core Concepts
