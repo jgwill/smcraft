@@ -980,6 +980,63 @@ server.tool(
 );
 
 server.tool(
+  "update_state",
+  "Change what a state says about itself without rewriting the machine: its description, its kind (normal, final, history) or its prompt. Omitted fields stay as they are; an empty description or prompt clears it. Use it after a scenario built states in auto mode, to say what each one is.",
+  {
+    name: z.string(),
+    description: z.string().optional(),
+    kind: z.enum(["normal", "final", "history"]).optional(),
+    prompt: z.string().optional(),
+  },
+  async ({ name, description, kind, prompt }) => {
+    const def = readDef();
+    if (!def) return { content: [{ type: "text", text: noMachine() }], isError: true };
+    const target = findState(def.state, name);
+    if (!target) return { content: [{ type: "text", text: `State '${name}' not found.` }], isError: true };
+    const patch: Record<string, string> = {};
+    const said: string[] = [];
+    if (description !== undefined) {
+      if (description.trim()) target.description = description;
+      else delete target.description;
+      patch.description = description;
+      said.push(description.trim() ? "description" : "description cleared");
+    }
+    if (kind !== undefined) {
+      target.kind = kind;
+      patch.kind = kind;
+      said.push(`kind ${kind}`);
+    }
+    if (prompt !== undefined) {
+      if (prompt.trim()) target.prompt = prompt;
+      else delete target.prompt;
+      patch.prompt = prompt.trim() ? prompt : "";
+      said.push(prompt.trim() ? "prompt" : "prompt cleared");
+    }
+    if (!said.length) return { content: [{ type: "text", text: `Nothing to change on '${name}': give a description, a kind or a prompt.` }], isError: true };
+    writeDef(def);
+    bridgeEmitPatch([{ op: "state.update", name, patch }]);
+    return { content: [{ type: "text", text: `Updated '${name}': ${said.join(", ")}.` }] };
+  }
+);
+
+server.tool(
+  "update_event",
+  "Change an event's description without rewriting the machine. An empty description clears it.",
+  { id: z.string(), description: z.string() },
+  async ({ id, description }) => {
+    const def = readDef();
+    if (!def) return { content: [{ type: "text", text: noMachine() }], isError: true };
+    const event = (def.events ?? []).flatMap((s) => s.events ?? []).find((e) => e.id === id);
+    if (!event) return { content: [{ type: "text", text: `Event '${id}' not found.` }], isError: true };
+    if (description.trim()) event.description = description;
+    else delete event.description;
+    writeDef(def);
+    bridgeEmitPatch([{ op: "event.update", id, patch: { description } }]);
+    return { content: [{ type: "text", text: description.trim() ? `Described event '${id}'.` : `Cleared the description of '${id}'.` }] };
+  }
+);
+
+server.tool(
   "set_prompt",
   "Say what an agent is asked to resolve while the machine is in a state: the instruction it receives when the state is entered — an opening message, the frame of every later turn. `description` says what the state is and notes are the conversation about it; the prompt is what to do in it. The text replaces what was there; an empty string clears it. Engines and code generation ignore it; get_definition and generate_rispec show it.",
   { state: z.string(), prompt: z.string() },

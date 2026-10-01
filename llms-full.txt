@@ -4,15 +4,15 @@
 
 **Engine (npm):** `@miadi/stateloom-engine` 0.4.4 — renamed from `smcraft`, which is deprecated on npm — parser, validator, runtime, SMDF interpreter, TypeScript codegen
 **Engine (PyPI):** `miadi-stateloom-engine` 0.2.1 — the Python twin, Python codegen, CLI `smcg`
-**Protocol:** `@miadi/stateloom-protocol` 0.1.11 — also carries the ERD, sequence and system formats (types, validators, links between drawings, the scenario replay and reconcile, layouts)
+**Protocol:** `@miadi/stateloom-protocol` 0.1.12 — also carries the ERD, sequence and system formats (types, validators, links between drawings, the scenario replay and reconcile, layouts)
 **Client:** `@miadi/stateloom-client` 0.1.3 — `emitView` / `on('view')`
 **Hub:** `@miadi/stateloom` 0.1.6 — bin `smcraft-bridge`; relays `view:show`
 **React:** `@miadi/stateloom-react` 0.1.6
 **Canvas:** `@miadi/stateloom-canvas` 0.1.5 — `<StateMachineCanvas>`, `<EntityRelationshipCanvas>` and `<SequenceCanvas>`, the design surfaces as mountable components
-**CLI:** `@miadi/stateloom-cli` 0.1.3 — bin `smcx`
-**MCP:** `@miadi/stateloom-mcp` 0.3.2 — bins `stateloom-mcp`, `smcraft-mcp`; 52 tools: 18 state-machine, 10 ERD, 14 sequence, 10 system
-**Skills:** `@miadi/stateloom-skills` 0.4.2 — bin `stateloom`
-**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.2.2, bin `stateloom-web`
+**CLI:** `@miadi/stateloom-cli` 0.1.4 — bin `smcx`
+**MCP:** `@miadi/stateloom-mcp` 0.3.3 — bins `stateloom-mcp`, `smcraft-mcp`; 54 tools: 20 state-machine, 10 ERD, 14 sequence, 10 system
+**Skills:** `@miadi/stateloom-skills` 0.4.3 — bin `stateloom`
+**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.2.3, bin `stateloom-web`
 **Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
 **RISE Specs:** 70–82
 **Repository:** https://github.com/jgwill/smcraft
@@ -639,7 +639,7 @@ Generates the TypeScript equivalent of the Python output: state enum, base state
 
 Spec 77 is the contract; this section is what shipped.
 
-### 5.1 `@miadi/stateloom-protocol` 0.1.11
+### 5.1 `@miadi/stateloom-protocol` 0.1.12
 
 Zero runtime dependencies. Everything else in the loom depends on it, and it depends on nothing — which is why the same layout, the same edge routing and the same file names appear on every surface without any of them importing each other.
 
@@ -755,7 +755,7 @@ The drawing helpers are re-exported here rather than re-implemented: the designe
 
 `viewport.ts` carries the pan/zoom math — `Viewport`, `Box`, `Point`, `ScaleLimits`, and the transforms between screen and world space.
 
-### 5.5 `@miadi/stateloom-cli` 0.1.3 — `smcx`
+### 5.5 `@miadi/stateloom-cli` 0.1.4 — `smcx`
 
 ```bash
 npm i -g @miadi/stateloom-cli
@@ -797,7 +797,7 @@ lets the designer and forgewright render the same board from different state. Ev
 Peer dependency `react ^19`. Depends on `stateloom-protocol` for layout, edge routing and label
 placement, so a canvas and a `smcx render` of the same document agree on where the boxes are.
 
-### 5.7 `@miadi/stateloom-mcp` 0.3.2 — see §6
+### 5.7 `@miadi/stateloom-mcp` 0.3.3 — see §6
 
 The MCP server is a bridge client like any other. It depends on `stateloom-cli` (for the render path), `stateloom-client` and `stateloom-protocol`.
 
@@ -931,7 +931,7 @@ The active document's type is its extension. `set_project_file` takes a `.smdf.j
 
 ## 7. Agent Skills
 
-`@miadi/stateloom-skills` 0.4.2, bin `stateloom` (alias `stateloom-skills`).
+`@miadi/stateloom-skills` 0.4.3, bin `stateloom` (alias `stateloom-skills`).
 
 ```bash
 npx -y @miadi/stateloom-skills skills list

@@ -181,10 +181,12 @@ export function reconcileScenario(
         (s) => s?.name === sourceName || s?.name === sender || s?.name === message.from || s?.feeder === message.from,
       );
       const existing = sourceIndex >= 0 ? machine.events![sourceIndex].name : sourceName;
+      // The message's own words describe what it adds, so nobody has to come back and say it again.
+      const described = { id: message.event!, ...(message.label?.trim() ? { description: message.label.trim() } : {}) };
       const ops: PatchOp[] =
         sourceIndex >= 0
-          ? [{ op: "event.add", sourceIndex, event: { id: message.event! } }]
-          : [{ op: "eventSource.add", source: { name: sourceName, events: [{ id: message.event! }] } }];
+          ? [{ op: "event.add", sourceIndex, event: described }]
+          : [{ op: "eventSource.add", source: { name: sourceName, events: [described] } }];
       proposeOnce(index, ops, `${names[index]} defines "${message.event}" in ${existing}, because ${where} fires it`);
       continue;
     }
@@ -233,10 +235,11 @@ export function reconcileScenario(
         proposeOnce(index, ops, `${names[index]} ${reasons.join(" and ")}, because ${where} says the machine is there`);
         continue;
       }
+      const why = message.label?.trim() ? { description: message.label.trim() } : {};
       ops.push(
         leaf === message.state
-          ? { op: "transition.add", state: leaf, transition: { event: message.event! } }
-          : { op: "transition.add", state: leaf, transition: { event: message.event!, nextState: message.state } },
+          ? { op: "transition.add", state: leaf, transition: { event: message.event!, ...why } }
+          : { op: "transition.add", state: leaf, transition: { event: message.event!, nextState: message.state, ...why } },
       );
       reasons.push(leaf === message.state ? `handles "${message.event}" in ${leaf} without leaving it` : `goes from ${leaf} to ${message.state} on "${message.event}"`);
       proposeOnce(index, ops, `${names[index]} ${reasons.join(" and ")}, because ${where} says so`);

@@ -107,18 +107,38 @@ function childrenOf(parent: StateDef): StateDef[] {
 }
 
 /**
+ * The sibling a state sits under at this level: itself when it is a sibling,
+ * the sibling composite that contains it when it is nested deeper, undefined
+ * when it lives elsewhere in the tree. A transition into a composite's child
+ * enters that composite, so for a picture of this level it is an edge to it.
+ */
+export function siblingOf(children: StateDef[], name: string): string | undefined {
+  for (const c of children) {
+    if (c.name === name) return c.name;
+    const stack = [...(c.states ?? []), ...(c.parallel?.states ?? [])];
+    while (stack.length) {
+      const s = stack.pop()!;
+      if (s.name === name) return c.name;
+      stack.push(...(s.states ?? []), ...(s.parallel?.states ?? []));
+    }
+  }
+  return undefined;
+}
+
+/**
  * Transitions between siblings — the exact edge set the canvas draws for one
- * drill-down level. Self-loops and targets outside the level are skipped, and
- * two transitions between the same pair count once for layout purposes.
+ * drill-down level. A transition into a sibling composite's child counts as an
+ * edge to that composite. Self-loops and targets outside the level are
+ * skipped, and two transitions between the same pair count once for layout
+ * purposes.
  */
 function siblingEdges(children: StateDef[]): Edge[] {
-  const names = new Set(children.map((c) => c.name));
   const seen = new Set<string>();
   const edges: Edge[] = [];
   for (const child of children) {
     for (const t of child.transitions ?? []) {
-      const to = t.nextState;
-      if (!to || to === child.name || !names.has(to)) continue;
+      const to = t.nextState ? siblingOf(children, t.nextState) : undefined;
+      if (!to || to === child.name) continue;
       const key = edgeKey(child.name, to);
       if (seen.has(key)) continue;
       seen.add(key);

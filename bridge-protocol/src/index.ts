@@ -18,7 +18,7 @@ export {
   collectEventIds,
   buildParentMap,
 } from "./tree.js";
-export { autoLayout, AUTO_LAYOUT_DEFAULTS } from "./autoLayout.js";
+export { autoLayout, siblingOf, AUTO_LAYOUT_DEFAULTS } from "./autoLayout.js";
 export type { AutoLayoutOptions, LayoutBox } from "./autoLayout.js";
 export {
   placeLabels,

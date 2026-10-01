@@ -66,7 +66,7 @@ State classification is derived from structure, not declared: leaf (no children)
 
 Full schema: [Spec 70 — SMDF Format](./rispecs/70-smdf-format.spec.md)
 
-## MCP server — 52 tools: 18 state-machine, 10 ERD, 14 sequence, 10 system
+## MCP server — 54 tools: 20 state-machine, 10 ERD, 14 sequence, 10 system
 
 `@miadi/stateloom-mcp`, stdio by default (Streamable HTTP optional — see Transport below). Registration:
 
@@ -92,6 +92,8 @@ Full schema: [Spec 70 — SMDF Format](./rispecs/70-smdf-format.spec.md)
 **Act** — `validate_definition()`, `generate_code(language)`, `generate_rispec(intent?)`, `render_diagram(format?, path?, scale?, theme?, stamp?, open?)`
 
 **Document** — `set_project_file(path)`, `get_project_file()`
+
+**Describe in place** — `update_state(name, description?, kind?, prompt?)`, `update_event(id, description)`: no need to rewrite the machine with `load_definition`.
 
 **Prompts** — `set_prompt(state, prompt)` (and `prompt` on `add_state`): what an agent resolves while the machine is in that state; engines ignore it, `generate_rispec` prints it.
 

@@ -17,9 +17,12 @@
  * on each box it touches, and `placeLabels` settles the event chips onto spots
  * of their own. Both live in the protocol, so an exported picture shows the
  * reader what the live board showed them. A self-loop becomes an arc off the
- * right edge. A transition leaving the level entirely (the one shape a curve
- * cannot honestly show) is written under its source as `event → Target`, so
- * nothing in the machine goes unrepresented.
+ * right edge. A transition into a sibling composite's child is an arrow to
+ * that composite, its chip naming the child (`Conclude → Concluded_Publish`).
+ * A transition leaving the level entirely (the one shape a curve cannot
+ * honestly show) is written under its source as `event → Target` — two lines
+ * and a count when there are more — so nothing in the machine goes
+ * unrepresented.
  *
  * Pure: no clock, no randomness, no I/O. The same definition always renders the
  * same bytes.
@@ -31,6 +34,7 @@ import {
   glyphAt,
   placeLabels,
   routeEdges,
+  siblingOf,
   textWidth,
   SELF_LOOP_BULGE,
   type Glyph,
@@ -291,11 +295,19 @@ function drawLevel(
   const stubs: { box: LayoutBox; text: string; x: number; y: number }[] = [];
   for (const child of children) {
     const box = boxOf(child.name);
-    const away = (child.transitions ?? []).filter(
-      (t) => !t.nextState || (t.nextState !== child.name && !here.has(t.nextState))
-    );
-    away.slice(0, 3).forEach((t, i) => {
-      const text = fit(t.nextState ? `${t.event} → ${t.nextState}` : `${t.event} ↻`, box.width + 60, 9);
+    // A transition into a sibling composite's child is drawn as an edge to that
+    // composite (below); only one with no sibling to land on is written here.
+    const away = (child.transitions ?? []).filter((t) => {
+      if (!t.nextState) return true;
+      if (t.nextState === child.name || here.has(t.nextState)) return false;
+      const sib = siblingOf(children, t.nextState);
+      return !sib || sib === child.name;
+    });
+    const shown = away.length > 3 ? away.slice(0, 2) : away;
+    const lines = shown.map((t) => (t.nextState ? `${t.event} → ${t.nextState}` : `${t.event} ↻`));
+    if (away.length > 3) lines.push(`+${away.length - 2} more`);
+    lines.forEach((line, i) => {
+      const text = fit(line, box.width + 60, 9);
       const y = box.y + box.height + 13 + i * 11;
       stubs.push({
         text,
@@ -319,8 +331,15 @@ function drawLevel(
   const transitions: { event: string; condition?: string; from: string; to: string }[] = [];
   for (const child of children) {
     for (const t of child.transitions ?? []) {
-      if (!t.nextState || !here.has(t.nextState)) continue;
-      transitions.push({ event: t.event, condition: t.condition, from: child.name, to: t.nextState });
+      if (!t.nextState) continue;
+      if (here.has(t.nextState)) {
+        transitions.push({ event: t.event, condition: t.condition, from: child.name, to: t.nextState });
+        continue;
+      }
+      // Into a sibling composite's child: an arrow to the composite, named for the child it enters.
+      const sib = siblingOf(children, t.nextState);
+      if (!sib || sib === child.name) continue;
+      transitions.push({ event: `${t.event} → ${t.nextState}`, condition: t.condition, from: child.name, to: sib });
     }
   }
   const curves = routeEdges(transitions, boxOf);

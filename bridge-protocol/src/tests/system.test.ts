@@ -216,9 +216,9 @@ test("reconcile: a new event and a new state in the scenario become the machine'
   assert.deepEqual(result.unresolved, []);
   assert.equal(result.proposals.length, 1);
   assert.deepEqual(result.proposals[0].ops, [
-    { op: "eventSource.add", source: { name: "PersonEvents", events: [{ id: "Slam" }] } },
+    { op: "eventSource.add", source: { name: "PersonEvents", events: [{ id: "Slam", description: "slam" }] } },
     { op: "state.add", parent: null, state: { name: "Cracked", transitions: [] } },
-    { op: "transition.add", state: "Opened", transition: { event: "Slam", nextState: "Cracked" } },
+    { op: "transition.add", state: "Opened", transition: { event: "Slam", nextState: "Cracked", description: "slam" } },
   ]);
   assert.match(result.proposals[0].reasons[1], /goes from Opened to Cracked on "Slam", because message 2 \(main\) says so/);
   const applied = applyPatchOps(DOOR, result.proposals[0].ops);
@@ -231,7 +231,7 @@ test("reconcile: an existing source named after the sender takes the event", () 
   const seq: SequenceDefinition = { ...story([says("Wave", { state: "Opened" })]), participants: [{ name: "Hand" }, { name: "Door" }] };
   seq.messages[0].from = "Hand";
   const ops = reconcileScenario(seq, [DOOR]).proposals[0].ops;
-  assert.deepEqual(ops[0], { op: "event.add", sourceIndex: 0, event: { id: "Wave" } });
+  assert.deepEqual(ops[0], { op: "event.add", sourceIndex: 0, event: { id: "Wave", description: "wave" } });
 });
 
 test("reconcile: what the scenario does not say is left for a person", () => {
@@ -310,7 +310,7 @@ test("reconcileSystem: one scenario edit reaches the machine, the data and the a
   const m = r.machines[0];
   assert.equal(m.machine, "ElliottWaveCountLifecycle");
   assert.deepEqual(m.ops.map((o) => o.op), ["eventSource.add", "state.add", "transition.add"]);
-  assert.deepEqual(m.ops[2], { op: "transition.add", state: "StrategicEntry", transition: { event: "RiskHalt", nextState: "Halted" } });
+  assert.deepEqual(m.ops[2], { op: "transition.add", state: "StrategicEntry", transition: { event: "RiskHalt", nextState: "Halted", description: "halts the mandate" } });
 
   // Applied, the system checks with no new error, and the new message walks.
   const after = members.map((x) =>
@@ -507,4 +507,21 @@ test("L009: a state that is not final and has no way out is named; a prompt ride
   assert.equal(applyPatchOps(M, ops).state.states![1].prompt, withPrompt.state.states![1].prompt);
   const cleared = applyPatchOps(withPrompt, [{ op: "state.update", name: "Waiting", patch: { prompt: "" } }]);
   assert.equal("prompt" in cleared.state.states![1], false);
+});
+
+test("layout: a transition into a composite's child is an edge to that composite (seen 2026-10-01 in AnalysisDiscussion)", async () => {
+  const { autoLayout, siblingOf } = await import("../autoLayout.js");
+  const M = machine("M", ["go", "end"], {
+    name: "Root",
+    states: [
+      { name: "Talking", transitions: [{ event: "end", nextState: "Done_A", condition: "k == 'a'" }, { event: "end", nextState: "Done_B" }] },
+      { name: "Concluded", states: [{ name: "Done_A", kind: "final" }, { name: "Done_B", kind: "final" }] },
+    ],
+  });
+  const children = M.state.states!;
+  assert.equal(siblingOf(children, "Done_B"), "Concluded");
+  assert.equal(siblingOf(children, "Talking"), "Talking");
+  assert.equal(siblingOf(children, "Elsewhere"), undefined);
+  const L = autoLayout(M);
+  assert.ok(L.Concluded.y > L.Talking.y, "Concluded is laid out below Talking, the state that enters it");
 });

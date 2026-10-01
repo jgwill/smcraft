@@ -75,7 +75,12 @@ test("a new event and a new state: L005 in check_system, a dry run that writes n
     assert.equal(applied.isError, false, applied.text);
     assert.match(applied.text, /ElliottWaveCountLifecycle \(elliott_wave_count\.smdf\.json\): wrote 3 op\(s\) — patch sent live/);
     const machine = machineOf(r.json(MACHINE));
-    assert.deepEqual(transitionsOf(machine, "StrategicEntry").at(-1), { event: "CountFulfilled", nextState: "Fulfilled" });
+    // The message's own words describe the transition it implied.
+    assert.deepEqual(transitionsOf(machine, "StrategicEntry").at(-1), {
+      event: "CountFulfilled",
+      nextState: "Fulfilled",
+      description: NEW_MESSAGE.label,
+    });
     assert.ok(machine.events.find((s) => s.name === "StrategyEvents")!.events!.some((e) => e.id === "CountFulfilled"));
     assert.equal(r.pushes.patch.length, 1);
     assert.equal(r.pushes.patch[0].docId, join(r.dir, MACHINE), "the machine's own room");
@@ -105,6 +110,7 @@ test("auto mode: an add_message with a new event and state updates the machine o
     assert.deepEqual(transitionsOf(machineOf(r.json(MACHINE)), "StrategicEntry").at(-1), {
       event: "CountFulfilled",
       nextState: "Fulfilled",
+      description: NEW_MESSAGE.label,
     });
     assert.equal(r.pushes.patch.length, 1, "patched to the machine's room");
 
