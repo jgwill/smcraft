@@ -46,6 +46,7 @@ import {
   normalizeNotes
 } from "@miadi/stateloom-protocol";
 import { stampedOutputPath } from "@miadi/stateloom-cli/render";
+import { writeFileAtomic } from "./atomicWrite.js";
 
 export interface ErdHost {
   /** The active document's absolute path. */
@@ -76,7 +77,7 @@ export function readErd(path: string): EntityRelationshipDefinition | null {
 }
 
 function writeErd(path: string, def: EntityRelationshipDefinition): void {
-  writeFileSync(path, JSON.stringify(def, null, 2) + "\n", "utf8");
+  writeFileAtomic(path, JSON.stringify(def, null, 2) + "\n");
 }
 
 /** One line for set_project_file / get_project_file when the active document is an ERDF. */

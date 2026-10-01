@@ -28,7 +28,7 @@ import { membersByKind, type LoadedMember } from "./check.js";
 import type { SystemActorKind, SystemDefinition } from "./definition.js";
 import { addActor } from "./edit.js";
 import { reconcileScenario } from "./reconcile.js";
-import { machineNames } from "./replay.js";
+import { machineName, machineNames } from "./replay.js";
 
 export interface SystemReconcile {
   machines: { member: string; index: number; machine: string; ops: PatchOp[]; reasons: string[]; def: StateMachineDefinition }[];
@@ -97,6 +97,27 @@ export function reconcileSystem(system: SystemDefinition | null, members: readon
     ops[i].push(...more);
     reasons[i].push(why);
   };
+
+  // An attribute whose `stateOf` names a machine stores that machine's state,
+  // so the machine is constructed with an object of that entity (L003). When it
+  // has none, declare one, named after the entity (Episode 550, L2).
+  const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+  for (const { def: erd } of erdDefs) {
+    for (const entity of erd.entities ?? []) {
+      for (const attr of entity.attributes ?? []) {
+        const targets = attr?.stateOf === undefined ? [] : Array.isArray(attr.stateOf) ? attr.stateOf : [attr.stateOf];
+        for (const machine of targets) {
+          const i = names.findIndex((n, k) => n === machine || machineName(current[k]) === machine);
+          if (i < 0) continue;
+          const objects = current[i].settings?.objects ?? [];
+          if (objects.some((o) => o.class === entity.name)) continue;
+          let instance = lowerFirst(entity.name);
+          while (objects.some((o) => o.instance === instance)) instance += "_";
+          push(i, [{ op: "settings.update", patch: { objects: [...objects, { instance, class: entity.name }] } }], `${names[i]} is constructed with the object ${instance} : ${entity.name}, because ${entity.name}.${attr.name} stores its state`);
+        }
+      }
+    }
+  }
 
   for (const { def: seq } of sequences) {
     for (const p of seq.participants ?? []) {

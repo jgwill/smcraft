@@ -525,3 +525,22 @@ test("layout: a transition into a composite's child is an edge to that composite
   const L = autoLayout(M);
   assert.ok(L.Concluded.y > L.Talking.y, "Concluded is laid out below Talking, the state that enters it");
 });
+
+test("Episode 550 L2: a stateOf naming a machine with no object of that entity gets one declared", () => {
+  const Walk = machine("Screenwalk", ["go"], { name: "Root", states: [{ name: "Idle", transitions: [{ event: "go", nextState: "Walking" }] }, { name: "Walking", kind: "final" }] });
+  const data = {
+    settings: { namespace: "t", name: "WalkData" },
+    entities: [{ name: "Screenwalk", attributes: [{ name: "state", type: "string", stateOf: "Screenwalk" }] }],
+    relationships: [],
+  };
+  const members: LoadedMember[] = [
+    { path: "walk.smdf.json", kind: "machine", def: Walk },
+    { path: "walk.erdf.json", kind: "erd", def: data },
+  ];
+  assert.ok(checkSystem(null, members).issues.some((i) => i.ruleId === "L003"));
+  const r = reconcileSystem(null, members);
+  assert.deepEqual(r.machines[0].ops, [{ op: "settings.update", patch: { objects: [{ instance: "screenwalk", class: "Screenwalk" }] } }]);
+  const fixed = [{ ...members[0], def: r.machines[0].def }, members[1]];
+  assert.equal(checkSystem(null, fixed).issues.some((i) => i.ruleId === "L003"), false);
+  assert.equal(reconcileSystem(null, fixed).count, 0, "a second run proposes nothing");
+});

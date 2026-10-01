@@ -125,6 +125,7 @@ import {
   type SystemHost,
 } from "./system.js";
 import { liveBridge } from "./live.js";
+import { writeFileAtomic } from "./atomicWrite.js";
 
 // STATELOOM_* read first, SMCRAFT_* legacy twin honored — the live MCP
 // registration bakes SMCRAFT_PROJECT_FILE and must keep working (2026-07-27
@@ -234,7 +235,7 @@ function writeDef(def: Definition): void {
   } catch {
     // A new or unreadable file is written in the loom's own shape.
   }
-  writeFileSync(PROJECT_FILE, JSON.stringify(bare ? def : { stateMachine: def }, null, 2) + (bare ? "\n" : ""), "utf8");
+  writeFileAtomic(PROJECT_FILE, JSON.stringify(bare ? def : { stateMachine: def }, null, 2) + (bare ? "\n" : ""));
 }
 
 // ─── Optional real-time design bridge (env-gated, best-effort) ───────
@@ -980,6 +981,26 @@ server.tool(
 );
 
 server.tool(
+  "add_object",
+  "Declare an object the machine is constructed with: `instance` is the name guards use (`walk` in `walk.state`), `class` is its type — an ERD entity when it is data. Fixes L001/L003 without rewriting the machine. Refused when the instance already exists.",
+  { instance: z.string(), class: z.string() },
+  async ({ instance, class: className }) => {
+    const def = readDef();
+    if (!def) return { content: [{ type: "text", text: noMachine() }], isError: true };
+    if (!instance.trim() || !className.trim()) return { content: [{ type: "text", text: "An object needs an instance and a class." }], isError: true };
+    const objects = [...((def.settings as { objects?: { instance: string; class: string }[] }).objects ?? [])];
+    if (objects.some((o) => o.instance === instance)) {
+      return { content: [{ type: "text", text: `The machine already has an object '${instance}'.` }], isError: true };
+    }
+    objects.push({ instance, class: className });
+    (def.settings as { objects?: { instance: string; class: string }[] }).objects = objects;
+    writeDef(def);
+    bridgeEmitPatch([{ op: "settings.update", patch: { objects } }]);
+    return { content: [{ type: "text", text: `Object '${instance}' : ${className} declared on '${def.settings.name}'.` }] };
+  }
+);
+
+server.tool(
   "update_state",
   "Change what a state says about itself without rewriting the machine: its description, its kind (normal, final, history) or its prompt. Omitted fields stay as they are; an empty description or prompt clears it. Use it after a scenario built states in auto mode, to say what each one is.",
   {
@@ -1334,7 +1355,11 @@ server.tool(
       : "bridge not configured (STATELOOM_BRIDGE_URL unset)";
     return {
       content: [
-        { type: "text", text: `Active document: ${PROJECT_FILE}\n${summary}\n${bridgeNote}\nCanvas: ${canvasLink(PROJECT_FILE)}` },
+        {
+          type: "text",
+          // The version is said so an agent can tell when its pin is behind (Episode 550, L4).
+          text: `Active document: ${PROJECT_FILE}\n${summary}\n${bridgeNote}\nCanvas: ${canvasLink(PROJECT_FILE)}\nLoom: @miadi/stateloom-mcp ${PACKAGE_VERSION} (\`npm view @miadi/stateloom-mcp version\` names the latest)`,
+        },
       ],
     };
   }

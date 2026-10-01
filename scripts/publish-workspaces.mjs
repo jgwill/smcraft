@@ -318,6 +318,46 @@ function packCheckOne(entry) {
 	return `${info.entryCount} files, ${Math.round((info.unpackedSize || 0) / 1024)} KiB unpacked`;
 }
 
+/**
+ * Wait until the registry RESOLVES `name@version`, not only accepts it.
+ *
+ * Earned 2026-10-01 (Episode 550, L3): mcp 0.3.2 became installable 2 min 22 s
+ * before protocol 0.1.11 did, although the protocol was published first —
+ * npm indexes each package on its own clock. For that window `npx
+ * @miadi/stateloom-mcp@latest` failed with ETARGET and a session started then
+ * got no loom at all. So a dependent is never published until what it depends
+ * on resolves with `--prefer-online` (no cache).
+ */
+function waitUntilResolves(name, version) {
+	const limitMs = Number(process.env.PUBLISH_RESOLVE_TIMEOUT_MS || 20 * 60 * 1000);
+	const started = Date.now();
+	for (;;) {
+		try {
+			const out = execFileSync(NPM, ['view', `${name}@${version}`, 'version', '--prefer-online'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+			if (out.trim() === version) {
+				console.log(`   resolves: ${name}@${version} after ${Math.round((Date.now() - started) / 1000)}s`);
+				return;
+			}
+		} catch {
+			// not yet
+		}
+		if (Date.now() - started > limitMs) {
+			throw new Error(`${name}@${version} was published but does not resolve after ${Math.round(limitMs / 60000)} min — its dependents were not published`);
+		}
+		execFileSync('sleep', ['10']);
+	}
+}
+
+/** Does the package in `later` depend on the package in `now` through a `file:` sibling? */
+function dependsOn(later, now) {
+	for (const section of DEP_SECTIONS) {
+		for (const spec of Object.values(later.data[section] || {})) {
+			if (typeof spec === 'string' && spec.startsWith('file:') && resolve(join(ROOT, later.dir), spec.slice(5)) === resolve(join(ROOT, now.dir))) return true;
+		}
+	}
+	return false;
+}
+
 function publishOne(entry) {
 	const { name, version } = entry.data;
 
@@ -368,6 +408,11 @@ for (const dir of targets) {
 				: publishOne(entry);
 			results.push({ dir, name, version, ...outcome });
 			console.log(`   ${outcome.status}: ${outcome.detail}`);
+			// A later target that depends on this one waits until it resolves (L3).
+			const rest = targets.slice(targets.indexOf(dir) + 1).map((d) => manifests.get(d));
+			if (outcome.status === 'published' && rest.some((later) => dependsOn(later, entry))) {
+				waitUntilResolves(name, version);
+			}
 		} finally {
 			// Always, on every path: the working tree goes back to `file:`
 			// specifiers so the next `npm ci` links siblings again.
