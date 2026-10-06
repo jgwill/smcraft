@@ -28,6 +28,51 @@ node --test lane-check.test.mjs                           # 20 tests
 A done claim that the evidence does not support is the pattern seen in ep140 on 2026-10-04. It
 shows as `claims_finished` yes beside a `lane_status` other than finished.
 
+## Which service answers
+
+A key is sent only to the service that issued it. There is no fallback from one to the other.
+
+| Key | Service | Decision endpoint |
+|---|---|---|
+| `JEV_AI_API_KEY` (made at https://jev-ai.pro/jev-api) | Jev AI, an independent host of a TypeSafe-compatible endpoint | `POST https://jev-ai.pro/api/v1/systemone` |
+| `TYPESAFE_API_KEY` (made at https://console.typesafe.ai/keys) | TypeSafe, which makes Jev | `POST https://api.typesafe.ai/v1/systemone` |
+
+When both keys are set, `JEV_AI_API_KEY` wins. `JEV_AI_BASE_URL` and `TYPESAFE_BASE_URL` move a base address. Keep `/api` in Jev AI's base and do not add `/v1`. A Jev AI key sent to TypeSafe answers 401, and so does the reverse.
+
+The lane check calls the endpoint with `fetch`, not TypeSafe's SDK. If code here ever moves to `@typesafe-ai/sdk`, construct its client with `baseURL: 'https://jev-ai.pro/api'` and `retry: { maxRetries: 0 }`. Setting only the key leaves the SDK pointed at TypeSafe.
+
+```bash
+node lane-check.mjs models    # the key's service, its address and its models; no inference, no charge
+node lane-check.mjs probe     # one small paid decision on a fixed sentence; prints model, answer, usage, balance
+```
+
+Measured 2026-10-05 with William's key:
+- `models` answered 200 from jev-ai.pro, through Cloudflare. `jev-latest` resolves to `jev-1.13.0`.
+- `probe` used 300 input tokens and returned in under a second.
+- Asked whether pushed work with an unruled Q4 is finished, it answered 0.04.
+
+## Failures
+
+After https://jev-ai.pro/docs#errors:
+
+| Status | Meaning | What the check does |
+|---|---|---|
+| 401 | Key missing, invalid or revoked, or sent to the wrong service | Stops |
+| 402 | Insufficient balance, or spending paused | Stops |
+| 404 | Wrong path | Stops |
+| 422 | Invalid request | Stops, and does not resend it unchanged |
+| 429, 502, 503, 529 | Confirmed failure | Resends up to 3 times, honouring `Retry-After` |
+| 504, timeout, lost connection | Uncertain: the call may already be charged | Stops and does not replay; reports the run id when there is one |
+
+Each decision record keeps the destination and Jev AI's run id (`X-Jev-Run-Id`). The balance headers (`X-Jev-Tokens-Remaining` and the rest) are read into the response; the key and the Authorization header are never written anywhere.
+
+## Configuration
+
+- **This host.** One literal line, `JEV_AI_API_KEY=...`, in `~/.env`. The check reads that file and never sources it. `~/.env` is mode 664 today, so other accounts on gaia can read it. `chmod 600 ~/.env` closes that, if nothing reads it across accounts.
+- **Miadi** (`/a/src/Miadi/.env`, mode 670) already holds the same key for server code. Never give it a `NEXT_PUBLIC_` prefix: that would put it in browser code.
+- **A service** such as the witness service (`miadi-witness.service`, a user unit with no environment file today) takes it through `EnvironmentFile=%h/.config/miadi/jev.env`, a file at mode 600 holding only the key line. Then `systemctl --user daemon-reload` and a restart.
+- **Never** in a repository, a unit file's `Environment=` line, a log, or a chat.
+
 ## What leaves the host with `--decider jev`
 
 Only the `state` and the questions, as `--request-dir` writes them:
@@ -40,20 +85,12 @@ Only the `state` and the questions, as `--request-dir` writes them:
 
 Measured on 2026-10-05 over 46 live lanes, the largest request was 5.8k tokens. Jev's limit is 32k for the state.
 
-TypeSafe charges $0.042 per million input tokens, so a full sweep costs under a cent. They state that Jev is not trained on customer requests. Zero data retention is an enterprise plan, so
-otherwise retention follows their Data Processing Agreement (https://typesafe.ai/legal/data-processing).
-Whether transcripts may leave the host on those terms is the person's decision (Q1).
+The two services keep that text on different terms:
 
-## The key
+- **Through Jev AI.** Its privacy page (https://jev-ai.pro/privacy, read 2026-10-05) says submitted text is stored while the account is active. TypeSafe processes it, and OpenRouter does when a fallback provider is needed. The data controller is named only as "Jev AI". Its docs say each run is billed from the account's token balance: 300 tokens for the probe.
+- **Directly to TypeSafe.** $0.042 per million input tokens. They state Jev is not trained on customer requests. Zero data retention is on their enterprise plan.
 
-Put one line in `~/.env`, or export it in the environment:
-
-```
-TYPESAFE_API_KEY=...
-```
-
-The file is read, never sourced, and the key is never printed. `TYPESAFE_ENV_FILE` points at
-another file. Never put it in a repository.
+Whether lane transcripts may leave the host on either set of terms is the person's decision (Q1). `probe` sends only a fixed sentence.
 
 ## The ledger
 
@@ -80,7 +117,7 @@ Verdicts are `act`, `hold`, `deepen`, `return`, `defer` and `no`. Sources are `t
 2. **First run, few lanes.** With the key in place, run `check <lane> --decider jev` on three to five lanes whose real state you know. Every threshold in `policy.example.json` is null, so every answer lands in the ask band and nothing acts.
 3. **Rule.** `pending` lists them. Rule on each one with your own words, or have the witness carry your words with `--source`.
 4. **Repeat** across a week of sweeps, until each class has a few dozen rulings.
-5. **Calibrate.** `calibrate` shows, per class, the lowest cut that agreed with you 95% of the time over at least 20 rulings. Copy `policy.example.json` and set `act_at` and `block_at`. Put your name in `set_by`, then pass the copy with `--policy`. Pin the model version (`--model`, default `jev-1.13.0`). Moving to a new Jev version means calibrating again.
+5. **Calibrate.** `calibrate` shows, per class, the lowest cut that agreed with you 95% of the time over at least 20 rulings. Copy `policy.example.json` and set `act_at` and `block_at`. Put your name in `set_by`, then pass the copy with `--policy`. The default model is `jev-latest`; once you calibrate, pin the version it resolved to (`--model jev-1.13.0`). Moving to a new version means calibrating again.
 6. **Then act.** With a policy set, the coordinator moves on a finished lane above `act_at`, reopens a stopped-short one, and routes a waiting question. Everything in between stays in `pending`.
 
 ## Limits found while building it

@@ -7,7 +7,7 @@ import { test } from "node:test";
 
 import { collectEvidence, readTranscript, resolveLane, RUNNING } from "./lib/evidence.mjs";
 import { buildQuestions, wireQuestions } from "./lib/questions.mjs";
-import { buildRequest, decideDry, decideJev, readAnswer, typesafeKey } from "./lib/decider.mjs";
+import { buildRequest, decideDry, decideJev, listModels, readAnswer, resolveProvider, typesafeKey } from "./lib/decider.mjs";
 import { loadGate, runGate } from "./lib/gate.mjs";
 import { calibrate, decisionsFor, loadPolicy, makeRuling, pending, summarize } from "./lane-check.mjs";
 
@@ -57,7 +57,7 @@ test("a guard the table does not know fails closed", () => {
 test("the request has TypeSafe's shape and none of our own fields", () => {
   const questions = buildQuestions({ question: "implement BOSf", asks: [] });
   const request = buildRequest({ question: "implement BOSf" }, wireQuestions(questions));
-  assert.equal(request.model, "jev-1.13.0");
+  assert.equal(request.model, "jev-latest");
   assert.deepEqual(Object.keys(request.questions).sort(), ["asks_person", "claims_finished", "lane_status", "request_met"]);
   for (const q of Object.values(request.questions)) {
     assert.deepEqual(Object.keys(q).sort(), ["criteria", "instructions", "type"]);
@@ -78,21 +78,74 @@ test("the dry decider sends nothing and reports the size", async () => {
   assert.ok(response.within_budget);
 });
 
-test("the jev decider retries 429 and 529, and stops on anything else", async () => {
-  const calls = [];
-  const ok = { model: "jev-1.13.0", answers: { x: { type: "noul", noul: 0.9 } }, usage: {} };
-  const replies = [{ status: 429 }, { status: 529 }, { status: 200, body: ok }];
+const jevAi = resolveProvider({ JEV_AI_API_KEY: "k", TYPESAFE_ENV_FILE: "/nonexistent" });
+const headersOf = (map = {}) => ({ get: (name) => map[name.toLowerCase()] ?? null });
+
+test("a Jev AI key goes to jev-ai.pro and nowhere else", () => {
+  assert.equal(jevAi.url, "https://jev-ai.pro/api/v1/systemone");
+  assert.equal(jevAi.modelsUrl, "https://jev-ai.pro/api/v1/models");
+  const ts = resolveProvider({ TYPESAFE_API_KEY: "t", TYPESAFE_ENV_FILE: "/nonexistent" });
+  assert.equal(ts.url, "https://api.typesafe.ai/v1/systemone");
+  const both = resolveProvider({ JEV_AI_API_KEY: "k", TYPESAFE_API_KEY: "t", TYPESAFE_ENV_FILE: "/nonexistent" });
+  assert.equal(both.apiKey, "k");
+  assert.match(both.url, /^https:\/\/jev-ai\.pro\//);
+  const moved = resolveProvider({ JEV_AI_API_KEY: "k", JEV_AI_BASE_URL: "https://jev-ai.pro/api/", TYPESAFE_ENV_FILE: "/nonexistent" });
+  assert.equal(moved.url, "https://jev-ai.pro/api/v1/systemone");
+  assert.equal(resolveProvider({ TYPESAFE_ENV_FILE: "/nonexistent" }), null);
+});
+
+test("the decision call has the documented URL, headers and body, and keeps the billing headers", async () => {
+  let seen;
   const fetchImpl = async (url, init) => {
-    calls.push(init.headers.Authorization);
-    const r = replies.shift();
-    return { ok: r.status === 200, status: r.status, json: async () => r.body, text: async () => "", headers: { get: () => "0.001" } };
+    seen = { url, init };
+    return { ok: true, status: 200, json: async () => ({ model: "jev-1.13.0", answers: { x: { type: "noul", noul: 0.9 } }, usage: { input_tokens: 40, output_tokens: 3 } }), headers: headersOf({ "x-jev-run-id": "run-1", "x-jev-tokens-remaining": "99960" }) };
   };
-  const response = await decideJev({ state: "s", model: "jev-1.13.0", questions: {} }, { apiKey: "k", fetchImpl });
-  assert.equal(response.answers.x.noul, 0.9);
-  assert.deepEqual(calls, ["Bearer k", "Bearer k", "Bearer k"]);
-  const bad = async () => ({ ok: false, status: 422, text: async () => "bad question", headers: { get: () => null } });
-  await assert.rejects(decideJev({}, { apiKey: "k", fetchImpl: bad }), /422/);
-  await assert.rejects(decideJev({}, { apiKey: "" }), /TYPESAFE_API_KEY/);
+  const request = buildRequest("s", { x: { type: "noul", instructions: "q" } });
+  const response = await decideJev(request, { provider: jevAi, fetchImpl });
+  assert.equal(seen.url, "https://jev-ai.pro/api/v1/systemone");
+  assert.equal(seen.init.method, "POST");
+  assert.equal(seen.init.headers.Authorization, "Bearer k");
+  assert.deepEqual(JSON.parse(seen.init.body), { state: "s", model: "jev-latest", questions: { x: { type: "noul", instructions: "q" } } });
+  assert.equal(response.destination, "https://jev-ai.pro/api/v1/systemone");
+  assert.deepEqual(response.billing, { run_id: "run-1", tokens_remaining: "99960" });
+});
+
+test("a confirmed failure is resent after Retry-After; an uncertain one never is", async () => {
+  const ok = { model: "jev-1.13.0", answers: {}, usage: {} };
+  const scripted = (statuses) => {
+    const calls = [];
+    const fetchImpl = async () => {
+      const status = statuses.shift();
+      calls.push(status);
+      return { ok: status === 200, status, json: async () => ok, text: async () => JSON.stringify({ error: { code: status, message: "m" } }), headers: headersOf({ "retry-after": "0.001" }) };
+    };
+    return { calls, fetchImpl };
+  };
+  const a = scripted([429, 503, 200]);
+  await decideJev({}, { provider: jevAi, fetchImpl: a.fetchImpl });
+  assert.deepEqual(a.calls, [429, 503, 200]);
+  const b = scripted([504, 200]);
+  await assert.rejects(decideJev({}, { provider: jevAi, fetchImpl: b.fetchImpl }), /504 .*uncertain/);
+  assert.deepEqual(b.calls, [504]);
+  const c = scripted([402]);
+  await assert.rejects(decideJev({}, { provider: jevAi, fetchImpl: c.fetchImpl }), /402 .*balance/);
+  const lost = async () => {
+    throw new Error("socket hang up");
+  };
+  await assert.rejects(decideJev({}, { provider: jevAi, fetchImpl: lost }), /uncertain, so the call was not resent/);
+  await assert.rejects(decideJev({}, { provider: null }), /JEV_AI_API_KEY or TYPESAFE_API_KEY/);
+});
+
+test("the models lookup reads the key's own service and runs no decision", async () => {
+  let url;
+  const fetchImpl = async (u, init) => {
+    url = u;
+    assert.equal(init.method, undefined);
+    return { ok: true, status: 200, json: async () => ({ models: [{ name: "jev-latest" }] }) };
+  };
+  const found = await listModels({ provider: jevAi, fetchImpl });
+  assert.equal(url, "https://jev-ai.pro/api/v1/models");
+  assert.deepEqual(found.models, [{ name: "jev-latest" }]);
 });
 
 test("answers are read into one number named for what it measures", () => {

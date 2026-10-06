@@ -4,6 +4,8 @@
 //
 //   node lane-check.mjs check <tmux-session|session-id>... [--live] [--decider dry|jev]
 //        [--policy file] [--out decisions.jsonl] [--request-dir dir] [--json]
+//   node lane-check.mjs models                      # the key's service and models; no inference
+//   node lane-check.mjs probe                       # one small paid decision on a fixed sentence
 //   node lane-check.mjs pending
 //   node lane-check.mjs rule <decision-id> --by <person> --verdict <v> --words "<verbatim>"
 //        [--reading "..."] [--source typed|question_box|spoken_transcribed|circle_turn]
@@ -22,7 +24,7 @@ import { fileURLToPath } from "node:url";
 
 import { collectEvidence, liveLanes, loadWitness, resolveLane } from "./lib/evidence.mjs";
 import { buildQuestions, wireQuestions } from "./lib/questions.mjs";
-import { buildRequest, decideDry, decideJev, estimateTokens, JEV_MODEL, readAnswer, STATE_TOKEN_BUDGET } from "./lib/decider.mjs";
+import { buildRequest, decideDry, decideJev, DEFAULT_MODEL, estimateTokens, listModels, readAnswer, resolveProvider, STATE_TOKEN_BUDGET } from "./lib/decider.mjs";
 import { COORDINATOR_MOVE, loadGate, runGate } from "./lib/gate.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -107,6 +109,8 @@ export function decisionsFor({ lane, questions, response, policy, gate, evidence
       state: run.state,
       unknown_guards: run.unknown_guards,
       decider: response.model,
+      destination: response.destination ?? null,
+      run_id: response.billing?.run_id ?? response.id ?? null,
       session_id: lane.sessionId,
       tmux: lane.tmux,
       episode: lane.episode,
@@ -160,7 +164,7 @@ async function check(args) {
     }
     const evidence = await collectEvidence(lane, { witness, paths, ledgers, maxChars: Number(args.flags["max-chars"] ?? 80_000) });
     const questions = buildQuestions(evidence.state);
-    const request = buildRequest(evidence.state, wireQuestions(questions), args.flags.model ?? JEV_MODEL);
+    const request = buildRequest(evidence.state, wireQuestions(questions), args.flags.model ?? DEFAULT_MODEL);
     if (args.flags["request-dir"]) {
       mkdirSync(args.flags["request-dir"], { recursive: true });
       writeFileSync(join(args.flags["request-dir"], `${(lane.tmux ?? lane.sessionId).replace(/[^\w.-]/g, "_")}.request.json`), `${JSON.stringify(request, null, 2)}\n`);
@@ -198,6 +202,26 @@ function rule(args) {
   const ruling = makeRuling({ decisionId, by: args.flags.by, verdict: args.flags.verdict, words: args.flags.words, reading: args.flags.reading ?? null, source: args.flags.source ?? "typed" });
   append(path, [ruling]);
   console.log(`${ruling.id} · ${ruling.verdict} by ${ruling.decided_by}`);
+}
+
+// One small paid decision on a sentence that carries nothing private: shows the destination,
+// the resolved model, the answer, the tokens it used and the balance left. Writes no ledger.
+export const PROBE = {
+  state: "The tests pass and the change is pushed, but the owner has not yet ruled on question Q4.",
+  questions: {
+    finished: { type: "noul", instructions: "Is the work finished, with nothing left for anyone to decide?" },
+  },
+};
+
+async function probe(args) {
+  const provider = resolveProvider();
+  const request = buildRequest(PROBE.state, PROBE.questions, args.flags.model ?? DEFAULT_MODEL);
+  const response = await decideJev(request, { provider, attempts: 1 });
+  const answer = response.answers?.finished;
+  console.log(`${response.service} · ${response.destination}`);
+  console.log(`model ${response.model} · finished = ${answer?.noul} (probability of yes)`);
+  console.log(`usage ${JSON.stringify(response.usage)} · billing ${JSON.stringify(response.billing)}`);
+  return response;
 }
 
 // Decisions in the ask or owner band that nobody has ruled on yet: the person's queue.
@@ -240,9 +264,16 @@ export function calibrate(records, { target = 0.95, min = 20 } = {}) {
 
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
-  const known = ["check", "rule", "pending", "calibrate"];
+  const known = ["check", "rule", "pending", "calibrate", "models", "probe"];
   const args = parseArgs(known.includes(command) ? rest : process.argv.slice(2));
   if (command === "rule") return rule(args);
+  if (command === "models") {
+    const found = await listModels();
+    console.log(`${found.service} · ${found.destination} · key ${found.keyName} · no inference, no charge`);
+    for (const m of found.models) console.log(`  ${m.name}  ${m.description ?? ""}`);
+    return found;
+  }
+  if (command === "probe") return probe(args);
   if (command === "pending") {
     const queue = pending(readRecords(args.flags.out ?? ledgerPath()));
     if (!queue.length) console.log("nothing waits for a ruling");
