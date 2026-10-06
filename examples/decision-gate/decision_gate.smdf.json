@@ -1,0 +1,149 @@
+{
+  "stateMachine": {
+    "settings": {
+      "namespace": "Miadi.Factory",
+      "name": "DecisionGate",
+      "asynchronous": true,
+      "objects": [
+        {
+          "instance": "decision",
+          "class": "Decision"
+        },
+        {
+          "instance": "relation",
+          "class": "Relation"
+        },
+        {
+          "instance": "policy",
+          "class": "ThresholdPolicy"
+        },
+        {
+          "instance": "ruling",
+          "class": "Ruling"
+        }
+      ]
+    },
+    "events": [
+      {
+        "name": "Internal",
+        "events": [
+          {
+            "id": "EvidenceAttached",
+            "description": "The question has its evidence and goes to the decider."
+          },
+          {
+            "id": "Scored",
+            "description": "The decider returned a probability (Noul), a distribution (Choice) or a value (Score)."
+          },
+          {
+            "id": "OwnerRuled",
+            "description": "The person whose word it is answered, with an author and a time."
+          },
+          {
+            "id": "ActionCompleted",
+            "description": "The chosen option is done and its evidence is kept."
+          },
+          {
+            "id": "ReasonFedBack",
+            "description": "The block reason is written where the lane reads it."
+          }
+        ]
+      }
+    ],
+    "state": {
+      "name": "Root",
+      "states": [
+        {
+          "name": "Asked",
+          "kind": "normal",
+          "description": "A lane has something to decide: act on a message, deploy, push, name a thing, close an episode. The decision exists as a typed question before anyone answers it.",
+          "prompt": "Write the decision as one typed question. Choice: a list of options. Score: a number on a named scale. Noul: one yes/no statement. Name the subject it is about, the criteria it is checked against (issue, chart step, acceptance line), and the person whose word it is, or \"the lane's own\" when nobody holds it.",
+          "transitions": [
+            {
+              "event": "EvidenceAttached",
+              "nextState": "Scoring"
+            }
+          ]
+        },
+        {
+          "name": "Scoring",
+          "kind": "normal",
+          "description": "Evidence is attached (transcript lines, commits, test output, captures) and the System-1 decider answers the question with a probability. No action has been taken.",
+          "prompt": "Send the question and its evidence to the decider. Do not act and do not rephrase the question to get a better answer. Record the probability it returns.",
+          "transitions": [
+            {
+              "event": "Scored",
+              "nextState": "AwaitingOwner",
+              "condition": "relation.word_owner != 'lane' and decision.ruling_id is None",
+              "description": "Relational gate first: a decision that belongs to a named person goes to that person whatever the probability. Thresholds only govern decisions that are the lane's own."
+            },
+            {
+              "event": "Scored",
+              "nextState": "Acting",
+              "condition": "decision.p >= policy.act_at",
+              "description": "Act band."
+            },
+            {
+              "event": "Scored",
+              "nextState": "Blocked",
+              "condition": "decision.p <= policy.block_at",
+              "description": "Block band."
+            },
+            {
+              "event": "Scored",
+              "nextState": "AwaitingOwner",
+              "description": "Ask band: the probability lies between block_at and act_at."
+            }
+          ]
+        },
+        {
+          "name": "AwaitingOwner",
+          "kind": "normal",
+          "description": "The decision belongs to a named person, or the probability fell between the two thresholds. The question goes to that person with its options and evidence. The lane keeps working on what does not depend on it.",
+          "prompt": "Send the person the question, the options and the evidence, through the witness or the question box. Say what you will do meanwhile. Do not treat a hedged or spoken message as the answer. Wait for a ruling with an author and a time.",
+          "transitions": [
+            {
+              "event": "OwnerRuled",
+              "nextState": "Acting",
+              "condition": "ruling.verdict == 'act'"
+            },
+            {
+              "event": "OwnerRuled",
+              "nextState": "Blocked",
+              "description": "Any ruling other than act: hold, talk first, no."
+            }
+          ]
+        },
+        {
+          "name": "Acting",
+          "kind": "normal",
+          "description": "The lane carries out the chosen option, because the probability cleared the act threshold on a decision that is its own, or because the owner ruled.",
+          "prompt": "Do the chosen option and nothing beside it. Keep the evidence that it was done (commit, deploy log, read-back).",
+          "transitions": [
+            {
+              "event": "ActionCompleted",
+              "nextState": "Recorded"
+            }
+          ]
+        },
+        {
+          "name": "Blocked",
+          "kind": "normal",
+          "description": "The lane does not do it. The probability fell under the block threshold, or the owner ruled against it. The reason goes back into the lane's context.",
+          "prompt": "Do not do it. Write the reason in one sentence where the lane and the next instance will read it.",
+          "transitions": [
+            {
+              "event": "ReasonFedBack",
+              "nextState": "Recorded"
+            }
+          ]
+        },
+        {
+          "name": "Recorded",
+          "kind": "final",
+          "description": "The decision record is written: question, probability, band, who decided, evidence, and the owner's ruling when there was one. Owner rulings are the labels that later set the thresholds."
+        }
+      ]
+    }
+  }
+}

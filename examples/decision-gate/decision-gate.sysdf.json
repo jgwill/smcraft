@@ -1,0 +1,46 @@
+{
+  "settings": {
+    "namespace": "Miadi.Factory",
+    "name": "decision-gate",
+    "description": "A typed decision inside an agent lane: the question, its probability, whose word it is, the band that follows, and the record that later calibrates the thresholds. Drawn from the two Jev reviews (b02ec47d, 80f50d5b) and a real lane on 2026-09-28.",
+    "notes": "Draft 0, 2026-10-05, session miadi-jev (Opus 5.5) at William's request: study the two Jev reviews (b02ec47d \"10 Levels of Jev\", 80f50d5b \"System-1 Decision Engineering\") against Miadi and the live tmux lanes, grounded relationally (Wilson).\n\nWhy it exists. William: \"LLMs are not type-safe outputs; that explains why the miadi-chronicle got messy\" and \"there really is something about decisions which basically we really need\". The lanes most often get one question wrong: is this the owner's decision, or my reading of it? Seven moments observed; the scenario is the clearest (trading lane c9ee574b, 2026-09-28: \"You asked whether your version made sense, and I took that as a decision and deployed it (#173)\").\n\nThree rules the drawing holds:\n1. The relational gate comes first and is never computed. A decision with a named word-owner goes to that person whatever the probability (council-record.spec.md §3.2, medicine-wheel#155). Thresholds govern only the lane's own reversible decisions.\n2. Unread is not a pass. read_status 'unknown' never acts (medicine-wheel infra preconditions.ts).\n3. A person's words and an agent's reading of them are two fields (Ruling.words, Ruling.reading).\n\nOpen for William: which decider (Jev, a local classifier, a small model); the first act_at/block_at per question class; whether TandT models (llms-digital-decision-making.md) become the composite form, one Noul per element.\n\nWhere it would plug in first, in Miadi: the STC triage record (config/stc-steering.json:21 already asks for verdict, confidence, execute), the worker-stopped route (a stop is a fact; done is a judgement), the attention store (episodic-memory-schema attention.ts)."
+  },
+  "members": [
+    {
+      "path": "decision_gate.smdf.json"
+    },
+    {
+      "path": "decision_record.erdf.json"
+    },
+    {
+      "path": "hedged_message.sqdf.json"
+    }
+  ],
+  "actors": [
+    {
+      "name": "William",
+      "kind": "person",
+      "description": "Holds the word on decisions that are his: live services, names, deletions, anything outward-facing."
+    },
+    {
+      "name": "Lane",
+      "kind": "agent",
+      "description": "An agent session in a tmux pane doing one piece of work (here the trading wave-labeler lane, session c9ee574b)."
+    },
+    {
+      "name": "Decider",
+      "kind": "service",
+      "description": "The System-1 decider: answers a typed question (Choice, Score, Noul) with a probability in under a second. Jev is one candidate; a local classifier or a small model is another. It never acts."
+    },
+    {
+      "name": "Witness",
+      "kind": "agent",
+      "description": "T3, Mino: carries a held question to William and his answer back, with author and time."
+    },
+    {
+      "name": "Chronicle",
+      "kind": "service",
+      "description": "Where the decision record is kept: the episode vessel and the medicine wheel."
+    }
+  ]
+}

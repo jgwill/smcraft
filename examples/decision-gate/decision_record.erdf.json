@@ -1,0 +1,290 @@
+{
+  "settings": {
+    "namespace": "Miadi.Factory",
+    "name": "decision_record",
+    "description": "What a typed decision keeps: the question, whose word it is, the probability and band, the evidence, the owner's ruling, and the thresholds the rulings calibrate."
+  },
+  "entities": [
+    {
+      "name": "Question",
+      "description": "One typed question a lane must answer before it acts.",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "string",
+          "key": "pk"
+        },
+        {
+          "name": "kind",
+          "type": "enum(choice, score, noul, tandt)",
+          "description": "tandt: a Digital Decision Making model, one acceptable/unacceptable element per row ranked by dominance; the first unacceptable element makes the answer no (llms-digital-decision-making.md)."
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "description": "The statement (noul), the instruction (choice, score), or the model name (tandt)."
+        },
+        {
+          "name": "options",
+          "type": "json",
+          "nullable": true,
+          "description": "Choice options, Score scale, or TandT elements with their dominance."
+        },
+        {
+          "name": "subject_ref",
+          "type": "string",
+          "description": "What it is about: a tool call, a commit, a message, an episode, an issue."
+        },
+        {
+          "name": "criteria_ref",
+          "type": "string",
+          "nullable": true,
+          "description": "The acceptance line, chart action step or issue the answer is checked against. Without it, \"is it done\" was measured 83.3% unclassifiable (Miadi worker-stopped route)."
+        }
+      ]
+    },
+    {
+      "name": "Relation",
+      "description": "Whose word the decision is and whom its outcome answers to (Wilson: relational accountability). Read before any probability is used.",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "string",
+          "key": "pk"
+        },
+        {
+          "name": "word_owner",
+          "type": "string",
+          "description": "A named person, or 'lane' when the decision is the lane's own (the reversible tail of work already asked for)."
+        },
+        {
+          "name": "accountable_to",
+          "type": "string[]",
+          "description": "The people and relations the outcome answers to."
+        },
+        {
+          "name": "reversible",
+          "type": "boolean"
+        },
+        {
+          "name": "outward_facing",
+          "type": "boolean"
+        },
+        {
+          "name": "does_not_authorize",
+          "type": "string",
+          "nullable": true,
+          "description": "The boundary of the authority claimed (community-choice.spec.md)."
+        }
+      ]
+    },
+    {
+      "name": "ThresholdPolicy",
+      "description": "act_at and block_at for one kind of question, set by a person and recalibrated from rulings. Advisory on any decision a person owns.",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "string",
+          "key": "pk"
+        },
+        {
+          "name": "question_class",
+          "type": "string",
+          "description": "The kind of question it governs, e.g. 'tool.before destructive', 'work finished against criteria'."
+        },
+        {
+          "name": "act_at",
+          "type": "number"
+        },
+        {
+          "name": "block_at",
+          "type": "number"
+        },
+        {
+          "name": "set_by",
+          "type": "string",
+          "description": "The person who set the thresholds. A threshold is a choice someone made, named as such (medicine-wheel#155)."
+        },
+        {
+          "name": "calibrated_from",
+          "type": "integer",
+          "description": "How many rulings the current values were checked against. Calibration holds over many decisions, never one."
+        }
+      ]
+    },
+    {
+      "name": "Decision",
+      "description": "One answer to one question in one lane: the probability, what it measures, the band, and the gate state.",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "string",
+          "key": "pk"
+        },
+        {
+          "name": "question_id",
+          "type": "string",
+          "references": "Question.id"
+        },
+        {
+          "name": "relation_id",
+          "type": "string",
+          "references": "Relation.id"
+        },
+        {
+          "name": "policy_id",
+          "type": "string",
+          "references": "ThresholdPolicy.id"
+        },
+        {
+          "name": "p",
+          "type": "number",
+          "nullable": true,
+          "description": "The probability (noul), top option probability (choice) or value (score). Null when unread."
+        },
+        {
+          "name": "p_measures",
+          "type": "string",
+          "description": "What the number measures, in words. A number is named for what it measures, never for a value it stands in for."
+        },
+        {
+          "name": "read_status",
+          "type": "enum(satisfied, unsatisfied, unauthorized, unknown)",
+          "description": "unknown when the evidence was never read; it never counts as a pass (medicine-wheel infra preconditions.ts)."
+        },
+        {
+          "name": "band",
+          "type": "enum(act, ask, block, owner)",
+          "description": "owner: the relational gate sent it to the word-owner before any threshold applied."
+        },
+        {
+          "name": "state",
+          "type": "string",
+          "stateOf": "DecisionGate"
+        },
+        {
+          "name": "decider",
+          "type": "string",
+          "description": "The model and version that scored it (Jev, a local classifier, a small model)."
+        },
+        {
+          "name": "ruling_id",
+          "type": "string",
+          "references": "Ruling.id",
+          "nullable": true
+        },
+        {
+          "name": "session_id",
+          "type": "string"
+        },
+        {
+          "name": "episode",
+          "type": "string",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "Evidence",
+      "description": "What the decision was read from: transcript lines, commits, test output, captures, a review.",
+      "weak": true,
+      "attributes": [
+        {
+          "name": "decision_id",
+          "type": "string",
+          "key": "pk",
+          "references": "Decision.id"
+        },
+        {
+          "name": "kind",
+          "type": "enum(transcript_line, commit, test_output, capture, review, issue)"
+        },
+        {
+          "name": "ref",
+          "type": "string",
+          "key": "pk",
+          "description": "A path with line, a commit hash, a URL. Something a person can open."
+        }
+      ]
+    },
+    {
+      "name": "Ruling",
+      "description": "A person's answer. Their words and the agent's reading of them are two fields, and the words are never edited.",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "string",
+          "key": "pk"
+        },
+        {
+          "name": "decided_by",
+          "type": "string",
+          "description": "A named person. Never a computed transition (council-record.spec.md §3.2)."
+        },
+        {
+          "name": "words",
+          "type": "string",
+          "description": "What the person said, verbatim. Never edited."
+        },
+        {
+          "name": "reading",
+          "type": "string",
+          "nullable": true,
+          "description": "What an agent made of the words. Kept apart so a wrong reading can be corrected without touching what was said."
+        },
+        {
+          "name": "source",
+          "type": "enum(question_box, typed, spoken_transcribed, circle_turn)",
+          "description": "spoken_transcribed carries the risk of words the transcription added (Episode staging circle, 2026-10-05)."
+        },
+        {
+          "name": "verdict",
+          "type": "enum(act, hold, deepen, return, defer, no)",
+          "description": "Wider than pass or fail, after community-review outcomes."
+        },
+        {
+          "name": "at",
+          "type": "datetime"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "from": "Question",
+      "to": "Decision",
+      "cardinality": "1:N",
+      "label": "answered by"
+    },
+    {
+      "from": "Relation",
+      "to": "Decision",
+      "cardinality": "1:N",
+      "label": "answers to"
+    },
+    {
+      "from": "ThresholdPolicy",
+      "to": "Decision",
+      "cardinality": "1:N",
+      "label": "bands"
+    },
+    {
+      "from": "Decision",
+      "to": "Evidence",
+      "cardinality": "1:N",
+      "label": "read from"
+    },
+    {
+      "from": "Decision",
+      "to": "Ruling",
+      "cardinality": "1:1",
+      "label": "ruled by"
+    },
+    {
+      "from": "Ruling",
+      "to": "ThresholdPolicy",
+      "cardinality": "N:M",
+      "label": "calibrates"
+    }
+  ]
+}
