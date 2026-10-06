@@ -109,3 +109,31 @@ sequenceDiagram
   end
 
 ```
+
+## sequence: lane_done.sqdf.json — lane_done
+
+```mermaid
+sequenceDiagram
+  actor p1 as Coordinator
+  actor p2 as Lane
+  actor p3 as Decider
+  actor p4 as William
+  actor p5 as Chronicle
+  p2->>p1: 1 stops: "BOSf is in production"
+  p1->>p3: 2 Choice lane_status, with asks, commits, pushes, files, last messages, screen · EvidenceAttached
+  alt stopped_short, confidence between the thresholds
+    p3-->>p1: f1.1 stopped_short, confidence 0.55 claims finished 0.93 · Scored
+    p1->>p4: f1.2 lane says done request_met 0.30, Q4 has no ruling
+    p4->>p1: f1.3 reopen it, Q4 is strict
+    p1->>p1: f1.4 ruling recorded: act, by William · OwnerRuled
+    p1->>p2: f1.5 reopen: Q4 strict, by William
+    p1->>p5: f1.6 decision and ruling written calibration gains one point · ActionCompleted
+  else confidence under block_at
+    p3-->>p1: f2.1 working, confidence 0.12 · Scored
+    p1->>p5: f2.2 no move on a guess check again later · ReasonFedBack
+  else as written
+    p3-->>p1: 3 finished, confidence 0.86 · Scored
+    p1->>p5: 4 marks collected, next lane dispatched, record written · ActionCompleted
+  end
+
+```

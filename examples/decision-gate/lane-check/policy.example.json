@@ -1,0 +1,43 @@
+{
+  "about": "Thresholds for the lane check, one entry per question class. Every threshold is null until a person sets it and puts their name in set_by: with nothing set, every answer lands in the ask band and nothing acts on its own (Decision Gate D4). act_at and block_at compare against the answer's number: for a noul, the probability of yes; for a choice, the confidence in the chosen option. A null block_at means the class has no block band. Copy this file, set values, and pass it with --policy. `calibrate` reports where your rulings say the cuts would agree with you.",
+  "set_by": null,
+  "set_at": null,
+  "classes": {
+    "lane_status": {
+      "act_at": null,
+      "block_at": null,
+      "word_owner": "lane",
+      "accountable_to": ["William"],
+      "reversible": true,
+      "outward_facing": false,
+      "does_not_authorize": "merging, deploying, publishing or naming anything; finished only lets the coordinator move on"
+    },
+    "ask_met": {
+      "act_at": null,
+      "block_at": null,
+      "word_owner": "lane",
+      "accountable_to": ["William"],
+      "reversible": true,
+      "outward_facing": false,
+      "does_not_authorize": "changing an ask's recorded status; the witness keeps the ledger"
+    },
+    "claims_finished": {
+      "act_at": null,
+      "block_at": null,
+      "word_owner": "lane",
+      "accountable_to": ["William"],
+      "reversible": true,
+      "outward_facing": false,
+      "does_not_authorize": "anything; it is read beside lane_status to show a done claim without evidence"
+    },
+    "asks_person": {
+      "act_at": null,
+      "block_at": null,
+      "word_owner": "William",
+      "accountable_to": ["William"],
+      "reversible": true,
+      "outward_facing": false,
+      "does_not_authorize": "answering for the person; a question to William goes to William"
+    }
+  }
+}

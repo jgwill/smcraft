@@ -14,6 +14,9 @@
     },
     {
       "path": "hedged_message.sqdf.json"
+    },
+    {
+      "path": "lane_done.sqdf.json"
     }
   ],
   "actors": [
@@ -41,6 +44,11 @@
       "name": "Chronicle",
       "kind": "service",
       "description": "Where the decision record is kept: the episode vessel and the medicine wheel."
+    },
+    {
+      "name": "Coordinator",
+      "kind": "agent",
+      "description": "The seat that dispatches and follows lanes. Its own decision is whether a lane is finished, so it may act on the answer once the thresholds allow."
     }
   ]
 }
