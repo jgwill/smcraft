@@ -38,21 +38,28 @@ export async function decideDry(request) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// The key's names: JEV_AI_API_KEY is the one this host uses (William, 2026-10-05, in ~/.env and
+// in Miadi's .env); TYPESAFE_API_KEY is the one TypeSafe's SDK reads.
+export const KEY_NAMES = ["JEV_AI_API_KEY", "TYPESAFE_API_KEY"];
+
 // The key, from the environment first, then from one literal line of
 // ${TYPESAFE_ENV_FILE:-~/.env}. The file is read, never sourced, and the key is never printed.
 export function typesafeKey(env = process.env) {
-  if (env.TYPESAFE_API_KEY) return env.TYPESAFE_API_KEY;
+  for (const name of KEY_NAMES) if (env[name]) return env[name];
   const file = env.TYPESAFE_ENV_FILE || join(homedir(), ".env");
   if (!existsSync(file)) return null;
-  for (const line of readFileSync(file, "utf8").split("\n")) {
-    const m = /^\s*(?:export\s+)?TYPESAFE_API_KEY\s*=\s*(.*)\s*$/.exec(line);
-    if (m) return m[1].replace(/^(['"])(.*)\1$/, "$2") || null;
+  const lines = readFileSync(file, "utf8").split("\n");
+  for (const name of KEY_NAMES) {
+    for (const line of lines) {
+      const m = new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=\\s*(.*?)\\s*$`).exec(line);
+      if (m) return m[1].replace(/^(['"])(.*)\1$/, "$2") || null;
+    }
   }
   return null;
 }
 
 export async function decideJev(request, { apiKey = typesafeKey(), fetchImpl = globalThis.fetch, attempts = 3, url = JEV_URL } = {}) {
-  if (!apiKey) throw new Error("no TYPESAFE_API_KEY in the environment or in ~/.env; the jev decider cannot run (--decider dry shows the request).");
+  if (!apiKey) throw new Error(`no ${KEY_NAMES.join(" or ")} in the environment or in ~/.env; the jev decider cannot run (--decider dry shows the request).`);
   let last;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const response = await fetchImpl(url, {

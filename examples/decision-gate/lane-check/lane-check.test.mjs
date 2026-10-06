@@ -221,4 +221,7 @@ test("the key comes from the environment, then from one literal line of the env 
   assert.equal(typesafeKey({ TYPESAFE_ENV_FILE: file }), "ts-abc");
   assert.equal(typesafeKey({ TYPESAFE_API_KEY: "env-wins", TYPESAFE_ENV_FILE: file }), "env-wins");
   assert.equal(typesafeKey({ TYPESAFE_ENV_FILE: join(dir, "missing") }), null);
+  writeFileSync(file, "JEV_AI_API_KEY=jev-1\nTYPESAFE_API_KEY=ts-2\n");
+  assert.equal(typesafeKey({ TYPESAFE_ENV_FILE: file }), "jev-1");
+  assert.equal(typesafeKey({ JEV_AI_API_KEY: "env-jev" }), "env-jev");
 });
