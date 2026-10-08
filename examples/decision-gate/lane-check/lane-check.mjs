@@ -6,6 +6,8 @@
 //        [--policy file] [--out decisions.jsonl] [--request-dir dir] [--json]
 //   node lane-check.mjs models                      # the key's service and models; no inference
 //   node lane-check.mjs probe                       # one small paid decision on a fixed sentence
+//   node lane-check.mjs find "<statement>" [lanes...]  # which live lanes this is true of, ranked
+//   node lane-check.mjs upstream <lane>                # which lane or person it waits on
 //   node lane-check.mjs pending
 //   node lane-check.mjs rule <decision-id> --by <person> --verdict <v> --words "<verbatim>"
 //        [--reading "..."] [--source typed|question_box|spoken_transcribed|circle_turn]
@@ -204,6 +206,87 @@ function rule(args) {
   console.log(`${ruling.id} · ${ruling.verdict} by ${ruling.decided_by}`);
 }
 
+// ---------- find and upstream: questions across lanes ----------
+
+async function laneContext(args) {
+  const witness = await loadWitness();
+  const paths = witness.threads.defaultPaths();
+  const { lines } = witness.threads.readBindings(paths.bindings);
+  const sessions = witness.threads.readSessionFiles(paths.sessionsDir);
+  const ledgers = witness.asks.readAllLedgers();
+  const targets = args.flags.live || !args._.length ? liveLanes(lines, sessions) : args._;
+  const lanes = targets.map((t) => resolveLane(t, lines)).filter(Boolean);
+  return { witness, paths, ledgers, lanes };
+}
+
+// A lane's display name: its tmux session, with the session id when two lanes share it.
+export function laneNames(lanes) {
+  const count = new Map();
+  for (const lane of lanes) count.set(lane.tmux, (count.get(lane.tmux) ?? 0) + 1);
+  return lanes.map((lane) => (count.get(lane.tmux) > 1 || !lane.tmux ? `${lane.tmux ?? "no-tmux"}#${lane.sessionId.slice(0, 8)}` : lane.tmux));
+}
+
+export function findQuestion(statement) {
+  return {
+    match: {
+      type: "noul",
+      instructions: { statement, question: "Is `statement` true of this agent session, according to `question`, `latest_request`, `last_messages` and `files_touched`?" },
+      criteria: { true: "The session's own words or work show it.", false: "Nothing in the session shows it." },
+    },
+  };
+}
+
+// The options are the other lanes, described by their first input, plus a person and nobody.
+export function upstreamQuestion(options) {
+  return {
+    upstream: {
+      type: "choice",
+      instructions: "Which session or person must act before this agent session can continue its work?",
+      criteria: { ...options, William: "The person: a decision, an answer or an action only he can give.", nobody: "Nothing outside the session holds it back." },
+    },
+  };
+}
+
+async function find(args) {
+  const statement = args._.shift();
+  if (!statement) throw new Error('find needs a statement, e.g. find "proposes a phase 3 after the Wall"');
+  const { witness, paths, ledgers, lanes } = await laneContext(args);
+  const names = laneNames(lanes);
+  const provider = resolveProvider();
+  const hits = [];
+  for (const [i, lane] of lanes.entries()) {
+    const { state } = await collectEvidence(lane, { witness, paths, ledgers });
+    const response = await decideJev(buildRequest(state, findQuestion(statement), args.flags.model ?? DEFAULT_MODEL), { provider });
+    hits.push({ lane: names[i], session_id: lane.sessionId, p: response.answers?.match?.noul ?? null });
+  }
+  hits.sort((a, b) => (b.p ?? -1) - (a.p ?? -1));
+  for (const hit of hits.slice(0, Number(args.flags.top ?? 8))) console.log(`${(hit.p ?? 0).toFixed(2)}  ${hit.lane}`);
+  return hits;
+}
+
+async function upstream(args) {
+  const target = args._.shift();
+  if (!target) throw new Error("upstream needs the lane to ask about");
+  const { witness, paths, ledgers, lanes } = await laneContext({ flags: { live: true }, _: [] });
+  const all = await laneContext({ flags: {}, _: [target] });
+  const lane = all.lanes[0];
+  if (!lane) throw new Error(`no binding line names ${target}`);
+  const others = lanes.filter((l) => l.sessionId !== lane.sessionId);
+  const names = laneNames(others);
+  const options = {};
+  for (const [i, other] of others.entries()) {
+    const first = witness.links.firstInput(paths.sessiondata, other.sessionId, { maxChars: 160 })?.text ?? "";
+    options[names[i]] = first.replace(/\s+/g, " ") || null;
+  }
+  const { state } = await collectEvidence(lane, { witness, paths, ledgers });
+  const response = await decideJev(buildRequest(state, upstreamQuestion(options), args.flags.model ?? DEFAULT_MODEL), { provider: resolveProvider() });
+  const answer = response.answers?.upstream;
+  const ranked = Object.entries(answer?.probabilities ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  console.log(`${lane.tmux} waits on: ${answer?.choice} (confidence ${answer?.confidence?.toFixed(2)})`);
+  for (const [name, p] of ranked) console.log(`  ${p.toFixed(2)}  ${name}`);
+  return answer;
+}
+
 // One small paid decision on a sentence that carries nothing private: shows the destination,
 // the resolved model, the answer, the tokens it used and the balance left. Writes no ledger.
 export const PROBE = {
@@ -264,9 +347,11 @@ export function calibrate(records, { target = 0.95, min = 20 } = {}) {
 
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
-  const known = ["check", "rule", "pending", "calibrate", "models", "probe"];
+  const known = ["check", "rule", "pending", "calibrate", "models", "probe", "find", "upstream"];
   const args = parseArgs(known.includes(command) ? rest : process.argv.slice(2));
   if (command === "rule") return rule(args);
+  if (command === "find") return find(args);
+  if (command === "upstream") return upstream(args);
   if (command === "models") {
     const found = await listModels();
     console.log(`${found.service} · ${found.destination} · key ${found.keyName} · no inference, no charge`);

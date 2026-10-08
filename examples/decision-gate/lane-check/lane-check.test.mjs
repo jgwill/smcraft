@@ -9,7 +9,21 @@ import { collectEvidence, readTranscript, resolveLane, RUNNING } from "./lib/evi
 import { buildQuestions, wireQuestions } from "./lib/questions.mjs";
 import { buildRequest, decideDry, decideJev, listModels, readAnswer, resolveProvider, typesafeKey } from "./lib/decider.mjs";
 import { loadGate, runGate } from "./lib/gate.mjs";
-import { calibrate, decisionsFor, loadPolicy, makeRuling, pending, summarize } from "./lane-check.mjs";
+import { calibrate, decisionsFor, findQuestion, laneNames, loadPolicy, makeRuling, pending, summarize, upstreamQuestion } from "./lane-check.mjs";
+
+test("find asks one noul about a statement; upstream offers every other lane, the person and nobody", () => {
+  const f = findQuestion("proposes a phase 3 after the Wall");
+  assert.equal(f.match.type, "noul");
+  assert.equal(f.match.instructions.statement, "proposes a phase 3 after the Wall");
+  const u = upstreamQuestion({ "t6-production": "deepdiver into episodes", "miadi-deepdiver": null });
+  assert.equal(u.upstream.type, "choice");
+  assert.deepEqual(Object.keys(u.upstream.criteria), ["t6-production", "miadi-deepdiver", "William", "nobody"]);
+});
+
+test("lanes sharing a tmux session are told apart by session id", () => {
+  const names = laneNames([{ tmux: "stcbot", sessionId: "3d15f8e9-x" }, { tmux: "stcbot", sessionId: "f8a0a2f8-y" }, { tmux: "backup", sessionId: "d016ad06-z" }]);
+  assert.deepEqual(names, ["stcbot#3d15f8e9", "stcbot#f8a0a2f8", "backup"]);
+});
 
 const gate = await loadGate();
 const lane = { sessionId: "c9ee574b-0165-44e9-8974-4e83a977ae55", tmux: "trading-lane", episode: null };
