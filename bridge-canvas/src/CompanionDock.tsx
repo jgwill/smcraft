@@ -129,12 +129,14 @@ export function CompanionDock({
       <div className={`slc-talk${className ? ` ${className}` : ""}`} style={{ ...themeStyle(theme), ...style }}>
         <button
           type="button"
-          className={`slc-talk-fab${live ? " slc-talk-fab--live" : ""}`}
+          className={`slc-talk-fab${live ? " slc-talk-fab--live" : ""}${!live && playing ? " slc-talk-fab--speaking" : ""}`}
           onClick={() => (live ? onRecord() : onOpenChange(true))}
-          aria-label={live ? `Stop and send (${clock(recorder.seconds)})` : `Talk with ${who}${fresh ? `, ${fresh} new` : ""}`}
-          title={live ? "Stop and send your take" : `Talk with ${who} about what is on the canvas`}
+          aria-label={
+            live ? `Stop and send (${clock(recorder.seconds)})` : playing ? `${who} is speaking. Open the conversation` : `Talk with ${who}${fresh ? `, ${fresh} new` : ""}`
+          }
+          title={live ? "Stop and send your take" : playing ? `${who} is walking the diagram` : `Talk with ${who} about what is on the canvas`}
         >
-          {live ? <span className="slc-talk-fab-clock">{clock(recorder.seconds)}</span> : "🎙"}
+          {live ? <span className="slc-talk-fab-clock">{clock(recorder.seconds)}</span> : playing ? "🔊" : "🎙"}
           {!live && fresh > 0 && <span className="slc-talk-fab-badge">{fresh}</span>}
         </button>
       </div>
@@ -222,7 +224,7 @@ export function CompanionDock({
                 <div className="slc-talk-who">
                   <strong>{who}</strong>
                   <span>{when(item.at)}</span>
-                  {!item.unvoiced &&
+                  {(!item.unvoiced || (item.steps?.length ?? 0) > 0) &&
                     (playing === item.id ? (
                       <button type="button" className="slc-stage-btn slc-talk-play slc-talk-play--on" onClick={onStop} aria-label="Stop">
                         ■
@@ -233,7 +235,13 @@ export function CompanionDock({
                         className="slc-stage-btn slc-talk-play"
                         onClick={() => onPlay(item.id)}
                         disabled={live}
-                        title={item.steps?.length ? `Hear ${who} walk the diagram (${item.steps.length} steps)` : `Hear ${who}`}
+                        title={
+                          item.unvoiced
+                            ? `Walk the diagram with ${who}'s words (no voice)`
+                            : item.steps?.length
+                              ? `Hear ${who} walk the diagram (${item.steps.length} steps)`
+                              : `Hear ${who}`
+                        }
                       >
                         ▶{unheard.includes(item.id) ? " New" : ""}
                       </button>

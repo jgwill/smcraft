@@ -308,3 +308,18 @@ body {
   .stage-board-card { left: 0.25rem; right: 0.25rem; }
   .stage-board-card > * { width: auto; }
 }
+
+/* The Talk dock (Spec 84): bottom-left, above the phone dock and above the
+   machine's zoom bar, clear of the stage's caption (bottom centre) and the
+   board's controls (top right). */
+.stage-talk-host {
+  position: fixed;
+  left: calc(0.75rem + env(safe-area-inset-left));
+  /* On a phone the caption spans the width: the dock stands above it while it shows. */
+  bottom: calc(var(--sm-dock-h) + env(safe-area-inset-bottom) + var(--stage-caption-h, 3rem) + 0.5rem);
+  z-index: 46;
+}
+
+@media (min-width: 768px) {
+  .stage-talk-host { bottom: 3.5rem; }
+}

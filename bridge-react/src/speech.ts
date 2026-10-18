@@ -63,6 +63,7 @@ export function browserVoice(options: BrowserVoiceOptions = {}): StageVoice | nu
     if (audio) {
       audio.onended = null;
       audio.onerror = null;
+      audio.onplaying = null;
       audio.pause();
       audio = null;
     }
@@ -76,16 +77,24 @@ export function browserVoice(options: BrowserVoiceOptions = {}): StageVoice | nu
       return new Promise<void>((resolve) => {
         // Some browsers never fire `end` (a voice that failed to load, a tab
         // in the background): the step is let go after twice its reading time.
-        const safety = setTimeout(done, stepHoldMs({ ...step, holdMs: undefined }) * 2 + 4000);
+        let safety = setTimeout(done, stepHoldMs({ ...step, holdMs: undefined }) * 2 + 4000);
         finish = () => {
           clearTimeout(safety);
           resolve();
         };
         if (step.audio && canPlay && options.recordings !== false) {
-          audio = new Audio(step.audio);
-          audio.onended = done;
-          audio.onerror = done;
-          audio.play().catch(done);
+          const own = new Audio(step.audio);
+          audio = own;
+          own.onended = done;
+          own.onerror = done;
+          // A recording knows its own length once it plays: a slow voice, or one rendered
+          // when asked for, is not cut at the reading-time guess.
+          own.onplaying = () => {
+            if (audio !== own || !Number.isFinite(own.duration)) return;
+            clearTimeout(safety);
+            safety = setTimeout(done, (own.duration - own.currentTime) * 1000 + 4000);
+          };
+          own.play().catch(done);
           return;
         }
         if (options.speech === false) {

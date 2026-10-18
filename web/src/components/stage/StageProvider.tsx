@@ -17,12 +17,13 @@
  * looking at, and that a drawing's marks changed.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { browserDictation, browserVoice, useStage, type StageShown } from "@miadi/stateloom-react";
+import { browserDictation, browserVoice, useStage, type StageShown, type UseStage } from "@miadi/stateloom-react";
 import { StageCaption, type ListenerLike } from "@miadi/stateloom-canvas";
 import { DEFAULT_STAGE, isStageName, type Box, type MarksEnvelope, type StageContext } from "@miadi/stateloom-protocol";
 import { loadRuntimeConfig } from "@/lib/runtimeConfig";
 import { requestedDoc } from "@/lib/docParam";
 import { FOCUS_REQUEST_EVENT, openInSystem, urlParam } from "@/lib/systemParam";
+import CompanionLayer from "./CompanionLayer";
 
 /** What the step on stage lights inside its drawing. `doc` absent: whatever drawing is open. */
 export interface Lit {
@@ -36,7 +37,7 @@ export interface Lit {
 /** What a layer reports about the board it sits on. */
 export type BoardReport = Omit<StageContext, "stage" | "at" | "tour" | "who">;
 
-interface StageValue {
+export interface StageValue {
   stage: string;
   connected: boolean;
   lit: Lit | null;
@@ -49,6 +50,10 @@ interface StageValue {
   lastReport: () => StageContext | null;
   sendMarks: (env: Omit<MarksEnvelope, "origin" | "stage">) => void;
   onMarks: (cb: (e: MarksEnvelope) => void) => () => void;
+  /** Play a tour from this page in its own voice — a companion's reply (Spec 84). */
+  present: UseStage["present"];
+  pause: () => void;
+  stop: () => void;
 }
 
 const StageCtx = createContext<StageValue | null>(null);
@@ -85,14 +90,19 @@ function requestFocus(focus: string): void {
 }
 
 export default function StageProvider({ children }: { children: ReactNode }) {
-  const [config, setConfig] = useState<{ bridgeUrl: string | null; stage: string }>({ bridgeUrl: null, stage: DEFAULT_STAGE });
+  const [config, setConfig] = useState<{ bridgeUrl: string | null; stage: string; companion: boolean; companionEpisode: string | null }>({
+    bridgeUrl: null,
+    stage: DEFAULT_STAGE,
+    companion: false,
+    companionEpisode: null,
+  });
   useEffect(() => {
     let live = true;
     loadRuntimeConfig().then((c) => {
       if (!live) return;
       const asked = urlParam("stage");
       const stage = isStageName(asked) ? asked : isStageName(c.stage) ? c.stage : DEFAULT_STAGE;
-      setConfig({ bridgeUrl: c.bridgeUrl, stage });
+      setConfig({ bridgeUrl: c.bridgeUrl, stage, companion: c.companion, companionEpisode: c.companionEpisode });
     });
     return () => {
       live = false;
@@ -160,6 +170,25 @@ export default function StageProvider({ children }: { children: ReactNode }) {
 
   const [answerNonce, setAnswerNonce] = useState(0);
 
+  // How tall the caption stands, for what must sit above it on a phone (the Talk dock).
+  const captionUp = !!stage.shown;
+  useEffect(() => {
+    const root = document.documentElement;
+    const caption = captionUp ? document.querySelector<HTMLElement>(".stage-caption-host .slc-stage-caption") : null;
+    if (!caption || typeof ResizeObserver === "undefined") {
+      root.style.removeProperty("--stage-caption-h");
+      return;
+    }
+    const measure = () => root.style.setProperty("--stage-caption-h", `${Math.ceil(caption.getBoundingClientRect().height) + 12}px`);
+    const watch = new ResizeObserver(measure);
+    watch.observe(caption);
+    measure();
+    return () => {
+      watch.disconnect();
+      root.style.removeProperty("--stage-caption-h");
+    };
+  }, [captionUp]);
+
   const value = useMemo<StageValue>(
     () => ({
       stage: config.stage,
@@ -181,8 +210,11 @@ export default function StageProvider({ children }: { children: ReactNode }) {
           marksListeners.current.delete(cb);
         };
       },
+      present: stage.present,
+      pause: stage.pause,
+      stop: stage.stop,
     }),
-    [config.stage, stage.status, stage.sendMarks, lit, author, listener, answerNonce, report],
+    [config.stage, stage.status, stage.sendMarks, stage.present, stage.pause, stage.stop, lit, author, listener, answerNonce, report],
   );
 
   return (
@@ -210,6 +242,7 @@ export default function StageProvider({ children }: { children: ReactNode }) {
           />
         </div>
       )}
+      {config.companion && <CompanionLayer stage={value} defaultEpisode={config.companionEpisode} />}
     </StageCtx.Provider>
   );
 }

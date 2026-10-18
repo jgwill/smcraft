@@ -1011,8 +1011,10 @@
 .slc-talk-fab--live {
   background: var(--slc-talk-live);
   border-color: var(--slc-talk-live);
-  animation: slc-stage-pulse 1.4s ease-in-out infinite;
+  animation: slc-talk-ring 1.4s ease-in-out infinite;
 }
+
+.slc-talk-fab--speaking { border-color: var(--slc-stage-light); box-shadow: 0 0 0 3px rgb(251 191 36 / 0.25); }
 
 .slc-talk-fab-clock { font: 700 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: white; }
 
@@ -1086,7 +1088,13 @@
 }
 
 .slc-talk-record:disabled { opacity: 0.45; cursor: default; }
-.slc-talk-record--live { background: var(--slc-talk-live); animation: slc-stage-pulse 1.4s ease-in-out infinite; }
+/* The button stays where the finger is while it records: only a ring breathes around it. */
+.slc-talk-record--live { background: var(--slc-talk-live); animation: slc-talk-ring 1.4s ease-in-out infinite; }
+
+@keyframes slc-talk-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(239 68 68 / 0.55); }
+  50% { box-shadow: 0 0 0 6px rgb(239 68 68 / 0); }
+}
 .slc-talk-record--retry { background: var(--slc-mark-open); color: #111827; }
 .slc-talk-clock { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
 

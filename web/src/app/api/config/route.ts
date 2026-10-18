@@ -25,6 +25,10 @@ export async function GET(): Promise<Response> {
       projectFile: envAlias("PROJECT_FILE") ?? null,
       // The stage this designer presents on (Spec 83); a page's `?stage=` wins.
       stage: envAlias("STAGE") ?? null,
+      // Whether a companion answers behind /api/companion (Spec 84), and the episode the
+      // Talk dock speaks in when the page names none. The service's address stays here.
+      companion: !!envAlias("COMPANION_URL"),
+      companionEpisode: envAlias("COMPANION_EPISODE") ?? null,
     },
     { headers: { "cache-control": "no-store" } }
   );

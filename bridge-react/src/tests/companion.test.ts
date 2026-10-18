@@ -193,7 +193,9 @@ test("a reply is a tour: its steps with their own voices, or one caption with th
   const tour = replyTour(stepped, "/api/companion/");
   assert.equal(tour.steps.length, 2);
   assert.equal(tour.steps[0].audio, "/api/companion/replies/r1/steps/0/audio");
-  assert.equal(tour.steps[1].audio, undefined, "a step not voiced yet has no recording");
+  assert.equal(tour.steps[1].audio, "/api/companion/replies/r1/steps/1/audio", "a step not voiced yet is asked for at its own address, where it is rendered");
+  const mute = replyTour({ ...stepped, unvoiced: "This reply cannot be voiced: no origin." }, "/api/companion/");
+  assert.equal(mute.steps[1].audio, undefined, "a reply that cannot be voiced is read, not asked for");
   assert.match(tour.settings.name, /^Mia · /);
   const plain = replyTour({ ...stepped, steps: undefined }, "/api/companion/");
   assert.deepEqual(plain.steps, [{ say: "one\n\ntwo", audio: "/api/companion/replies/r1/audio" }]);

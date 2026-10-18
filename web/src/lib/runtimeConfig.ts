@@ -19,6 +19,10 @@ export interface RuntimeConfig {
   projectFile: string | null;
   /** The stage agents present on (Spec 83), when the server names one. */
   stage: string | null;
+  /** A companion answers behind `/api/companion` (Spec 84). */
+  companion: boolean;
+  /** The episode the Talk dock speaks in when the page names none. */
+  companionEpisode: string | null;
 }
 
 /**
@@ -50,12 +54,14 @@ export function loadRuntimeConfig(): Promise<RuntimeConfig> {
           bridgeUrl: body.bridgeUrl || fallback,
           projectFile: body.projectFile ?? null,
           stage: body.stage ?? null,
+          companion: body.companion === true,
+          companionEpisode: body.companionEpisode ?? null,
         };
       }
     } catch {
       // Older server, or none reachable: fall back to whatever the build knew.
     }
-    return { bridgeUrl: fallback, projectFile: null, stage: null };
+    return { bridgeUrl: fallback, projectFile: null, stage: null, companion: false, companionEpisode: null };
   })();
   return pending;
 }

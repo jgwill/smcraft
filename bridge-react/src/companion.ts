@@ -80,9 +80,16 @@ export function companionUrl(base: string, path: string | null | undefined): str
 export function replyTour(reply: CompanionReply, base: string, who = "Mia"): TourDefinition {
   const when = new Date(reply.at);
   const name = `${who}${Number.isNaN(when.getTime()) ? "" : ` · ${when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}`;
+  // The service renders a voice when its address is asked for, so a reply it can voice is
+  // heard even before its files exist. One it cannot voice is read for its reading time.
+  const voiced = !reply.unvoiced;
+  const heard = (audio: string | null | undefined, fallback: string) => companionUrl(base, audio || (voiced ? fallback : null));
   const steps: TourStep[] = reply.steps?.length
-    ? reply.steps.map(({ audio, ...step }) => ({ ...step, ...(companionUrl(base, audio) ? { audio: companionUrl(base, audio) } : {}) }))
-    : [{ say: reply.text, ...(companionUrl(base, reply.audio ?? `api/replies/${reply.id}/audio`) ? { audio: companionUrl(base, reply.audio ?? `api/replies/${reply.id}/audio`) } : {}) }];
+    ? reply.steps.map(({ audio, ...step }, i) => {
+        const url = heard(audio, `api/replies/${reply.id}/steps/${i}/audio`);
+        return { ...step, ...(url ? { audio: url } : {}) };
+      })
+    : [{ say: reply.text, ...(heard(reply.audio, `api/replies/${reply.id}/audio`) ? { audio: heard(reply.audio, `api/replies/${reply.id}/audio`) } : {}) }];
   return { settings: { namespace: "companion", name, author: who }, steps };
 }
 
