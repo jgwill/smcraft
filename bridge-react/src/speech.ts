@@ -20,6 +20,12 @@ export interface BrowserVoiceOptions {
   voiceName?: string;
   /** Play a step's `audio` when it has one. Default true. */
   recordings?: boolean;
+  /**
+   * Read a step that has no recording with the browser's voice. Default true. False for a
+   * companion's reply: one that could not be voiced is shown for its reading time instead
+   * of being spoken in a voice that is not hers.
+   */
+  speech?: boolean;
 }
 
 type WindowWithSpeech = Window & {
@@ -80,6 +86,15 @@ export function browserVoice(options: BrowserVoiceOptions = {}): StageVoice | nu
           audio.onended = done;
           audio.onerror = done;
           audio.play().catch(done);
+          return;
+        }
+        if (options.speech === false) {
+          const held = setTimeout(done, stepHoldMs(step));
+          const prior = finish;
+          finish = () => {
+            clearTimeout(held);
+            prior?.();
+          };
           return;
         }
         if (!synth || !step.say?.trim()) return done();

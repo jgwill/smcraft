@@ -222,3 +222,55 @@ test("context carries the stage and where the tour stands; marks carry the stage
   assert.deepEqual({ index: ctx.tour.index, count: ctx.tour.count, title: ctx.tour.title }, { index: 2, count: 3, title: "Walk" });
   assert.equal((sent.find((x) => x.kind === "marks")!.env as { stage: string }).stage, "trading");
 });
+
+test("present plays a tour from the page in its own voice, and answers when it ends or is replaced", async () => {
+  const { client, fire } = fakeClient();
+  const c = clock();
+  const pageSpoke: string[] = [];
+  const ownSpoke: string[] = [];
+  const pending: (() => void)[] = [];
+  const pageVoice: StageVoice = { speak: async (s) => void pageSpoke.push(s.say), cancel: () => {} };
+  const recordings: StageVoice = {
+    speak: (s) => new Promise<void>((resolve) => {
+      ownSpoke.push(s.audio ?? "");
+      pending.push(resolve);
+    }),
+    cancel: () => pending.splice(0).forEach((r) => r()),
+  };
+  const s = createStageSession({ url: "x", client, voice: pageVoice, gapMs: 100, setTimer: c.setTimer, clearTimer: c.clearTimer });
+  s.connect();
+  await tick();
+  const reply: TourDefinition = {
+    settings: { namespace: "companion", name: "Mia · 14:02" },
+    steps: [
+      { doc: "/d/a.smdf.json", spotlight: ["state:A"], say: "one", audio: "/a/0.mp3" },
+      { say: "two", audio: "/a/1.mp3" },
+    ],
+  };
+  const done = s.present(reply, { voice: recordings, origin: "Mia" });
+  assert.equal(s.getSnapshot().shown?.origin, "Mia");
+  assert.equal(s.getSnapshot().shown?.step.doc, "/d/a.smdf.json");
+  assert.deepEqual(ownSpoke, ["/a/0.mp3"], "the tour's own voice, not the page's");
+  assert.deepEqual(pageSpoke, []);
+  pending.shift()!();
+  await tick();
+  c.advance(100);
+  assert.equal(s.getSnapshot().index, 1);
+  assert.equal(s.getSnapshot().shown?.step.doc, "/d/a.smdf.json", "the drawing carries forward");
+  pending.shift()!();
+  await tick();
+  c.advance(100);
+  assert.equal(await done, true, "played to its end");
+
+  // After the tour, the page's own voice is back.
+  fire("stage-step", { stage: "default", step: { say: "live" }, origin: "agent" });
+  await tick();
+  assert.deepEqual(pageSpoke, ["live"]);
+
+  const second = s.present(reply, { voice: recordings });
+  const third = s.present(reply, { voice: recordings });
+  assert.equal(await second, false, "a tour replaced by another answers false");
+  s.stop();
+  assert.equal(await third, false, "a stopped tour answers false");
+  assert.equal(await s.present({ settings: { namespace: "n", name: "empty" }, steps: [] }), false);
+});

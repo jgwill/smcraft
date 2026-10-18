@@ -65,5 +65,6 @@ export function useStage(opts: UseStageOptions): UseStage {
     dismiss: session.dismiss,
     sendContext: session.sendContext,
     sendMarks: session.sendMarks,
+    present: session.present,
   };
 }

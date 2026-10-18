@@ -25,6 +25,32 @@ export type { StageSession, StageSessionOptions, StageSnapshot, StageShown, Stag
 export { useStage } from "./useStage.js";
 export type { UseStage, UseStageOptions } from "./useStage.js";
 export { browserVoice, browserDictation } from "./speech.js";
+// Talking with a companion from the canvas (Spec 84): the phone page's recorder and
+// conversation, for any page that reaches a phone-capture service.
+export {
+  createTakeRecorder,
+  createCompanionThread,
+  companionUrl,
+  replyTour,
+  takeContext,
+  recordingType,
+  wavRecorder,
+} from "./companion.js";
+export type {
+  CompanionItem,
+  CompanionPresence,
+  CompanionReply,
+  CompanionReplyStep,
+  CompanionTake,
+  CompanionThread,
+  CompanionThreadOptions,
+  RecorderLike,
+  RecorderSnapshot,
+  RecorderState,
+  TakeRecorder,
+  TakeRecorderOptions,
+  ThreadSnapshot,
+} from "./companion.js";
 export type { BrowserVoiceOptions, Dictation } from "./speech.js";
 
 export { autoLayout, AUTO_LAYOUT_DEFAULTS } from "./autoLayout.js";
