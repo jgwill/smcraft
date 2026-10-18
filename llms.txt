@@ -151,6 +151,8 @@ From `@miadi/stateloom-protocol`: `checkSystem`, `replayScenario`, `reconcileSce
 
 **Stage tools** — `show_step(say, doc?, focus?, spotlight?, region?, title?, system?, audio?)` puts one step on the person's canvas: open the drawing, select `focus`, dim all but `spotlight`, frame `region`, show `say` as a caption. `write_tour(name, steps, …)` writes `<name>.tour.json` (paths relative to it, T001–T009); `play_tour(tour?, from?, autoplay?)` hands it to the canvases, which play it with their own controls; `stage_control(action, index?)` — play, pause, next, prev, goto, stop. `read_marks(doc?, system?, all?)` returns what is on the person's screen and the marks waiting for the agent — notes anchored to elements or an area of a drawing, kept in `<drawing>.marks.json` — read it before replying to a person who has the canvas open. `answer_mark(id, text?, resolve?, show?)` replies in the thread; `add_mark(text, elements?, region?, kind?)` leaves the agent's question; `await_marks(timeoutSeconds?)` waits for the next mark; `what_is_on_screen()`. Stages are named (`STATELOOM_STAGE`, default `default`); the hub answers `GET /stage/<name>`.
 
+**Talking on the canvas (Spec 84)** — with `STATELOOM_COMPANION_URL` set, the designer records takes into a Mia episode companion and plays its replies. A take carries what the canvas showed (`captures/<take>/canvas.json`; the wake says "spoken at the canvas"). Answer about drawings with `mia-listen reply <take> --steps steps.json` — an array of Spec 83 steps with absolute paths, one or two sentences each; the canvas plays them as a tour, each step's drawing opened and lit while its own voice plays. From `@miadi/stateloom-react`: `createTakeRecorder`, `createCompanionThread`, `replyTour`, `takeContext`, and `present()` on the stage session; from `@miadi/stateloom-canvas`: `CompanionDock`.
+
 From `@miadi/stateloom-protocol`: `validateTour`, `resolveTourPaths`, `stepHoldMs`, `addMark`, `replyToMark`, `marksWaitingOn`, `marksPathOf`, `machineElementBoxes`, `erdElementBoxes`, `sequenceElementBoxes`, `elementsInRegion`, `elementAt`, `formatReview`. Components: `StageOverlay`, `StageCaption`, `MarkComposer`, `MarkThread`, `MarksPanel` (`@miadi/stateloom-canvas`); `useStage`, `createStageSession`, `browserVoice`, `browserDictation` (`@miadi/stateloom-react`). Full spec: [Spec 83 — the stage and the marks](./rispecs/83-stage-and-marks.spec.md)
 
 ## Terminal — `smcx`
@@ -222,6 +224,8 @@ stand the whole loom up, and keep it up, from these alone.
 | `STATELOOM_CHRONICLE_ROOT` | — | The canvas admits `<root>/<episode>/diagrams/*.json` under it, and nothing else there. |
 | `STATELOOM_STAGE` | `default` | The stage an MCP server, `smcx` and a canvas present on (Spec 83). A page joins another with `?stage=`. |
 | `STATELOOM_AGENT_NAME` | `mcp-agent` / `agent` | How the agent is named on the hub, on marks and on captions. |
+| `STATELOOM_COMPANION_URL` | — | A Mia episode companion (`phone-capture`, e.g. `http://127.0.0.1:8771`). Set, the designer shows the Talk dock and proxies `/api/companion/*` to it — never a reply post (Spec 84). |
+| `STATELOOM_COMPANION_EPISODE` | — | The episode the Talk dock speaks in when the page names none (`?episode=`) and the drawing is not under the chronicle. |
 
 4598 (canvas) and 4599 (hub) are the loom's pair. `scripts/live-loop.sh env|hub|web-build|web|mcp-line` resolves all of it once and writes `.env.smcraft-live`.
 

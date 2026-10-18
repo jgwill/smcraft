@@ -364,6 +364,18 @@ Stages are named (`STATELOOM_STAGE`, a page's `?stage=`); the hub keeps the step
 what the person is looking at for a canvas that opens late, and answers `GET /stage/<name>` in
 JSON. The skill: `stateloom skills install stateloom-stage`.
 
+### Talking with Mia on the canvas
+
+[Spec 84](./rispecs/84-talking-on-the-canvas.spec.md). With `STATELOOM_COMPANION_URL` naming a
+Mia episode companion (jgwill/miadi-orchestration-kit `phone-capture`, `http://127.0.0.1:8771`),
+every board carries a 🎙 Talk dock: Record, speak about the drawing, Stop & send. The take is
+backed up on the service while it records and carries what the canvas showed (the drawing, the
+element in focus, the marks waiting on an agent). Mia's reply comes back to the same thread as the
+phone page's; a reply written as steps plays as a tour: each step opens its drawing and lights
+what it names while that step's words play in her voice. Replies never play over a recording or
+over each other. The designer reaches the service through `/api/companion/*`, which never passes a
+reply on: replies are posted from the companion's host only.
+
 ## For agents
 
 [`llms.txt`](./llms.txt) is the index; [`llms-full.txt`](./llms-full.txt) is the deep
