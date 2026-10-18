@@ -42,6 +42,17 @@ example, driven by Playwright as the person and by the MCP server over stdio as 
   one failure is R10 (`system.test.ts`), which expects EACCES on a read-only file and gets none
   because this container runs as root; it does not touch the stage. `next build` passes.
 
+## Elsewhere, same branch name
+
+- **jgwill/miadi-orchestration-kit**: `miadi-stateloom` 0.2.0 carries `stateloom-stage`,
+  `/stage-present` (draft a tour, one pass of the `tour-editor` agent, write, play) and
+  `/stage-listen` (`smcx marks await` in the background, each mark answered in its thread); its
+  MCP pin stays at the published 0.3.5 until 0.4.0 is out (`STATELOOM_MCP=<smcraft>/mcp` meanwhile).
+  `mia-episode-companion` 0.4.2: Mia's wake says what is on William's canvas and which marks wait.
+  `miadi-deepdiver` 0.3.0: `/notebook-from-handoff`, which takes this file.
+- **jgwill/Miadi**: the chronicle diagram card counts the marks on its drawing;
+  `rispecs/stateloom-stage-embed/` plans the board and the stage inside the episode.
+
 ## What is not done
 
 - **Nothing is published.** Versions are bumped (protocol 0.1.15, client 0.1.4, hub 0.1.7,
