@@ -60,13 +60,13 @@ const out = (s: string): void => {
 };
 
 function stageName(c: StageCtx): string {
-  const name = c.stage ?? envAlias("STAGE") ?? DEFAULT_STAGE;
+  const name = c.stage || envAlias("STAGE") || DEFAULT_STAGE;
   if (!isStageName(name)) throw new Error(`not a stage name: ${name}`);
   return name;
 }
 
 function agentName(c: StageCtx): string {
-  return c.name ?? envAlias("AGENT_NAME") ?? "agent";
+  return c.name || envAlias("AGENT_NAME") || "agent";
 }
 
 /** The drawings in scope: the project file, or a system's members. */

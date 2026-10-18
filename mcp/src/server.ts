@@ -381,7 +381,7 @@ const erdHost: ErdHost = {
 
 // Pushes to rooms other than the active document's: a reconciled machine, an
 // ERD, a view on a system. Each is a short-lived client of its own (./live.ts).
-const live = liveBridge({ url: BRIDGE_URL, token: BRIDGE_TOKEN, name: AGENT_NAME ?? "mcp-agent" });
+const live = liveBridge({ url: BRIDGE_URL, token: BRIDGE_TOKEN, name: AGENT_NAME || "mcp-agent" });
 
 // The system this server last created, set or checked — where `show` and the
 // system tools go when neither an argument nor the active document names one.
@@ -1524,9 +1524,10 @@ const stageHost: StageHost = {
   projectFile: () => PROJECT_FILE,
   outsideRoot: (path) => outsideRoot(path),
   live,
-  stageName: () => envAlias("STAGE") ?? "default",
+  // `||`, not `??`: a plugin's .mcp.json passes an unset variable as "".
+  stageName: () => envAlias("STAGE") || "default",
   agent: () => {
-    const name = AGENT_NAME ?? "agent";
+    const name = AGENT_NAME || "agent";
     return { id: name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-"), name, role: "agent" };
   },
   lastSystem: () => LAST_SYSTEM,
