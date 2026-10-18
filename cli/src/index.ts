@@ -23,6 +23,7 @@ import { serveCommand } from "./commands/serve.js";
 import { openCommand, defaultWebUrl } from "./commands/open.js";
 import { renderCommand } from "./commands/render.js";
 import { presenceCommand } from "./commands/presence.js";
+import { marksAwait, marksList, marksReply, stageControl, stagePlay, stageShow, stageWhere, type StageCtx } from "./commands/stage.js";
 
 const program = new Command();
 
@@ -145,6 +146,84 @@ program
   .action(async () => {
     const c = ctx();
     await presenceCommand({ doc: c.doc, bridgeUrl: c.bridgeUrl, name: c.name });
+  });
+
+// ─── The stage and the marks (Spec 83) ─────────────────────────────────
+
+function stageCtx(stage?: string): StageCtx {
+  const c = ctx();
+  return { doc: c.doc, bridgeUrl: c.bridgeUrl, name: c.name, stage };
+}
+
+const stage = program.command("stage").description("show the person something on the canvas (Spec 83)");
+
+stage
+  .command("show")
+  .description("one step now: open a drawing, light part of it, say a sentence beside it")
+  .requiredOption("--say <text>", "what you say at this step")
+  .option("--focus <kind:name>", "one element to select and centre")
+  .option("--spotlight <list>", "elements to light, comma-separated kind:name")
+  .option("--title <text>", "a few words over the caption")
+  .option("--drawing <path>", "the drawing to open (default --doc)")
+  .option("--system <path>", "open it as a member of this .sysdf.json")
+  .option("--audio <url>", "a recording of the words to play instead of the canvas voice")
+  .option("--stage <name>", "stage name (default STATELOOM_STAGE or 'default')")
+  .action(async (opts: { say: string; focus?: string; spotlight?: string; title?: string; drawing?: string; system?: string; audio?: string; stage?: string }) => {
+    await stageShow(stageCtx(opts.stage), opts);
+  });
+
+stage
+  .command("play <tour>")
+  .description("hand a .tour.json to the canvases; they play it with their own controls")
+  .option("--from <n>", "step to start at, from 1", toInt)
+  .option("--paused", "load it without playing")
+  .option("--stage <name>", "stage name")
+  .action(async (tour: string, opts: { from?: number; paused?: boolean; stage?: string }) => {
+    await stagePlay(stageCtx(opts.stage), tour, opts);
+  });
+
+stage
+  .command("control <action> [index]")
+  .description("play | pause | next | prev | goto <n> | stop")
+  .option("--stage <name>", "stage name")
+  .action(async (action: string, index: string | undefined, opts: { stage?: string }) => {
+    await stageControl(stageCtx(opts.stage), action, index ? toInt(index) : undefined);
+  });
+
+stage
+  .command("where")
+  .description("one line: what the person's canvas shows right now")
+  .option("--stage <name>", "stage name")
+  .action(async (opts: { stage?: string }) => {
+    await stageWhere(stageCtx(opts.stage));
+  });
+
+const marks = program
+  .command("marks")
+  .description("what the person marked on the drawings (Spec 83); with no subcommand, list the marks waiting")
+  .option("--all", "every mark, answered and resolved too")
+  .option("--json", "as JSON")
+  .option("--stage <name>", "stage name")
+  .action(async (opts: { all?: boolean; json?: boolean; stage?: string }) => {
+    await marksList(stageCtx(opts.stage), opts);
+  });
+
+marks
+  .command("await")
+  .description("wait for the person's next mark or reply; exit 0 with it, 4 on timeout (run it as a background task)")
+  .option("--timeout <s>", "seconds to wait (default 1800)", toInt)
+  .option("--stage <name>", "stage name")
+  .action(async (opts: { timeout?: number; stage?: string }) => {
+    process.exitCode = await marksAwait(stageCtx(opts.stage), opts);
+  });
+
+marks
+  .command("reply <id> [text]")
+  .description("answer a mark in its thread, as the agent (--name or STATELOOM_AGENT_NAME)")
+  .option("--resolve", "close the mark")
+  .option("--stage <name>", "stage name")
+  .action(async (id: string, text: string | undefined, opts: { resolve?: boolean; stage?: string }) => {
+    await marksReply(stageCtx(opts.stage), id, text, opts);
   });
 
 program.parseAsync(process.argv).catch((err: unknown) => {

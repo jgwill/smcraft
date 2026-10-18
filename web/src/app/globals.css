@@ -268,3 +268,43 @@ body {
    designer and forgewright animate the same way from one source. Nothing in
    this app referenced the old `sm-*` class names outside the canvas, which is
    why they could simply leave. */
+
+/* The stage's caption (Spec 83): a fixed layer the size of the screen that lets
+   every pointer through except on the caption itself, which sits above the
+   phone dock and, from `md` up, at the bottom edge. */
+.stage-caption-host {
+  position: fixed;
+  inset: 0 0 calc(var(--sm-dock-h) + env(safe-area-inset-bottom)) 0;
+  pointer-events: none;
+  z-index: 45;
+}
+
+@media (min-width: 768px) {
+  .stage-caption-host { bottom: 0; }
+}
+
+/* The stage's controls on a board: top-right, clear of the status line (top
+   left), the machine's zoom bar (bottom left) and the view controls (bottom
+   right). */
+.stage-board-controls {
+  position: absolute;
+  right: 0.75rem;
+  top: 0.5rem;
+  z-index: 20;
+  display: flex;
+  gap: 0.375rem;
+  pointer-events: auto;
+}
+
+/* The mark cards open under those controls. */
+.stage-board-card {
+  position: absolute;
+  right: 0.5rem;
+  top: 3.25rem;
+  z-index: 25;
+}
+
+@media (max-width: 767px) {
+  .stage-board-card { left: 0.25rem; right: 0.25rem; }
+  .stage-board-card > * { width: auto; }
+}

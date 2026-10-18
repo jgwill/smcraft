@@ -75,6 +75,8 @@ import { loadRuntimeConfig } from "@/lib/runtimeConfig";
 import { useSheetDrag } from "@/lib/useSheetDrag";
 import { safely } from "@/lib/safely";
 import { stripNote, useFocusRequest, useUrlParam, writeFocus } from "@/lib/systemParam";
+import StageLayer, { StageReveal } from "@/components/stage/StageLayer";
+import { sequenceElementBoxes } from "@miadi/stateloom-protocol";
 import { memberOfDoc, notifySystemChanged, reconcileNow, systemVocabulary, useSystem } from "@/lib/systemLoad";
 
 type Tab = "participants" | "messages" | "notes" | "issues";
@@ -215,6 +217,8 @@ export default function SequenceWorkspace() {
   // shows what it can). Edits still go through the protocol on `def` itself.
   const view = useMemo(() => (def ? drawableSequence(def) : null), [def]);
   const layout = useMemo(() => (view ? sequenceLayout(view) : null), [view]);
+  const stageBoxes = useMemo(() => (view && layout ? safely(() => sequenceElementBoxes(view, layout), []) : []), [view, layout]);
+  const stageFocus = useUrlParam("focus");
   // A malformed document is reported as one issue, not a crash.
   const problems = useMemo<SqdValidationError[]>(() => {
     if (!def) return [];
@@ -579,6 +583,12 @@ export default function SequenceWorkspace() {
             />
             </BoardBoundary>
           )}
+          {/* The stage (Spec 83). In the list view nothing is drawn to light, so a
+              step that lights something here brings the diagram back. */}
+          {def && layout && mode === "diagram" && (
+            <StageLayer docPath={docPath || null} kind="sequence" viewport={viewport} setViewport={setViewport} boxes={stageBoxes} boardRef={boardRef} focus={stageFocus} />
+          )}
+          {def && layout && mode === "list" && <StageReveal docPath={docPath} onReveal={() => setMode("diagram")} />}
 
           <div
             className={`pointer-events-none absolute left-2 top-2 max-w-[75%] items-center gap-1.5 rounded bg-gray-950/70 px-1.5 py-0.5 text-[11px] ${

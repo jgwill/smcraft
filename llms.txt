@@ -66,7 +66,7 @@ State classification is derived from structure, not declared: leaf (no children)
 
 Full schema: [Spec 70 — SMDF Format](./rispecs/70-smdf-format.spec.md)
 
-## MCP server — 56 tools: 22 state-machine, 10 ERD, 14 sequence, 10 system
+## MCP server — 65 tools: 22 state-machine, 10 ERD, 14 sequence, 10 system, 9 stage
 
 `@miadi/stateloom-mcp`, stdio by default (Streamable HTTP optional — see Transport below). Registration:
 
@@ -147,6 +147,12 @@ A `.sysdf.json` names a system's members (`.erdf.json`, `.smdf.json`, `.sqdf.jso
 
 From `@miadi/stateloom-protocol`: `checkSystem`, `replayScenario`, `reconcileScenario`, `reconcileSystem`, `systemLinks`, `linksOf`. Worked example: `examples/wave-count/` (Episode 140). Full spec: [Spec 82 — SYSDF](./rispecs/82-sysdf-system.spec.md)
 
+## The stage and the marks — the agent shows, the person points back
+
+**Stage tools** — `show_step(say, doc?, focus?, spotlight?, region?, title?, system?, audio?)` puts one step on the person's canvas: open the drawing, select `focus`, dim all but `spotlight`, frame `region`, show `say` as a caption. `write_tour(name, steps, …)` writes `<name>.tour.json` (paths relative to it, T001–T009); `play_tour(tour?, from?, autoplay?)` hands it to the canvases, which play it with their own controls; `stage_control(action, index?)` — play, pause, next, prev, goto, stop. `read_marks(doc?, system?, all?)` returns what is on the person's screen and the marks waiting for the agent — notes anchored to elements or an area of a drawing, kept in `<drawing>.marks.json` — read it before replying to a person who has the canvas open. `answer_mark(id, text?, resolve?, show?)` replies in the thread; `add_mark(text, elements?, region?, kind?)` leaves the agent's question; `await_marks(timeoutSeconds?)` waits for the next mark; `what_is_on_screen()`. Stages are named (`STATELOOM_STAGE`, default `default`); the hub answers `GET /stage/<name>`.
+
+From `@miadi/stateloom-protocol`: `validateTour`, `resolveTourPaths`, `stepHoldMs`, `addMark`, `replyToMark`, `marksWaitingOn`, `marksPathOf`, `machineElementBoxes`, `erdElementBoxes`, `sequenceElementBoxes`, `elementsInRegion`, `elementAt`, `formatReview`. Components: `StageOverlay`, `StageCaption`, `MarkComposer`, `MarkThread`, `MarksPanel` (`@miadi/stateloom-canvas`); `useStage`, `createStageSession`, `browserVoice`, `browserDictation` (`@miadi/stateloom-react`). Full spec: [Spec 83 — the stage and the marks](./rispecs/83-stage-and-marks.spec.md)
+
 ## Terminal — `smcx`
 
 Global options: `--bridge <url>`, `--doc <path>`, `--name <label>`.
@@ -163,6 +169,13 @@ smcx render [--as svg|png|mermaid|ascii] [--out path|-] [--scale n]
             [--theme dark|light] [--title text] [--stamp] [--open]
 smcx open [--web url]
 smcx presence
+smcx stage show --say text [--focus k:n] [--spotlight a,b] [--drawing path]
+smcx stage play <tour.json> [--from n] [--paused]
+smcx stage control <play|pause|next|prev|goto|stop> [n]
+smcx stage where                                   what the person's canvas shows
+smcx marks [--all] [--json]                        the marks waiting, with the context
+smcx marks await [--timeout s]                     exit 0 with the next mark, 4 on timeout
+smcx marks reply <id> [text] [--resolve]
 ```
 
 Mutations are durable-first: the definition is written to disk, then emitted to the hub. A machine can be edited with no hub running at all.
@@ -179,7 +192,7 @@ npx -y @miadi/stateloom-skills skills install --all
 
 Installs a ready-to-use `SKILL.md` into `.claude/skills/`. Ten skills, sources in [`./skills/`](./skills/):
 
-`stateloom-setup`, `stateloom-docker`, `stateloom-design`, `stateloom-erd` (the entity-relationship diagram beside the machines: tools, rules, `check_links`, the two notations), `stateloom-sequence` (usage scenarios: participants, messages that fire events and carry entities, fragments), `stateloom-system` (the drawings as one system: checks, replay, reconcile in propose or auto mode, `show`), `stateloom-live-loop`, `stateloom-render`, `stateloom-codegen`, `stateloom-rispec`, `stateloom-service`, `stateloom-tailnet`.
+`stateloom-setup`, `stateloom-docker`, `stateloom-design`, `stateloom-erd` (the entity-relationship diagram beside the machines: tools, rules, `check_links`, the two notations), `stateloom-sequence` (usage scenarios: participants, messages that fire events and carry entities, fragments), `stateloom-system` (the drawings as one system: checks, replay, reconcile in propose or auto mode, `show`), `stateloom-stage` (show the work on the canvas step by step or as a tour; read and answer the person's marks), `stateloom-live-loop`, `stateloom-render`, `stateloom-codegen`, `stateloom-rispec`, `stateloom-service`, `stateloom-tailnet`.
 
 The last two are the deployment pair: `stateloom-service` runs the hub and canvas as
 supervised systemd user units over the published packages — including the upgrade a bare
@@ -207,6 +220,8 @@ stand the whole loom up, and keep it up, from these alone.
 | `STATELOOM_MCP_LOCK_PROJECT` | — | `1` refuses `set_project_file` entirely. |
 | `STATELOOM_RECONCILE` | — | `auto` or `propose`: this session's reconcile mode, over the system's own `settings.reconcile`. |
 | `STATELOOM_CHRONICLE_ROOT` | — | The canvas admits `<root>/<episode>/diagrams/*.json` under it, and nothing else there. |
+| `STATELOOM_STAGE` | `default` | The stage an MCP server, `smcx` and a canvas present on (Spec 83). A page joins another with `?stage=`. |
+| `STATELOOM_AGENT_NAME` | `mcp-agent` / `agent` | How the agent is named on the hub, on marks and on captions. |
 
 4598 (canvas) and 4599 (hub) are the loom's pair. `scripts/live-loop.sh env|hub|web-build|web|mcp-line` resolves all of it once and writes `.env.smcraft-live`.
 
@@ -227,6 +242,7 @@ A browser download always, and `--stamp` / `stamp: true` on demand, produce `[ep
 - [Spec 78 — Forgewright Episode Rendering](./rispecs/78-forgewright-episode-rendering.plan.md): plan
 - [Spec 79 — Layout Persistence](./rispecs/79-layout-persistence.plan.md): plan
 - [Spec 80 — ERDF Format](./rispecs/80-erdf-format.spec.md): entity-relationship sibling of SMDF, rules E001–E005, link rules L001–L004, MCP tools, canvas
+- [Spec 83 — The Stage and the Marks](./rispecs/83-stage-and-marks.spec.md): tours and steps an agent plays on the canvas, marks a person leaves on any drawing, the wire, the tools
 
 ## Lineage / KINSHIP
 

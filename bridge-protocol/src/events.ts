@@ -70,6 +70,14 @@ export const EV = {
   REQUEST: 'def:request',
   PRESENCE_IN: 'presence:update',
   VIEW_IN: 'view:show',
+  /** Join a stage's room (Spec 83). Acked with the stage's `StageState`. */
+  STAGE_JOIN: 'stage:join',
+  STAGE_LEAVE: 'stage:leave',
+  STAGE_STEP_IN: 'stage:step',
+  STAGE_LOAD_IN: 'stage:load',
+  STAGE_CONTROL_IN: 'stage:control',
+  STAGE_CONTEXT_IN: 'stage:context',
+  MARKS_IN: 'marks:changed',
   // outbound (hub -> client)
   WELCOME: 'bridge:welcome',
   PATCH_OUT: 'def:patch',
@@ -80,6 +88,11 @@ export const EV = {
   PRESENCE_LIST: 'presence:list',
   PRESENCE_UPDATE: 'presence:update',
   VIEW_OUT: 'view:show',
+  STAGE_STEP_OUT: 'stage:step',
+  STAGE_LOAD_OUT: 'stage:load',
+  STAGE_CONTROL_OUT: 'stage:control',
+  STAGE_CONTEXT_OUT: 'stage:context',
+  MARKS_OUT: 'marks:changed',
   ERROR: 'bridge:error',
 } as const;
 

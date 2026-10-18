@@ -61,7 +61,9 @@ import LockIcon from "@/components/LockIcon";
 import { docQuery, navigateToDoc, useRequestedDoc } from "@/lib/docParam";
 import { loadRuntimeConfig } from "@/lib/runtimeConfig";
 import { useSheetDrag } from "@/lib/useSheetDrag";
-import { urlParam, useFocusRequest, writeFocus } from "@/lib/systemParam";
+import { urlParam, useFocusRequest, useUrlParam, writeFocus } from "@/lib/systemParam";
+import StageLayer from "@/components/stage/StageLayer";
+import { erdElementBoxes } from "@miadi/stateloom-protocol";
 import { safely } from "@/lib/safely";
 
 type Moved = Record<string, { x: number; y: number }>;
@@ -380,6 +382,8 @@ export default function ErdWorkspace() {
   // show it. `attribute:E.a` shows its entity. A person's selection becomes the
   // focus in turn, so the strip can list what it links to.
   const focusRequest = useFocusRequest();
+  const stageFocus = useUrlParam("focus");
+  const stageBoxes = useMemo(() => (def ? safely(() => erdElementBoxes(def, positions, { rows: notation !== "chen" }), []) : []), [def, positions, notation]);
   const appliedFocus = useRef(-1);
   useEffect(() => {
     if (!def || appliedFocus.current === focusRequest.nonce) return;
@@ -533,6 +537,8 @@ export default function ErdWorkspace() {
             />
             </BoardBoundary>
           )}
+          {/* The stage (Spec 83): what an agent lights, and the person's marks. */}
+          {def && <StageLayer docPath={docPath || null} kind="erd" viewport={viewport} setViewport={setViewport} boxes={stageBoxes} boardRef={boardRef} focus={stageFocus} />}
 
           {/* Status costs no layout: it is a line over the board's corner. */}
           <div

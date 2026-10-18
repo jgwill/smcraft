@@ -124,6 +124,7 @@ import {
   systemRispec,
   type SystemHost,
 } from "./system.js";
+import { registerStageTools, type StageHost } from "./stage.js";
 import { liveBridge } from "./live.js";
 import { writeFileAtomic } from "./atomicWrite.js";
 
@@ -1517,6 +1518,21 @@ server.tool(
 registerErdTools(server, erdHost);
 registerSequenceTools(server, sequenceHost);
 registerSystemTools(server, systemHost);
+
+// The stage and the marks (Spec 83): the agent shows, the person points back.
+const stageHost: StageHost = {
+  projectFile: () => PROJECT_FILE,
+  outsideRoot: (path) => outsideRoot(path),
+  live,
+  stageName: () => envAlias("STAGE") ?? "default",
+  agent: () => {
+    const name = AGENT_NAME ?? "agent";
+    return { id: name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-"), name, role: "agent" };
+  },
+  lastSystem: () => LAST_SYSTEM,
+  canvasUrl: (doc) => canvasLink(doc),
+};
+registerStageTools(server, stageHost);
 
 // Notes — the same two tools for either document type.
 

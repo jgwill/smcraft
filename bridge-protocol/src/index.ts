@@ -161,3 +161,40 @@ export type {
   ElementRef,
   SystemLink,
 } from "./system/check.js";
+export * from "./stage/definition.js";
+export {
+  readMark,
+  readMarksFile,
+  newMarkId,
+  markInputProblem,
+  addMark,
+  replyToMark,
+  resolveMark,
+  reopenMark,
+  removeMark,
+  marksWaitingOn,
+  markAnchorText,
+} from "./stage/marks.js";
+export {
+  validateStep,
+  validateTour,
+  resolveStepPaths,
+  resolveTourPaths,
+  stepDocs,
+  stepHoldMs,
+  summarizeTour,
+} from "./stage/tour.js";
+export type { TourValidationError } from "./stage/tour.js";
+export {
+  unionBox,
+  padBox,
+  boxesOf,
+  elementsInRegion,
+  elementAt,
+  machineElementBoxes,
+  erdElementBoxes,
+  sequenceElementBoxes,
+} from "./stage/boxes.js";
+export type { ElementBox } from "./stage/boxes.js";
+export { formatMarks, formatContext, formatReview } from "./stage/review.js";
+export type { DocMarks } from "./stage/review.js";

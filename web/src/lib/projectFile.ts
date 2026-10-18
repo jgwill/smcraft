@@ -1,6 +1,6 @@
 import { closeSync, constants, lstatSync, openSync, readdirSync, readlinkSync, realpathSync, statSync, writeSync } from "fs";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "path";
-import { envAlias } from "@miadi/stateloom-protocol";
+import { envAlias, isLoomSidecar } from "@miadi/stateloom-protocol";
 
 export function getProjectFilePath(): string {
   return resolve(envAlias("PROJECT_FILE") ?? "./statemachine.smdf.json");
@@ -262,6 +262,8 @@ export function listDocuments(limit = 300, maxDepth = 4): { docs: DocEntry[]; tr
         continue;
       }
       if (!entry.endsWith(".json") || !real.endsWith(".json")) continue;
+      // A drawing's marks and a tour are the loom's, but they are not drawings (Spec 83).
+      if (isLoomSidecar(entry)) continue;
       if (docs.length >= limit) {
         truncated = true;
         return;
@@ -298,7 +300,7 @@ export function listDocuments(limit = 300, maxDepth = 4): { docs: DocEntry[]; tr
         continue; // no diagrams/ folder: nothing of this episode is admitted
       }
       for (const file of files) {
-        if (file.startsWith(".") || !file.endsWith(".json")) continue;
+        if (file.startsWith(".") || !file.endsWith(".json") || isLoomSidecar(file)) continue;
         const full = join(dir, file);
         let real: string;
         let stat;

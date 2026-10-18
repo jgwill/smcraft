@@ -20,6 +20,7 @@ Extracted from the **Caishen** legacy C# platform's `StateForge.StateMachine` li
 | 80 | `rispecs/80-erdf-format.spec.md` | ERDF — the data beside the machines, E001–E005, L001–L004 |
 | 81 | `rispecs/81-sqdf-format.spec.md` | SQDF — usage scenarios as sequences, S001–S006 |
 | 82 | `rispecs/82-sysdf-system.spec.md` | SYSDF — the drawings as one system: checks, the scenario replay, reconcile (propose / auto) |
+| 83 | `rispecs/83-stage-and-marks.spec.md` | The stage and the marks — tours an agent plays on the canvas, marks a person leaves on any drawing |
 
 ## Relationships
 

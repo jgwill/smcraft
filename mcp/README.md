@@ -139,6 +139,25 @@ state-machine tools refuse to write a machine over it.
 
 Format and rules: [Spec 80 — ERDF](https://github.com/jgwill/smcraft/blob/main/rispecs/80-erdf-format.spec.md).
 
+### The stage and the marks
+
+The agent shows its work on the person's canvas and hears what they point at
+([Spec 83](https://github.com/jgwill/smcraft/blob/main/rispecs/83-stage-and-marks.spec.md)).
+Needs the hub (`STATELOOM_BRIDGE_URL`); the canvas and this server on one stage
+(`STATELOOM_STAGE`, default `default`).
+
+| Tool | What it does |
+|---|---|
+| `show_step` | One step now: open a drawing, select `focus`, light `spotlight` while the rest dims, frame `region`, show `say` as a caption |
+| `write_tour` | A walkthrough as `<name>.tour.json`, played back by the canvas with its own controls (T001–T009) |
+| `play_tour` | Hand a tour to the canvases, from a step, playing or paused |
+| `stage_control` | play, pause, next, prev, goto, stop |
+| `read_marks` | What is on the person's screen, and the marks waiting — notes on elements or an area of a drawing, kept in `<drawing>.marks.json` |
+| `await_marks` | Wait for the person's next mark or reply |
+| `answer_mark` | Reply in a mark's thread; `resolve`; `show` lights what it is about with the answer as the caption |
+| `add_mark` | Leave a question pinned on elements of a drawing |
+| `what_is_on_screen` | What the person's canvas shows right now |
+
 Also exposed: the resource `smcraft://definition` (the current definition), and the prompt `design-state-machine` — a guided conversation for building one from a domain description.
 
 ## What a session looks like

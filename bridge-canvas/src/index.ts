@@ -32,6 +32,16 @@ export type {
   SequenceTargetKind,
 } from "./SequenceCanvas.js";
 
+// The stage (Spec 83): a layer over any of the boards that lights what an
+// agent points at and takes a person's marks, the caption that plays a tour,
+// and the cards marks are written and read in.
+export { StageOverlay, markAnchor } from "./StageOverlay.js";
+export type { StageOverlayProps, MarkDraft } from "./StageOverlay.js";
+export { StageCaption } from "./StageCaption.js";
+export type { StageCaptionProps } from "./StageCaption.js";
+export { MarkComposer, MarkThread, MarksPanel } from "./MarkCards.js";
+export type { MarkComposerProps, MarkThreadProps, MarksPanelProps, ListenerLike } from "./MarkCards.js";
+
 export { themeStyle, CANVAS_THEME_VARS } from "./theme.js";
 export type { CanvasTheme } from "./theme.js";
 
@@ -70,6 +80,13 @@ export {
   placeLabels,
   eventGlyph,
   guardText,
+  machineElementBoxes,
+  erdElementBoxes,
+  sequenceElementBoxes,
+  elementsInRegion,
+  elementAt,
+  boxesOf,
+  unionBox,
 } from "@miadi/stateloom-protocol";
 export type {
   AutoLayoutOptions,
@@ -85,4 +102,9 @@ export type {
   StateMachineDefinition,
   TransitionDef,
   Viewport,
+  ElementBox,
+  Mark,
+  MarkKind,
+  TourStep,
+  TourDefinition,
 } from "@miadi/stateloom-protocol";

@@ -23,6 +23,8 @@ export async function GET(): Promise<Response> {
     {
       bridgeUrl: envAlias("BRIDGE_URL") ?? null,
       projectFile: envAlias("PROJECT_FILE") ?? null,
+      // The stage this designer presents on (Spec 83); a page's `?stage=` wins.
+      stage: envAlias("STAGE") ?? null,
     },
     { headers: { "cache-control": "no-store" } }
   );

@@ -14,4 +14,5 @@ export type {
   BridgeStatus,
   JoinResult,
   AckPayload,
+  StageJoinResult,
 } from "./client.js";

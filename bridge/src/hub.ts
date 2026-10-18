@@ -18,12 +18,20 @@ import {
   hashDef,
   colorFor,
   envAlias,
+  isStageName,
+  stageRoom,
   EV,
   type StateMachineDefinition,
   type Presence,
   type PatchEnvelope,
   type FullEnvelope,
   type ViewEnvelope,
+  type MarksEnvelope,
+  type StageContext,
+  type StageControlEnvelope,
+  type StageLoadEnvelope,
+  type StageState,
+  type StageStepEnvelope,
 } from "@miadi/stateloom-protocol";
 import { normalizeDocId, readDefFile, mtimeOf } from "./docio.js";
 import { watchRoom, type RoomWatcher } from "./watcher.js";
@@ -94,8 +102,41 @@ export function startBridge(opts: StartBridgeOpts = {}): Promise<BridgeHandle> {
   const token = opts.token;
 
   const rooms = new Map<string, Room>();
+  // A stage (Spec 83) is not a document: no file, no seq, no watcher. What the
+  // hub keeps of one is what a canvas opening late needs to catch up — the
+  // step on screen, the tour loaded, what the person was last looking at —
+  // in memory, as presence is kept, and gone when the hub restarts.
+  const stages = new Map<string, StageState>();
+  const stageOf = (name: string): StageState => {
+    let st = stages.get(name);
+    if (!st) stages.set(name, (st = { stage: name }));
+    return st;
+  };
+  const authorized = (header: string | undefined): boolean => !token || header === `Bearer ${token}`;
 
-  const httpServer: HttpServer = createServer();
+  // Plain HTTP for whoever cannot speak socket.io — a shell script, a listener
+  // waiting for a person's context: `GET /health` and `GET /stage/<name>`
+  // (the stage's state, as a joining canvas receives it). Read-only.
+  const httpServer: HttpServer = createServer((req, res) => {
+    const url = new URL(req.url ?? "/", "http://hub");
+    // socket.io answers its own path through its own listener.
+    if (url.pathname.startsWith("/socket.io")) return;
+    const send = (status: number, body: unknown): void => {
+      res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
+      res.end(JSON.stringify(body));
+    };
+    if (req.method === "GET" && url.pathname === "/health") {
+      return send(200, { ok: true, rooms: rooms.size, stages: stages.size });
+    }
+    const m = /^\/stage\/([^/]+)$/.exec(url.pathname);
+    if (req.method === "GET" && m) {
+      if (!authorized(req.headers.authorization)) return send(401, { error: "bridge: invalid or missing auth token" });
+      const name = decodeURIComponent(m[1]);
+      if (!isStageName(name)) return send(400, { error: `not a stage name: ${name}` });
+      return send(200, stages.get(name) ?? { stage: name });
+    }
+    send(404, { error: "not found" });
+  });
   const io = new Server(httpServer, {
     // socket.io-client from node does not require CORS; browsers do.
     cors: opts.cors ? { origin: "*" } : undefined,
@@ -300,6 +341,82 @@ export function startBridge(opts: StartBridgeOpts = {}): Promise<BridgeHandle> {
       if (!env || typeof env.docId !== "string" || !env.docId) return;
       const docId = normalizeDocId(env.docId);
       io.to(docId).emit(EV.VIEW_OUT, { ...env, docId, origin: env.origin || socket.id });
+    });
+
+    // ── The stage (Spec 83) ──────────────────────────────────────────
+    // A socket joins any number of stages beside its one document room. Every
+    // stage frame is checked against the token as a view is: the sender need
+    // not have joined (an agent's one-shot client sends and leaves).
+    const refuse = (): boolean => {
+      if (token && socket.handshake.auth?.token !== token) {
+        socket.emit(EV.ERROR, { message: "bridge: invalid or missing auth token" });
+        return true;
+      }
+      return false;
+    };
+
+    socket.on(EV.STAGE_JOIN, (payload: { stage?: string }, ack?: (res: unknown) => void) => {
+      if (refuse()) return;
+      const name = isStageName(payload?.stage) ? payload!.stage! : null;
+      if (!name) {
+        if (typeof ack === "function") ack({ error: { code: "bad_stage", message: `not a stage name: ${String(payload?.stage)}` } });
+        return;
+      }
+      const stagesJoined: Set<string> = socket.data.stages ?? (socket.data.stages = new Set<string>());
+      stagesJoined.add(name);
+      socket.join(stageRoom(name));
+      if (typeof ack === "function") ack({ selfId: socket.id, state: stageOf(name) });
+    });
+
+    socket.on(EV.STAGE_LEAVE, (payload: { stage?: string }) => {
+      if (!isStageName(payload?.stage)) return;
+      (socket.data.stages as Set<string> | undefined)?.delete(payload.stage);
+      socket.leave(stageRoom(payload.stage));
+    });
+
+    socket.on(EV.STAGE_STEP_IN, (env: StageStepEnvelope) => {
+      if (refuse() || !env || !isStageName(env.stage) || !env.step) return;
+      const out: StageStepEnvelope = { ...env, origin: env.origin || socket.id, at: env.at ?? new Date().toISOString() };
+      stageOf(env.stage).step = out;
+      io.to(stageRoom(env.stage)).emit(EV.STAGE_STEP_OUT, out);
+    });
+
+    socket.on(EV.STAGE_LOAD_IN, (env: StageLoadEnvelope) => {
+      if (refuse() || !env || !isStageName(env.stage) || !env.tour || !Array.isArray(env.tour.steps)) return;
+      const out: StageLoadEnvelope = { ...env, origin: env.origin || socket.id, at: env.at ?? new Date().toISOString() };
+      const st = stageOf(env.stage);
+      st.tour = out;
+      delete st.step;
+      io.to(stageRoom(env.stage)).emit(EV.STAGE_LOAD_OUT, out);
+    });
+
+    socket.on(EV.STAGE_CONTROL_IN, (env: StageControlEnvelope) => {
+      if (refuse() || !env || !isStageName(env.stage) || typeof env.action !== "string") return;
+      if (env.action === "stop") {
+        const st = stageOf(env.stage);
+        delete st.tour;
+        delete st.step;
+      }
+      io.to(stageRoom(env.stage)).emit(EV.STAGE_CONTROL_OUT, { ...env, origin: env.origin || socket.id });
+    });
+
+    // What the person is looking at: kept as the stage's latest, relayed to
+    // whoever listens on it (an agent waiting for context), never echoed back.
+    socket.on(EV.STAGE_CONTEXT_IN, (ctx: StageContext) => {
+      if (refuse() || !ctx || !isStageName(ctx.stage)) return;
+      const out: StageContext = { ...ctx, at: ctx.at ?? new Date().toISOString() };
+      stageOf(ctx.stage).context = out;
+      socket.to(stageRoom(ctx.stage)).emit(EV.STAGE_CONTEXT_OUT, out);
+    });
+
+    // A drawing's marks changed (the sender already wrote the sidecar). To the
+    // drawing's room, and to a stage when one is named, once per socket.
+    socket.on(EV.MARKS_IN, (env: MarksEnvelope) => {
+      if (refuse() || !env || typeof env.docId !== "string" || !env.docId || !Array.isArray(env.marks)) return;
+      const docId = normalizeDocId(env.docId);
+      const out: MarksEnvelope = { ...env, docId, origin: env.origin || socket.id };
+      const targets = [docId, ...(isStageName(env.stage) ? [stageRoom(env.stage)] : [])];
+      socket.to(targets).emit(EV.MARKS_OUT, out);
     });
 
     function leave(): void {

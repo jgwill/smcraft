@@ -17,7 +17,12 @@
 import { createBridgeClient, type BridgeClient } from "@miadi/stateloom-client";
 import {
   hashDef,
+  type MarksEnvelope,
   type PatchOp,
+  type StageControlEnvelope,
+  type StageLoadEnvelope,
+  type StageState,
+  type StageStepEnvelope,
   type StateMachineDefinition,
   type ViewEnvelope,
 } from "@miadi/stateloom-protocol";
@@ -36,6 +41,15 @@ export interface Live {
   full(docId: string, def: unknown, mtime: number): Promise<LiveOutcome>;
   /** A view to a system's room; needs a connection, not a join. */
   view(view: Omit<ViewEnvelope, "origin"> & { origin?: string }): Promise<LiveOutcome>;
+  /** One step to a stage (Spec 83). */
+  step?(env: Omit<StageStepEnvelope, "origin"> & { origin?: string }): Promise<LiveOutcome>;
+  /** A whole tour to a stage. */
+  load?(env: Omit<StageLoadEnvelope, "origin"> & { origin?: string }): Promise<LiveOutcome>;
+  control?(env: Omit<StageControlEnvelope, "origin"> & { origin?: string }): Promise<LiveOutcome>;
+  /** A drawing's marks changed: its room and a stage. The sidecar is already written. */
+  marks?(env: Omit<MarksEnvelope, "origin"> & { origin?: string }): Promise<LiveOutcome>;
+  /** What the hub keeps of a stage: the step on screen, the tour, what the person is looking at. */
+  stageState?(stage: string): Promise<{ ok: boolean; text: string; state?: StageState }>;
 }
 
 export interface LiveTarget {
@@ -145,10 +159,49 @@ export function liveBridge(target: LiveTarget): Live {
     }
   }
 
+  /**
+   * A frame the hub acks no answer to (a step, a tour, a control, marks): send
+   * it from a short-lived client, and wait a moment for a refusal before
+   * calling it delivered — as a view is sent.
+   */
+  async function oneShot(what: string, emit: (client: BridgeClient) => Promise<void>): Promise<LiveOutcome> {
+    if (!target.url) return unconfigured;
+    const client = open(`stage:${what}`);
+    const refused = refusal(client);
+    try {
+      await withTimeout(Promise.race([emit(client), refused.promise]), ms, "reaching the hub");
+      await Promise.race([new Promise((r) => setTimeout(r, Math.min(ms, 250))), refused.promise]);
+      return { ok: true, text: `${what} sent to the hub` };
+    } catch (e) {
+      return { ok: false, text: e instanceof Refused ? `the hub refused the ${what}: ${e.message}` : `not sent: ${message(e)}` };
+    } finally {
+      refused.off();
+      client.disconnect();
+    }
+  }
+
   return {
     patch: (docId, ops, def, mtime) => send(docId, def, "patch", (c) => c.emitPatch(ops, mtime)),
     full: (docId, def, mtime) =>
       send(docId, def, "document", (c) => c.emitFull(def as StateMachineDefinition, mtime)),
+    step: (env) => oneShot("step", (c) => c.emitStep({ ...env, origin: env.origin ?? target.name ?? "agent" })),
+    load: (env) => oneShot("tour", (c) => c.emitLoad({ ...env, origin: env.origin ?? target.name ?? "agent" })),
+    control: (env) => oneShot("control", (c) => c.emitControl({ ...env, origin: env.origin ?? target.name ?? "agent" })),
+    marks: (env) => oneShot("marks", (c) => c.emitMarks({ ...env, origin: env.origin ?? target.name ?? "agent" })),
+    async stageState(stage) {
+      if (!target.url) return unconfigured;
+      const client = open(`stage:${stage}`);
+      const refused = refusal(client);
+      try {
+        const joined = await withTimeout(Promise.race([client.joinStage(stage), refused.promise]), ms, "joining the stage");
+        return { ok: true, text: "read from the hub", state: joined.state };
+      } catch (e) {
+        return { ok: false, text: e instanceof Refused ? `the hub refused: ${e.message}` : `not read: ${message(e)}` };
+      } finally {
+        refused.off();
+        client.disconnect();
+      }
+    },
     async view(view) {
       if (!target.url) return unconfigured;
       const client = open(view.docId);

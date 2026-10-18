@@ -17,6 +17,8 @@ import SystemWorkspace from "@/components/system/SystemWorkspace";
 import SystemStrip from "@/components/system/SystemStrip";
 import BoardBoundary from "@/components/BoardBoundary";
 import IssueIcon from "@/components/IssueIcon";
+import StageProvider from "@/components/stage/StageProvider";
+import MachineStageLayer from "@/components/stage/MachineStageLayer";
 import { docKindOfPath, isSysdfPath, type DocKind } from "@miadi/stateloom-protocol";
 import { useRequestedDoc } from "@/lib/docParam";
 import { useMachineFocus } from "@/lib/machineFocus";
@@ -102,12 +104,16 @@ export default function Home() {
       {workspace}
     </BoardBoundary>
   );
-  if (!systemParam || !isSysdfPath(systemParam)) return guarded;
+  // The stage (Spec 83) wraps whichever workspace is open, so a tour that
+  // moves between drawings keeps playing across the switch.
+  if (!systemParam || !isSysdfPath(systemParam)) return <StageProvider>{guarded}</StageProvider>;
   return (
-    <div className="system-frame">
-      <SystemStrip systemPath={systemParam} />
-      {guarded}
-    </div>
+    <StageProvider>
+      <div className="system-frame">
+        <SystemStrip systemPath={systemParam} />
+        {guarded}
+      </div>
+    </StageProvider>
   );
 }
 
@@ -161,10 +167,11 @@ function MachineDesigner() {
       <Toolbar />
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* Canvas */}
-        <div className="flex-1 overflow-hidden">
+        <div className="relative flex-1 overflow-hidden" id="machine-board">
           <BoardBoundary what="state machine">
             <Canvas />
           </BoardBoundary>
+          <MachineStageLayer />
         </div>
 
         {/* Scrim. Phone only — it is what makes "tap the canvas to dismiss"

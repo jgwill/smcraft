@@ -17,6 +17,12 @@ import {
   type PatchEnvelope,
   type FullEnvelope,
   type ViewEnvelope,
+  type MarksEnvelope,
+  type StageContext,
+  type StageControlEnvelope,
+  type StageLoadEnvelope,
+  type StageState,
+  type StageStepEnvelope,
   EV,
 } from "@miadi/stateloom-protocol";
 
@@ -45,7 +51,25 @@ export interface AckPayload {
   [k: string]: unknown;
 }
 
-export type BridgeEvent = 'patch' | 'full' | 'ack' | 'presence' | 'error' | 'status' | 'view';
+export type BridgeEvent =
+  | 'patch'
+  | 'full'
+  | 'ack'
+  | 'presence'
+  | 'error'
+  | 'status'
+  | 'view'
+  | 'stage-step'
+  | 'stage-load'
+  | 'stage-control'
+  | 'stage-context'
+  | 'marks';
+
+/** What `joinStage` resolves to: this socket's id and what the hub keeps of the stage. */
+export interface StageJoinResult {
+  selfId: string;
+  state: StageState;
+}
 
 export interface BridgeClient {
   connect(): Promise<void>;
@@ -60,6 +84,22 @@ export interface BridgeClient {
    * document. Needs a connection, not a join.
    */
   emitView(view: Omit<ViewEnvelope, 'origin' | 'docId'> & { docId?: string; origin?: string }): Promise<void>;
+  /**
+   * Join a stage (Spec 83) beside this client's document room: hear its steps,
+   * tours, controls, context and marks. Re-call it after a reconnect; the hub
+   * forgets a socket's rooms when the socket goes.
+   */
+  joinStage(stage: string): Promise<StageJoinResult>;
+  leaveStage(stage: string): void;
+  /** Show one step on a stage. Needs a connection, not a join. */
+  emitStep(env: Omit<StageStepEnvelope, 'origin'> & { origin?: string }): Promise<void>;
+  /** Hand a whole tour to a stage's canvases. */
+  emitLoad(env: Omit<StageLoadEnvelope, 'origin'> & { origin?: string }): Promise<void>;
+  emitControl(env: Omit<StageControlEnvelope, 'origin'> & { origin?: string }): Promise<void>;
+  /** Say what this canvas is showing, so an agent knows what the person is looking at. */
+  emitContext(ctx: Omit<StageContext, 'at'> & { at?: string }): void;
+  /** A drawing's marks changed: tell its room (and a stage). Write the sidecar first. */
+  emitMarks(env: Omit<MarksEnvelope, 'origin'> & { origin?: string }): Promise<void>;
   on(event: 'patch', h: (e: PatchEnvelope) => void): () => void;
   on(event: 'full', h: (e: FullEnvelope) => void): () => void;
   on(event: 'ack', h: (e: AckPayload) => void): () => void;
@@ -68,6 +108,11 @@ export interface BridgeClient {
   on(event: 'status', h: (s: BridgeStatus) => void): () => void;
   /** A view relayed to this client's room (it must have joined the system's room). */
   on(event: 'view', h: (e: ViewEnvelope) => void): () => void;
+  on(event: 'stage-step', h: (e: StageStepEnvelope) => void): () => void;
+  on(event: 'stage-load', h: (e: StageLoadEnvelope) => void): () => void;
+  on(event: 'stage-control', h: (e: StageControlEnvelope) => void): () => void;
+  on(event: 'stage-context', h: (e: StageContext) => void): () => void;
+  on(event: 'marks', h: (e: MarksEnvelope) => void): () => void;
   get status(): BridgeStatus;
   get lastSeq(): number;
   get presence(): Presence[];
@@ -112,6 +157,11 @@ export function createBridgeClient(opts: BridgeClientOptions): BridgeClient {
     error: new Set(),
     status: new Set(),
     view: new Set(),
+    'stage-step': new Set(),
+    'stage-load': new Set(),
+    'stage-control': new Set(),
+    'stage-context': new Set(),
+    marks: new Set(),
   };
 
   function fire(event: BridgeEvent, arg?: unknown): void {
@@ -171,6 +221,11 @@ export function createBridgeClient(opts: BridgeClientOptions): BridgeClient {
   socket.on(EV.VIEW_OUT, (env: ViewEnvelope) => {
     fire('view', env);
   });
+  socket.on(EV.STAGE_STEP_OUT, (env: StageStepEnvelope) => fire('stage-step', env));
+  socket.on(EV.STAGE_LOAD_OUT, (env: StageLoadEnvelope) => fire('stage-load', env));
+  socket.on(EV.STAGE_CONTROL_OUT, (env: StageControlEnvelope) => fire('stage-control', env));
+  socket.on(EV.STAGE_CONTEXT_OUT, (env: StageContext) => fire('stage-context', env));
+  socket.on(EV.MARKS_OUT, (env: MarksEnvelope) => fire('marks', env));
 
   // --- hub-originated error frames ---
   socket.on(EV.ERROR, (e: { code?: string; message?: string }) => {
@@ -270,6 +325,53 @@ export function createBridgeClient(opts: BridgeClientOptions): BridgeClient {
     socket.emit(EV.VIEW_IN, { ...view, docId: view.docId ?? docId, origin: view.origin ?? (name || role) });
   }
 
+  async function joinStage(stage: string): Promise<StageJoinResult> {
+    await connect();
+    return new Promise<StageJoinResult>((resolve, reject) => {
+      socket.emit(EV.STAGE_JOIN, { stage }, (ack: { selfId?: string; state?: StageState; error?: { code: string; message: string } }) => {
+        if (!ack || ack.error || !ack.state) {
+          const e = ack?.error ?? { code: 'stage_join_failed', message: 'no stage join ack' };
+          fire('error', e);
+          reject(new Error(`${e.code}: ${e.message}`));
+          return;
+        }
+        if (ack.selfId) selfId = ack.selfId;
+        resolve({ selfId: ack.selfId ?? selfId, state: ack.state });
+      });
+    });
+  }
+
+  function leaveStage(stage: string): void {
+    if (socket.connected) socket.emit(EV.STAGE_LEAVE, { stage });
+  }
+
+  const sender = (): string => name || role;
+
+  async function emitStep(env: Omit<StageStepEnvelope, 'origin'> & { origin?: string }): Promise<void> {
+    await connect();
+    socket.emit(EV.STAGE_STEP_IN, { ...env, origin: env.origin ?? sender() });
+  }
+
+  async function emitLoad(env: Omit<StageLoadEnvelope, 'origin'> & { origin?: string }): Promise<void> {
+    await connect();
+    socket.emit(EV.STAGE_LOAD_IN, { ...env, origin: env.origin ?? sender() });
+  }
+
+  async function emitControl(env: Omit<StageControlEnvelope, 'origin'> & { origin?: string }): Promise<void> {
+    await connect();
+    socket.emit(EV.STAGE_CONTROL_IN, { ...env, origin: env.origin ?? sender() });
+  }
+
+  function emitContext(ctx: Omit<StageContext, 'at'> & { at?: string }): void {
+    if (!socket.connected) return;
+    socket.emit(EV.STAGE_CONTEXT_IN, { ...ctx, at: ctx.at ?? new Date().toISOString() });
+  }
+
+  async function emitMarks(env: Omit<MarksEnvelope, 'origin'> & { origin?: string }): Promise<void> {
+    await connect();
+    socket.emit(EV.MARKS_IN, { ...env, origin: env.origin ?? sender() });
+  }
+
   function on(event: BridgeEvent, handler: (arg: never) => void): () => void {
     const set = listeners[event];
     const h = handler as unknown as (...args: unknown[]) => void;
@@ -293,6 +395,13 @@ export function createBridgeClient(opts: BridgeClientOptions): BridgeClient {
     request,
     updatePresence,
     emitView,
+    joinStage,
+    leaveStage,
+    emitStep,
+    emitLoad,
+    emitControl,
+    emitContext,
+    emitMarks,
     on: on as BridgeClient['on'],
     disconnect,
     get status() {

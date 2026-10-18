@@ -11,6 +11,11 @@ Beside the state machines the loom holds the data they act on (ERDF), the usage
 scenarios that walk through them (SQDF), and a system document (SYSDF) that joins all of
 them as one system — checked against each other, and kept level by the scenarios.
 
+Over all of them sits a **stage**: an agent shows its work on the canvas — a drawing, what to
+light in it, a sentence beside it — one step at a time or as a tour the canvas plays back, and
+the person answers by **marking** elements or an area of any drawing and saying what the agent
+should know.
+
 ## Packages
 
 | Package | Install | Directory | What it is |
@@ -20,10 +25,10 @@ them as one system — checked against each other, and kept level by the scenari
 | [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | `npm i @miadi/stateloom-protocol` | `bridge-protocol/` | Zero-dependency foundation: patch ops, diff/apply, envelopes, layout, edge routing, ASCII/Mermaid render, export naming — and the ERD, sequence and system formats: types, validators, the links between drawings, the scenario replay and reconcile, layouts |
 | [`@miadi/stateloom-client`](https://www.npmjs.com/package/@miadi/stateloom-client) | `npm i @miadi/stateloom-client` | `bridge-client/` | Framework-agnostic socket.io-client wrapper: join / patch / full / presence with auto-resync |
 | [`@miadi/stateloom`](https://www.npmjs.com/package/@miadi/stateloom) | `npm i @miadi/stateloom` | `bridge/` | The socket.io hub. Bin `smcraft-bridge` |
-| [`@miadi/stateloom-react`](https://www.npmjs.com/package/@miadi/stateloom-react) | `npm i @miadi/stateloom-react` | `bridge-react/` | React 19 binding: `useSmcraftBridge`, session core |
-| [`@miadi/stateloom-canvas`](https://www.npmjs.com/package/@miadi/stateloom-canvas) | `npm i @miadi/stateloom-canvas` | `bridge-canvas/` | The design surfaces: `<StateMachineCanvas>`, `<EntityRelationshipCanvas>` (crow's foot or Chen) and `<SequenceCanvas>` — pan, zoom, drag, routed edges, touch gestures. Props in, callbacks out, CSS-variable themed |
+| [`@miadi/stateloom-react`](https://www.npmjs.com/package/@miadi/stateloom-react) | `npm i @miadi/stateloom-react` | `bridge-react/` | React 19 binding: `useSmcraftBridge`, session core; the stage's `useStage` / `createStageSession`, `browserVoice`, `browserDictation` |
+| [`@miadi/stateloom-canvas`](https://www.npmjs.com/package/@miadi/stateloom-canvas) | `npm i @miadi/stateloom-canvas` | `bridge-canvas/` | The design surfaces: `<StateMachineCanvas>`, `<EntityRelationshipCanvas>` (crow's foot or Chen) and `<SequenceCanvas>` — pan, zoom, drag, routed edges, touch gestures — and the stage's parts: `<StageOverlay>` over any of them, `<StageCaption>`, `<MarkComposer>`, `<MarkThread>`, `<MarksPanel>`. Props in, callbacks out, CSS-variable themed |
 | [`@miadi/stateloom-cli`](https://www.npmjs.com/package/@miadi/stateloom-cli) | `npm i -g @miadi/stateloom-cli` | `cli/` | Bin `smcx` — drive the loom from a terminal |
-| [`@miadi/stateloom-mcp`](https://www.npmjs.com/package/@miadi/stateloom-mcp) | `npx -y @miadi/stateloom-mcp` | `mcp/` | The MCP server: 56 tools — 22 state-machine, 10 ERD, 14 sequence, 10 system. Bins `stateloom-mcp` and legacy `smcraft-mcp` |
+| [`@miadi/stateloom-mcp`](https://www.npmjs.com/package/@miadi/stateloom-mcp) | `npx -y @miadi/stateloom-mcp` | `mcp/` | The MCP server: 65 tools — 22 state-machine, 10 ERD, 14 sequence, 10 system, 9 stage. Bins `stateloom-mcp` and legacy `smcraft-mcp` |
 | [`@miadi/stateloom-skills`](https://www.npmjs.com/package/@miadi/stateloom-skills) | `npx -y @miadi/stateloom-skills` | `skills-cli/` | Bin `stateloom` — installs agent skills into `.claude/skills/` |
 | [`@miadi/stateloom-web`](https://www.npmjs.com/package/@miadi/stateloom-web) | `npx -y @miadi/stateloom-web` | `web/` → `web-dist/` | The visual designer (Next.js), prebuilt. `web/` stays private; `web-dist/` ships its standalone build |
 | [`jgwill/stateloom`](https://hub.docker.com/r/jgwill/stateloom) | `docker run -p 4598:8080 jgwill/stateloom` | `Dockerfile`, `docker/` | The whole loom as one image: hub, canvas, MCP and CLI behind a single port |
@@ -108,10 +113,11 @@ npx -y @miadi/stateloom-skills skills list
 npx -y @miadi/stateloom-skills skills install --all
 ```
 
-Drops a ready-to-use `SKILL.md` into `.claude/skills/`. Ten skills, sources in
+Drops a ready-to-use `SKILL.md` into `.claude/skills/`. Thirteen skills, sources in
 [`skills/`](./skills/): `stateloom-setup`, `stateloom-docker`, `stateloom-design`,
-`stateloom-erd`, `stateloom-live-loop`, `stateloom-render`, `stateloom-codegen`,
-`stateloom-rispec`, `stateloom-service`, `stateloom-tailnet`.
+`stateloom-erd`, `stateloom-sequence`, `stateloom-system`, `stateloom-stage`,
+`stateloom-live-loop`, `stateloom-render`, `stateloom-codegen`, `stateloom-rispec`,
+`stateloom-service`, `stateloom-tailnet`.
 
 The last two are the deployment pair — `stateloom-service` runs the hub and canvas as
 supervised systemd user units over the published packages, and `stateloom-tailnet`
@@ -208,6 +214,7 @@ Full specs in [`rispecs/`](./rispecs/):
 | [80](./rispecs/80-erdf-format.spec.md) | ERDF format — the entity-relationship sibling, rules E001–E005, link rules L001–L004 |
 | [81](./rispecs/81-sqdf-format.spec.md) | SQDF format — the sequence (usage scenario) sibling, rules S001–S006 |
 | [82](./rispecs/82-sysdf-system.spec.md) | SYSDF — the drawings as one system: checks Y001–Y004 and L005–L008, the scenario replay, reconcile and its `propose` / `auto` mode, the canvas view |
+| [83](./rispecs/83-stage-and-marks.spec.md) | The stage and the marks — an agent shows its work step by step or as a tour (`.tour.json`, T001–T009); a person marks elements or an area of any drawing (`<drawing>.marks.json`) and the agent answers in the thread |
 
 Specs 60-63 in the upstream `caishen` repo define the C# StateForge contracts this
 reimplements.
@@ -332,6 +339,30 @@ system before it designs anything.
 In the designer a system opens as a map of its drawings; every drawing opened from it
 carries a strip to switch to the others and follow the selected element across them. Worked
 example: [`examples/wave-count/`](./examples/wave-count/), the Episode 140 wave count.
+
+### The stage and the marks
+
+[Spec 83](./rispecs/83-stage-and-marks.spec.md). The agent shows; the person points back.
+
+- **A step** opens a drawing on the person's canvas, lights some of it (`focus` one element,
+  `spotlight` several while the rest dims, `region` an area) and shows a sentence beside it.
+  `show_step` sends one while the agent talks.
+- **A tour** (`<name>.tour.json`) is an ordered walk through the drawings the canvas plays back
+  with its own controls — ◀ ▶ ⏯, step dots, a voice the person may turn on, and **Answer**.
+  `write_tour`, `play_tour`, `stage_control`.
+- **A mark** is the person pointing: ✎, then a tap on an element or a drag around several, then
+  what the agent should know — typed, or spoken where the browser can listen. Marks are pinned
+  on the drawing and kept beside it (`<drawing>.marks.json`, never in it). The agent reads them
+  with what is on the person's screen (`read_marks`) before it replies, answers in the thread
+  (`answer_mark`, which can light the marked elements as it answers), and leaves questions of
+  its own (`add_mark`). **Copy for the agent** puts the same review on the clipboard for any
+  agent without the MCP.
+- **Waiting**: `await_marks` holds a tool call; `smcx marks await` exits with the person's next
+  mark — run it as a background task and the session wakes when they point.
+
+Stages are named (`STATELOOM_STAGE`, a page's `?stage=`); the hub keeps the step on screen and
+what the person is looking at for a canvas that opens late, and answers `GET /stage/<name>` in
+JSON. The skill: `stateloom skills install stateloom-stage`.
 
 ## For agents
 

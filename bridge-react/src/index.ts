@@ -18,6 +18,15 @@ export type {
   UseSmcraftBridgeOptions,
 } from "./useSmcraftBridge.js";
 
+// The stage (Spec 83): a canvas shown things by an agent, and the person's
+// context and marks sent back.
+export { createStageSession } from "./stage.js";
+export type { StageSession, StageSessionOptions, StageSnapshot, StageShown, StageVoice } from "./stage.js";
+export { useStage } from "./useStage.js";
+export type { UseStage, UseStageOptions } from "./useStage.js";
+export { browserVoice, browserDictation } from "./speech.js";
+export type { BrowserVoiceOptions, Dictation } from "./speech.js";
+
 export { autoLayout, AUTO_LAYOUT_DEFAULTS } from "./autoLayout.js";
 export type { AutoLayoutOptions, LayoutBox } from "./autoLayout.js";
 

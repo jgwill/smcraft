@@ -17,6 +17,8 @@
 export interface RuntimeConfig {
   bridgeUrl: string | null;
   projectFile: string | null;
+  /** The stage agents present on (Spec 83), when the server names one. */
+  stage: string | null;
 }
 
 /**
@@ -47,12 +49,13 @@ export function loadRuntimeConfig(): Promise<RuntimeConfig> {
           // build — it just has nothing to add.
           bridgeUrl: body.bridgeUrl || fallback,
           projectFile: body.projectFile ?? null,
+          stage: body.stage ?? null,
         };
       }
     } catch {
       // Older server, or none reachable: fall back to whatever the build knew.
     }
-    return { bridgeUrl: fallback, projectFile: null };
+    return { bridgeUrl: fallback, projectFile: null, stage: null };
   })();
   return pending;
 }
