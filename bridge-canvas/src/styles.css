@@ -973,3 +973,168 @@
 .slc-stage-panel-said { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slc-stage-panel-meta { font-size: 11px; color: var(--slc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slc-stage-empty { color: var(--slc-muted); font-size: 12px; line-height: 1.4; }
+
+/* ─── Talking with a companion (Spec 84) ──────────────────────────────────── */
+
+.slc-talk {
+  --slc-accent: #3b82f6;
+  --slc-accent-fill: #1e3a5f;
+  --slc-accent-ink: #93c5fd;
+  --slc-danger: #ef4444;
+  --slc-label: #e2e8f0;
+  --slc-muted: #94a3b8;
+  --slc-faint: #64748b;
+  --slc-panel-bg: rgb(17 24 39 / 0.96);
+  --slc-panel-border: #374151;
+  --slc-panel-hover: #1f2937;
+  --slc-stage-light: #fbbf24;
+  --slc-mark-open: #f59e0b;
+  --slc-mark-question: #a78bfa;
+  --slc-talk-live: #ef4444;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  pointer-events: auto;
+}
+
+.slc-talk-fab {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid var(--slc-panel-border);
+  background: var(--slc-panel-bg);
+  color: var(--slc-label);
+  font-size: 22px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+}
+
+.slc-talk-fab--live {
+  background: var(--slc-talk-live);
+  border-color: var(--slc-talk-live);
+  animation: slc-stage-pulse 1.4s ease-in-out infinite;
+}
+
+.slc-talk-fab-clock { font: 700 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: white; }
+
+.slc-talk-fab-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--slc-mark-question);
+  color: #111827;
+  font: 700 11px/20px ui-sans-serif, system-ui, sans-serif;
+}
+
+.slc-talk-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(23rem, calc(100vw - 1rem));
+  max-height: min(78vh, 40rem);
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid var(--slc-panel-border);
+  background: var(--slc-panel-bg);
+  color: var(--slc-label);
+  font-size: 13px;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(8px);
+}
+
+.slc-talk-head { display: flex; align-items: center; gap: 8px; }
+.slc-talk-title { font-weight: 700; }
+
+.slc-talk-presence {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+}
+
+.slc-talk-presence--away { background: var(--slc-faint); box-shadow: none; }
+
+.slc-talk-episode { width: 100%; }
+.slc-talk-meta { color: var(--slc-muted); font-size: 12px; line-height: 1.4; }
+.slc-talk-meta--away { color: var(--slc-mark-open); }
+.slc-talk-meta--error { color: var(--slc-danger); }
+
+.slc-talk-notice {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgb(167 139 250 / 0.12);
+  color: var(--slc-label);
+  font-size: 12px;
+}
+
+.slc-talk-record {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 46px;
+  border-radius: 12px;
+  border: 0;
+  background: var(--slc-accent);
+  color: white;
+  font: 700 15px ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.slc-talk-record:disabled { opacity: 0.45; cursor: default; }
+.slc-talk-record--live { background: var(--slc-talk-live); animation: slc-stage-pulse 1.4s ease-in-out infinite; }
+.slc-talk-record--retry { background: var(--slc-mark-open); color: #111827; }
+.slc-talk-clock { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+
+.slc-talk-toggle { display: flex; align-items: center; gap: 6px; color: var(--slc-muted); font-size: 12px; }
+
+.slc-talk-thread {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.slc-talk-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.04);
+  border-left: 3px solid var(--slc-mark-open);
+}
+
+.slc-talk-entry--reply { border-left-color: var(--slc-mark-question); background: rgb(167 139 250 / 0.07); }
+.slc-talk-entry--new { box-shadow: inset 0 0 0 1px var(--slc-mark-question); }
+
+.slc-talk-who { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--slc-muted); }
+.slc-talk-who strong { color: var(--slc-label); font-size: 12px; }
+.slc-talk-canvas { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--slc-accent-ink); }
+.slc-talk-text { white-space: pre-wrap; line-height: 1.42; overflow-wrap: anywhere; }
+.slc-talk-play { min-height: 24px; min-width: 30px; padding: 0 7px; font-size: 12px; margin-left: auto; }
+.slc-talk-play--on { color: var(--slc-stage-light); border-color: var(--slc-stage-light); }
+.slc-talk-thumbs { display: inline-flex; gap: 2px; }
+
+.slc-talk-thumb {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.45;
+  font-size: 13px;
+}
+
+.slc-talk-thumb--on { opacity: 1; }
+
+@media (pointer: coarse) {
+  .slc-talk-play { min-height: 34px; min-width: 40px; }
+  .slc-talk-thumb { font-size: 17px; }
+}

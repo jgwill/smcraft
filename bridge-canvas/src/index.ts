@@ -40,6 +40,9 @@ export type { StageOverlayProps, MarkDraft } from "./StageOverlay.js";
 export { StageCaption } from "./StageCaption.js";
 export type { StageCaptionProps } from "./StageCaption.js";
 export { MarkComposer, MarkThread, MarksPanel } from "./MarkCards.js";
+// Talking with a companion from the canvas (Spec 84).
+export { CompanionDock } from "./CompanionDock.js";
+export type { CompanionDockProps, DockItem, DockReply, DockTake } from "./CompanionDock.js";
 export type { MarkComposerProps, MarkThreadProps, MarksPanelProps, ListenerLike } from "./MarkCards.js";
 
 export { themeStyle, CANVAS_THEME_VARS } from "./theme.js";
