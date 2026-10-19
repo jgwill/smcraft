@@ -292,3 +292,26 @@ test("present plays a tour from the page in its own voice, and answers when it e
   assert.equal(await third, false, "a stopped tour answers false");
   assert.equal(await s.present({ settings: { namespace: "n", name: "empty" }, steps: [] }), false);
 });
+
+test("connect, disconnect, connect again (React's development mount) still joins the stage", async () => {
+  let joins = 0;
+  let release: () => void = () => {};
+  const { client } = fakeClient({ stage: "default", tour: { stage: "default", tour, from: 0, origin: "mia" } });
+  const realJoin = client.joinStage.bind(client);
+  // The first join waits for a connection that the disconnect abandons.
+  client.joinStage = (async (name: string) => {
+    joins += 1;
+    if (joins === 1) await new Promise<void>((r) => (release = r));
+    return realJoin(name);
+  }) as typeof client.joinStage;
+  const s = createStageSession({ url: "x", client });
+  s.connect();
+  s.disconnect();
+  s.connect();
+  await tick();
+  assert.equal(joins, 2, "the second connect joins for itself");
+  assert.equal(s.getSnapshot().shown?.step.say, "one", "and catches up with the stage");
+  release();
+  await tick();
+  assert.equal(s.getSnapshot().index, 0, "the abandoned join, answered late, changes nothing");
+});

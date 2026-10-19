@@ -179,6 +179,8 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
   let wanted = false;
   let joined = false;
   let joining = false;
+  /** Moves on every join and disconnect, so a join answered after a disconnect applies nothing. */
+  let joinGen = 0;
 
   /** Set while the catch-up on join puts the hub's stage on screen. */
   let catching = false;
@@ -390,9 +392,11 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
   function join(): void {
     if (joining) return;
     joining = true;
+    const gen = ++joinGen;
     client
       .joinStage(stage)
       .then(({ state }) => {
+        if (gen !== joinGen) return;
         joining = false;
         joined = true;
         // After a reconnect, a hub that kept the stage has nothing new for a
@@ -401,6 +405,7 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
         commit();
       })
       .catch(() => {
+        if (gen !== joinGen) return;
         joining = false;
         commit();
       });
@@ -426,6 +431,11 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
     },
     disconnect() {
       wanted = false;
+      // A join still waiting for its connection is let go: React's development mode mounts,
+      // unmounts and mounts again, and the second connect must join for itself.
+      joinGen += 1;
+      joining = false;
+      joined = false;
       quiet();
       client.leaveStage(stage);
       client.disconnect();
