@@ -4,17 +4,17 @@
 
 **Engine (npm):** `@miadi/stateloom-engine` 0.4.4 — renamed from `smcraft`, which is deprecated on npm — parser, validator, runtime, SMDF interpreter, TypeScript codegen
 **Engine (PyPI):** `miadi-stateloom-engine` 0.2.1 — the Python twin, Python codegen, CLI `smcg`
-**Protocol:** `@miadi/stateloom-protocol` 0.1.14 — also carries the ERD, sequence and system formats (types, validators, links between drawings, the scenario replay and reconcile, layouts)
-**Client:** `@miadi/stateloom-client` 0.1.3 — `emitView` / `on('view')`
-**Hub:** `@miadi/stateloom` 0.1.6 — bin `smcraft-bridge`; relays `view:show`
-**React:** `@miadi/stateloom-react` 0.1.6
-**Canvas:** `@miadi/stateloom-canvas` 0.1.5 — `<StateMachineCanvas>`, `<EntityRelationshipCanvas>` and `<SequenceCanvas>`, the design surfaces as mountable components
-**CLI:** `@miadi/stateloom-cli` 0.1.4 — bin `smcx`
-**MCP:** `@miadi/stateloom-mcp` 0.3.5 — bins `stateloom-mcp`, `smcraft-mcp`; 56 tools: 22 state-machine, 10 ERD, 14 sequence, 10 system
-**Skills:** `@miadi/stateloom-skills` 0.4.6 — bin `stateloom`
-**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.2.6, bin `stateloom-web`
+**Protocol:** `@miadi/stateloom-protocol` 0.1.15 — also carries the ERD, sequence and system formats (types, validators, links between drawings, the scenario replay and reconcile, layouts), and the stage: tours, marks, element boxes
+**Client:** `@miadi/stateloom-client` 0.1.4 — `emitView` / `on('view')`, `joinStage`, `emitStep` / `emitLoad` / `emitControl` / `emitContext` / `emitMarks`
+**Hub:** `@miadi/stateloom` 0.1.7 — bin `smcraft-bridge`; relays `view:show`, stage rooms and marks, `GET /stage/<name>`
+**React:** `@miadi/stateloom-react` 0.1.7 — `useStage`, `createTakeRecorder`, `createCompanionThread`, `replyTour`
+**Canvas:** `@miadi/stateloom-canvas` 0.1.6 — `<StateMachineCanvas>`, `<EntityRelationshipCanvas>` and `<SequenceCanvas>`, the design surfaces as mountable components; `<StageOverlay>`, `<StageCaption>`, the mark cards, `<CompanionDock>`, drawn icons
+**CLI:** `@miadi/stateloom-cli` 0.1.5 — bin `smcx`; `smcx stage`, `smcx marks`
+**MCP:** `@miadi/stateloom-mcp` 0.4.0 — bins `stateloom-mcp`, `smcraft-mcp`; 65 tools: 22 state-machine, 10 ERD, 14 sequence, 10 system, 9 stage
+**Skills:** `@miadi/stateloom-skills` 0.5.0 — bin `stateloom`
+**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.3.0, bin `stateloom-web`
 **Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
-**RISE Specs:** 70–82
+**RISE Specs:** 70–84
 **Repository:** https://github.com/jgwill/smcraft
 **Published at:** https://docs.smcraft.jgwill.com
 
