@@ -44,6 +44,7 @@ import type { StageValue } from "./StageProvider";
 const BASE = "/api/companion/";
 const WHO = "Mia";
 const AUTOPLAY_KEY = "stateloom.companion.autoplay";
+const EPISODE_KEY = "stateloom.companion.episode";
 const EPISODE_NAME = /^\d{4}-\d{2}-\d{2}-episode-\d+-[a-z0-9-]+$/;
 
 /** The episode a chronicle drawing belongs to: `<root>/<episode>/diagrams/<file>`. */
@@ -84,7 +85,14 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
   const [autoplay, setAutoplayState] = useState(() => readLocal(AUTOPLAY_KEY) !== "0");
   const [episode, setEpisodeState] = useState<string | null>(() => {
     const asked = urlParam("episode");
-    return (asked && EPISODE_NAME.test(asked) ? asked : null) ?? episodeOf(requestedDoc()) ?? defaultEpisode;
+    // The episode this browser last spoke in comes before a server's default, as on the phone page.
+    const remembered = readLocal(EPISODE_KEY);
+    return (
+      (asked && EPISODE_NAME.test(asked) ? asked : null) ??
+      episodeOf(requestedDoc()) ??
+      (remembered && EPISODE_NAME.test(remembered) ? remembered : null) ??
+      defaultEpisode
+    );
   });
   const [episodes, setEpisodes] = useState<{ path: string; number: number }[]>([]);
   const [rec, setRec] = useState<RecorderSnapshot>(IDLE);
@@ -337,6 +345,7 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
     setUnheard([]);
     setNotice(null);
     setEpisodeState(path);
+    writeLocal(EPISODE_KEY, path);
   };
 
   const waiting = thread.waiting ? { take: thread.waiting.take, seconds: Math.max(0, Math.floor((now - thread.waiting.since) / 1000)) } : null;

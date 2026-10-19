@@ -113,8 +113,9 @@ its own seat's. `GET /api/config` says `companion: true` when the variable is se
 appears; `STATELOOM_COMPANION_EPISODE` names the episode when the page does not.
 
 The episode is, in order: `?episode=`, the episode of the drawing when it lives in the chronicle
-(`<root>/<episode>/diagrams/<file>`), `STATELOOM_COMPANION_EPISODE`, the service's default. The
-dock's list changes it.
+(`<root>/<episode>/diagrams/<file>`), the episode this browser last chose in the dock,
+`STATELOOM_COMPANION_EPISODE`, the service's default. The dock's list changes it, and the choice
+is remembered in the browser.
 
 The dock opens closed on every visit: the board comes first. It sits bottom-left above the
 machine's zoom bar; open beside a caption on a wide screen it stands above it, and on a phone it is
