@@ -871,7 +871,14 @@
   color: var(--slc-label);
   font-size: 13px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
+
+/* Drawn icons (icons.tsx) take the button's colour and never shrink in a tight row. */
+.slc-icon { display: block; flex: none; }
 
 .slc-stage-btn:hover:not(:disabled) { background: var(--slc-panel-hover); }
 .slc-stage-btn:disabled { opacity: 0.35; cursor: default; }
@@ -974,6 +981,29 @@
 .slc-stage-panel-meta { font-size: 11px; color: var(--slc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slc-stage-empty { color: var(--slc-muted); font-size: 12px; line-height: 1.4; }
 
+/* Two choices side by side: which marks the list shows. */
+.slc-stage-segment {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid var(--slc-panel-border);
+}
+.slc-stage-segment-btn {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--slc-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.slc-stage-segment-btn--on { background: var(--slc-panel-hover); color: var(--slc-label); }
+@media (pointer: coarse) {
+  .slc-stage-segment-btn { min-height: 34px; padding: 0 12px; font-size: 14px; }
+}
+
 /* ─── Talking with a companion (Spec 84) ──────────────────────────────────── */
 
 .slc-talk {
@@ -1006,6 +1036,9 @@
   font-size: 22px;
   cursor: pointer;
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .slc-talk-fab--live {
@@ -1048,7 +1081,7 @@
 }
 
 .slc-talk-head { display: flex; align-items: center; gap: 8px; }
-.slc-talk-title { font-weight: 700; }
+.slc-talk-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
 
 .slc-talk-presence {
   width: 9px;
@@ -1128,21 +1161,84 @@
 .slc-talk-who strong { color: var(--slc-label); font-size: 12px; }
 .slc-talk-canvas { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--slc-accent-ink); }
 .slc-talk-text { white-space: pre-wrap; line-height: 1.42; overflow-wrap: anywhere; }
-.slc-talk-play { min-height: 24px; min-width: 30px; padding: 0 7px; font-size: 12px; margin-left: auto; }
+.slc-talk-play { min-height: 26px; min-width: 30px; padding: 0 8px; gap: 5px; font-size: 12px; margin-left: auto; }
 .slc-talk-play--on { color: var(--slc-stage-light); border-color: var(--slc-stage-light); }
+.slc-talk-new {
+  padding: 0 5px;
+  border-radius: 6px;
+  background: var(--slc-mark-question);
+  color: #111827;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+}
 .slc-talk-thumbs { display: inline-flex; gap: 2px; }
 
 .slc-talk-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  min-height: 26px;
   border: 0;
+  border-radius: 6px;
   background: transparent;
+  color: var(--slc-faint);
   cursor: pointer;
-  opacity: 0.45;
-  font-size: 13px;
 }
 
-.slc-talk-thumb--on { opacity: 1; }
+.slc-talk-thumb:hover { color: var(--slc-label); }
+.slc-talk-thumb--on { color: var(--slc-mark-question); }
+
+/* A reply that walks the diagram: its steps, each a row that starts the walk there. */
+.slc-talk-steps {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slc-talk-step {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--slc-label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.slc-talk-step:hover:not(:disabled) { background: rgb(255 255 255 / 0.05); }
+.slc-talk-step:disabled { cursor: default; }
+.slc-talk-step--here { background: rgb(251 191 36 / 0.1); box-shadow: inset 2px 0 0 var(--slc-stage-light); }
+
+.slc-talk-step-n {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 1px solid var(--slc-panel-border);
+  color: var(--slc-muted);
+  font: 600 10px/16px ui-sans-serif, system-ui, sans-serif;
+  text-align: center;
+}
+
+.slc-talk-step--here .slc-talk-step-n { border-color: var(--slc-stage-light); background: var(--slc-stage-light); color: #111827; }
+
+.slc-talk-step-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.slc-talk-step-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; font-size: 12px; }
+.slc-talk-step-where { font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--slc-accent-ink); overflow-wrap: anywhere; }
+.slc-talk-step-say { line-height: 1.4; overflow-wrap: anywhere; }
 
 @media (pointer: coarse) {
   .slc-talk-play { min-height: 34px; min-width: 40px; }
-  .slc-talk-thumb { font-size: 17px; }
+  .slc-talk-thumb { min-width: 36px; min-height: 36px; }
+  .slc-talk-step { padding: 8px 6px; }
 }

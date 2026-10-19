@@ -13,13 +13,23 @@
  */
 import type { CSSProperties } from "react";
 import { themeStyle, type CanvasTheme } from "./theme.js";
+import { CloseIcon, MicIcon, PlayIcon, SpeakerIcon, StopIcon, ThumbDownIcon, ThumbUpIcon } from "./icons.js";
 
 export interface DockTake {
   kind: "take";
   take: string;
   at: string;
   text: string;
-  canvas?: { doc: string | null; kind: string | null; focus: string | null };
+  canvas?: { doc: string | null; kind: string | null; focus: string | null; step?: { title?: string; index?: number; count?: number } | null };
+}
+
+/** One step of a reply that walks the diagram: what is said, on which drawing, lighting what. */
+export interface DockStep {
+  say: string;
+  title?: string;
+  doc?: string;
+  focus?: string;
+  spotlight?: string[];
 }
 
 export interface DockReply {
@@ -31,7 +41,7 @@ export interface DockReply {
   audio: string | null;
   unvoiced?: string;
   feedback?: "up" | "down";
-  steps?: unknown[];
+  steps?: DockStep[];
 }
 
 export type DockItem = DockTake | DockReply;
@@ -52,7 +62,10 @@ export interface CompanionDockProps {
   unheard?: readonly string[];
   /** The reply being heard now. */
   playing?: string | null;
-  onPlay: (id: string) => void;
+  /** The step of that reply on the board now, counted from 0. */
+  playingStep?: number | null;
+  /** Play a reply; `from` starts a reply with steps at that step (from 0). */
+  onPlay: (id: string, from?: number) => void;
   onStop?: () => void;
   onFeedback?: (id: string, value: "up" | "down" | "") => void;
   autoplay: boolean;
@@ -72,6 +85,16 @@ const when = (iso: string) => {
   return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 const fileOf = (p: string | null | undefined) => (p ? p.split("/").pop() ?? p : "");
+/** A drawing named for a person: its file name without the format's extensions. */
+const drawingOf = (p: string | null | undefined) => fileOf(p).replace(/\.(smdf|erdf|sqdf|sysdf)\.json$/i, "").replace(/\.json$/i, "");
+/** What a step lights, said briefly: the element's own name, or how many. */
+function litOf(step: DockStep): string {
+  const names = step.spotlight?.length ? step.spotlight : step.focus ? [step.focus] : [];
+  // A message is known by its number on the drawing; everything else by its name.
+  const bare = names.map((n) => (n.startsWith("message:") ? `#${n.slice(8)}` : n.slice(n.indexOf(":") + 1)));
+  if (!bare.length) return "";
+  return bare.length <= 2 ? bare.join(", ") : `${bare.slice(0, 2).join(", ")} +${bare.length - 2}`;
+}
 
 function presenceLine(who: string, presence: CompanionDockProps["presence"], episode: string | null): { text: string; away: boolean } {
   if (!episode) return { text: "Choose the episode you are speaking in.", away: true };
@@ -108,6 +131,7 @@ export function CompanionDock({
   items,
   unheard = [],
   playing = null,
+  playingStep = null,
   onPlay,
   onStop,
   onFeedback,
@@ -136,7 +160,7 @@ export function CompanionDock({
           }
           title={live ? "Stop and send your take" : playing ? `${who} is walking the diagram` : `Talk with ${who} about what is on the canvas`}
         >
-          {live ? <span className="slc-talk-fab-clock">{clock(recorder.seconds)}</span> : playing ? "🔊" : "🎙"}
+          {live ? <span className="slc-talk-fab-clock">{clock(recorder.seconds)}</span> : playing ? <SpeakerIcon size={24} /> : <MicIcon size={24} />}
           {!live && fresh > 0 && <span className="slc-talk-fab-badge">{fresh}</span>}
         </button>
       </div>
@@ -150,11 +174,13 @@ export function CompanionDock({
     <div className={`slc-talk slc-talk--open${className ? ` ${className}` : ""}`} style={{ ...themeStyle(theme), ...style }}>
       <section className="slc-talk-panel" aria-label={`Conversation with ${who}`} onPointerDown={(e) => e.stopPropagation()}>
         <header className="slc-talk-head">
-          <span className="slc-talk-title">🎙 Talk with {who}</span>
+          <span className="slc-talk-title">
+            <MicIcon /> Talk with {who}
+          </span>
           <span className={`slc-talk-presence${line.away ? " slc-talk-presence--away" : ""}`} title={line.text} />
           <span className="slc-stage-spacer" />
           <button type="button" className="slc-stage-btn slc-stage-btn--quiet" onClick={() => onOpenChange(false)} aria-label="Close the conversation">
-            ✕
+            <CloseIcon />
           </button>
         </header>
 
@@ -213,8 +239,9 @@ export function CompanionDock({
                 </div>
                 {item.canvas?.doc && (
                   <div className="slc-talk-canvas">
-                    on {fileOf(item.canvas.doc)}
-                    {item.canvas.focus ? ` · ${item.canvas.focus}` : ""}
+                    on {drawingOf(item.canvas.doc)}
+                    {item.canvas.focus ? ` · ${item.canvas.focus.slice(item.canvas.focus.indexOf(":") + 1)}` : ""}
+                    {item.canvas.step?.title ? ` · during “${item.canvas.step.title}”` : ""}
                   </div>
                 )}
                 <div className="slc-talk-text">{item.text || "(no transcript yet)"}</div>
@@ -226,8 +253,8 @@ export function CompanionDock({
                   <span>{when(item.at)}</span>
                   {(!item.unvoiced || (item.steps?.length ?? 0) > 0) &&
                     (playing === item.id ? (
-                      <button type="button" className="slc-stage-btn slc-talk-play slc-talk-play--on" onClick={onStop} aria-label="Stop">
-                        ■
+                      <button type="button" className="slc-stage-btn slc-talk-play slc-talk-play--on" onClick={onStop} aria-label="Stop" title="Stop">
+                        <StopIcon />
                       </button>
                     ) : (
                       <button
@@ -243,7 +270,9 @@ export function CompanionDock({
                               : `Hear ${who}`
                         }
                       >
-                        ▶{unheard.includes(item.id) ? " New" : ""}
+                        <PlayIcon />
+                        {(item.steps?.length ?? 0) > 0 ? <span>Walk {item.steps!.length} steps</span> : null}
+                        {unheard.includes(item.id) ? <span className="slc-talk-new">New</span> : null}
                       </button>
                     ))}
                   {onFeedback && (
@@ -256,14 +285,48 @@ export function CompanionDock({
                           onClick={() => onFeedback(item.id, item.feedback === v ? "" : v)}
                           aria-label={v === "up" ? "This reply worked" : "This reply missed"}
                         >
-                          {v === "up" ? "👍" : "👎"}
+                          {v === "up" ? <ThumbUpIcon size={15} /> : <ThumbDownIcon size={15} />}
                         </button>
                       ))}
                     </span>
                   )}
                 </div>
-                {(item.steps?.length ?? 0) > 0 && <div className="slc-talk-canvas">walks the diagram in {item.steps!.length} steps</div>}
-                <div className="slc-talk-text">{item.text}</div>
+                {(item.steps?.length ?? 0) > 0 ? (
+                  <ol className="slc-talk-steps" aria-label={`${who}'s walk through the diagram`}>
+                    {item.steps!.map((step, i) => {
+                      const here = playing === item.id && playingStep === i;
+                      return (
+                        <li key={i}>
+                          <button
+                            type="button"
+                            className={`slc-talk-step${here ? " slc-talk-step--here" : ""}`}
+                            onClick={() => onPlay(item.id, i)}
+                            disabled={live}
+                            aria-current={here ? "step" : undefined}
+                            title={`Walk from step ${i + 1}`}
+                          >
+                            <span className="slc-talk-step-n">{i + 1}</span>
+                            <span className="slc-talk-step-body">
+                              {(step.title || step.doc) && (
+                                <span className="slc-talk-step-head">
+                                  {step.title && <strong>{step.title}</strong>}
+                                  {(step.doc || litOf(step)) && (
+                                    <span className="slc-talk-step-where">
+                                      {[drawingOf(step.doc), litOf(step)].filter(Boolean).join(" · ")}
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                              <span className="slc-talk-step-say">{step.say}</span>
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                ) : (
+                  <div className="slc-talk-text">{item.text}</div>
+                )}
                 {item.unvoiced && <div className="slc-talk-meta">{item.unvoiced}</div>}
               </li>
             ),

@@ -57,6 +57,11 @@ export interface StageShown {
   title?: string;
   origin?: string;
   tourPath?: string;
+  /**
+   * What the hub held when this canvas joined, put on screen by the catch-up rather than
+   * sent now. A host may keep the drawing the person asked for and only show the caption.
+   */
+  caught?: boolean;
   /** Moves every time something is put on stage. */
   nonce: number;
 }
@@ -70,6 +75,8 @@ export interface StageSnapshot {
   index: number;
   playing: boolean;
   speaking: boolean;
+  /** The tour loaded carries its own voice (`present`): the page's voice choice does not apply to it. */
+  ownVoice: boolean;
 }
 
 type Timer = ReturnType<typeof setTimeout>;
@@ -173,11 +180,14 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
   let joined = false;
   let joining = false;
 
-  let snapshot: StageSnapshot = { status: client.status, stage, shown, tour, index, playing, speaking };
+  /** Set while the catch-up on join puts the hub's stage on screen. */
+  let catching = false;
+
+  let snapshot: StageSnapshot = { status: client.status, stage, shown, tour, index, playing, speaking, ownVoice: false };
   const subscribers = new Set<() => void>();
 
   function commit(): void {
-    snapshot = { status: client.status, stage, shown, tour, index, playing, speaking };
+    snapshot = { status: client.status, stage, shown, tour, index, playing, speaking, ownVoice: !!tour && override !== undefined };
     for (const cb of [...subscribers]) cb();
   }
 
@@ -223,7 +233,7 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
   function show(next: Omit<StageShown, "nonce"> | null, advance: boolean): void {
     nonce += 1;
     quiet();
-    shown = next ? { ...next, nonce } : null;
+    shown = next ? { ...next, nonce, ...(catching ? { caught: true } : {}) } : null;
     commit();
     opts.onShow?.(shown);
     const inTour = !!shown && shown.index !== null;
@@ -268,8 +278,13 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
 
   function apply(state: StageState): void {
     // What was on stage when this canvas arrived, shown paused.
-    if (state.tour) load(state.tour, false);
-    if (state.step) liveStep(state.step);
+    catching = true;
+    try {
+      if (state.tour) load(state.tour, false);
+      if (state.step) liveStep(state.step);
+    } finally {
+      catching = false;
+    }
   }
 
   function goto(i: number): void {
@@ -307,7 +322,8 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
       ended = false;
       index = 0;
     }
-    if (shown?.index !== index) show(tourStep(index), true);
+    // A step only caught up on join has not opened its drawing yet: show it for real.
+    if (shown?.index !== index || shown.caught) show(tourStep(index), true);
     else {
       commit();
       dwell(shown.step, true);

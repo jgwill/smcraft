@@ -44,7 +44,6 @@ import type { StageValue } from "./StageProvider";
 const BASE = "/api/companion/";
 const WHO = "Mia";
 const AUTOPLAY_KEY = "stateloom.companion.autoplay";
-const OPEN_KEY = "stateloom.companion.open";
 const EPISODE_NAME = /^\d{4}-\d{2}-\d{2}-episode-\d+-[a-z0-9-]+$/;
 
 /** The episode a chronicle drawing belongs to: `<root>/<episode>/diagrams/<file>`. */
@@ -80,7 +79,8 @@ const IDLE: RecorderSnapshot = { state: "idle", seconds: 0, held: 0, message: ""
 const EMPTY: ThreadSnapshot = { episode: null, items: [], presence: null, waiting: null, error: null };
 
 export default function CompanionLayer({ stage, defaultEpisode }: { stage: StageValue; defaultEpisode: string | null }) {
-  const [open, setOpenState] = useState(() => readLocal(OPEN_KEY) === "1");
+  // The dock opens closed on every visit: the board comes first, the conversation is one tap away.
+  const [open, setOpenState] = useState(false);
   const [autoplay, setAutoplayState] = useState(() => readLocal(AUTOPLAY_KEY) !== "0");
   const [episode, setEpisodeState] = useState<string | null>(() => {
     const asked = urlParam("episode");
@@ -123,17 +123,17 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
   };
 
   /** The latest `play`, for the calls that outlive a render (a queued reply, a callback). */
-  const playRef = useRef<(reply: CompanionReply) => Promise<void>>(async () => {});
+  const playRef = useRef<(reply: CompanionReply, from?: number) => Promise<void>>(async () => {});
   const play = useCallback(
-    async (reply: CompanionReply) => {
+    async (reply: CompanionReply, from = 0) => {
       setPlaying(reply.id);
       setUnheard((u) => u.filter((id) => id !== reply.id));
-      // A reply that walks the diagram needs the board: the dock folds to its button
-      // (the choice kept for the next visit is the person's, not this).
-      if (reply.steps?.length) setOpenState(false);
+      // A reply that walks the diagram needs the board. On a phone the dock folds to its
+      // button; on a wider screen it stays beside the board and follows the walk step by step.
+      if (reply.steps?.length && window.matchMedia("(max-width: 767px)").matches) setOpenState(false);
       const more = queue.current.length;
       setNotice(more ? `${more} more of ${WHO}'s replies wait after this one.` : null);
-      const done = await stageRef.current.present(replyTour(reply, BASE, WHO), { voice, origin: WHO });
+      const done = await stageRef.current.present(replyTour(reply, BASE, WHO), { voice, origin: WHO, from });
       // Another reply took the stage from this one: that play owns what follows.
       if (playingRef.current !== reply.id) return;
       setPlaying(null);
@@ -178,7 +178,23 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
     const r = createTakeRecorder({
       base: BASE,
       episode: () => episodeRef.current,
-      context: () => takeContext(stageRef.current.lastReport(), waitingMarks.current.length ? { marks: waitingMarks.current } : {}),
+      context: () => {
+        // A take spoken while a step is on the board carries that step: what was lit and said.
+        const on = stageRef.current.shown;
+        const step = on
+          ? {
+              ...(on.title || on.step.title ? { title: [on.title, on.step.title].filter(Boolean).join(" · ") } : {}),
+              say: on.step.say.slice(0, 400),
+              ...(on.index !== null && on.count !== null ? { index: on.index, count: on.count } : {}),
+              ...(on.origin ? { by: on.origin } : {}),
+            }
+          : null;
+        return takeContext(stageRef.current.lastReport(), {
+          ...(waitingMarks.current.length ? { marks: waitingMarks.current } : {}),
+          ...(on?.step.spotlight?.length ? { spotlight: on.step.spotlight } : {}),
+          ...(step ? { step } : {}),
+        });
+      },
       onChange: (s) => {
         const was = recRef.current.state;
         recRef.current = s;
@@ -288,7 +304,7 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
     void r.press();
   }, []);
 
-  const onPlay = useCallback((id: string) => {
+  const onPlay = useCallback((id: string, from?: number) => {
     const reply = threadRef.current?.getSnapshot().items.find((i): i is CompanionReply => i.kind === "reply" && i.id === id);
     if (!reply) return;
     if (busy(recRef.current.state)) {
@@ -297,7 +313,7 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
     }
     queue.current = [];
     heldForTake.current = false;
-    void playRef.current(reply);
+    void playRef.current(reply, from);
   }, []);
 
   const onStop = useCallback(() => {
@@ -308,7 +324,6 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
 
   const setOpen = (v: boolean) => {
     setOpenState(v);
-    writeLocal(OPEN_KEY, v ? "1" : "0");
     if (v) void refreshMarks(true);
   };
   const setAutoplay = (v: boolean) => {
@@ -341,6 +356,7 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
         items={thread.items}
         unheard={unheard}
         playing={playing}
+        playingStep={playing && stage.shown?.origin === WHO ? stage.shown.index : null}
         onPlay={onPlay}
         onStop={onStop}
         onFeedback={(id, value) => {

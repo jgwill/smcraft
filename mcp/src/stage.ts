@@ -163,6 +163,15 @@ function systemFor(host: StageHost, doc: string, named?: string): string | undef
     const def = readSystem(sys);
     if (def?.members.some((m) => resolveMemberPath(sys, m.path) === doc)) return sys;
   }
+  // A system kept beside the drawing that lists it: the strip of its siblings stays on screen.
+  try {
+    for (const name of readdirSync(dirname(doc)).filter((f) => isSysdfPath(f)).sort()) {
+      const sys = join(dirname(doc), name);
+      if (readSystem(sys)?.members.some((m) => resolveMemberPath(sys, m.path) === doc)) return sys;
+    }
+  } catch {
+    // No folder to read: the step opens the drawing alone.
+  }
   return undefined;
 }
 
@@ -316,7 +325,17 @@ export function registerStageTools(server: McpServer, host: StageHost): void {
       if (problems.length) return fail(`${path} does not check:\n` + problems.map((p) => `${p.ruleId}${p.step !== undefined ? ` step ${p.step + 1}` : ""}: ${p.message}`).join("\n"));
       if (!live.load) return fail(notLive);
       const start = Math.min(def.steps.length, from ?? 1) - 1;
-      const sent = await live.load({ stage: st, tour: resolveTourPaths(def, path), path, from: start, autoplay: autoplay !== false });
+      // Each drawing opens inside the system that lists it, so its siblings stay in reach.
+      const resolved = resolveTourPaths(def, path);
+      const placed = {
+        ...resolved,
+        steps: resolved.steps.map((s) => {
+          if (s.system || !s.doc) return s;
+          const system = systemFor(host, s.doc);
+          return system ? { ...s, system } : s;
+        }),
+      };
+      const sent = await live.load({ stage: st, tour: placed, path, from: start, autoplay: autoplay !== false });
       lastTour = path;
       return sent.ok
         ? ok(`Playing '${def.settings.name}' (${def.steps.length} steps) on stage '${st}' from step ${start + 1}${autoplay === false ? ", paused" : ""}: ${sent.text}.`)

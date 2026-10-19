@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { MARK_KINDS, markAnchorText, type Box, type Mark, type MarkKind } from "@miadi/stateloom-protocol";
 import { themeStyle, type CanvasTheme } from "./theme.js";
+import { CloseIcon, MicIcon } from "./icons.js";
 
 /** Something that turns speech into words (`browserDictation()`). */
 export interface ListenerLike {
@@ -169,7 +170,7 @@ export function MarkComposer({
             aria-pressed={listening}
             title={listening ? "Stop listening" : "Speak instead of typing"}
           >
-            🎙
+            <MicIcon />
           </button>
         )}
         <span className="slc-stage-spacer" />
@@ -239,7 +240,7 @@ export function MarkThread({
         </span>
         <span className="slc-stage-spacer" />
         <button type="button" className="slc-stage-btn slc-stage-btn--quiet" onClick={onClose} aria-label="Close">
-          ✕
+          <CloseIcon />
         </button>
       </div>
       <div className="slc-stage-card-anchor">
@@ -267,7 +268,7 @@ export function MarkThread({
           />
           {listener && (
             <button type="button" className={`slc-stage-btn${listening ? " slc-stage-btn--live" : ""}`} onClick={() => toggle(reply)} aria-pressed={listening} title="Speak the reply">
-              🎙
+              <MicIcon />
             </button>
           )}
           <button type="submit" className="slc-stage-btn slc-stage-btn--main" disabled={!reply.trim() || busy}>
@@ -316,6 +317,7 @@ export function MarksPanel({ marks, selected, onSelect, onCopy, copied, onClose,
   const [all, setAll] = useState(false);
   const numbered = marks.map((m, i) => ({ m, n: i + 1 }));
   const shown = all ? numbered : numbered.filter(({ m }) => m.status !== "resolved");
+  const open = marks.filter((m) => m.status !== "resolved").length;
   return (
     <div
       className={`slc-stage-card slc-stage-panel${className ? ` ${className}` : ""}`}
@@ -325,12 +327,17 @@ export function MarksPanel({ marks, selected, onSelect, onCopy, copied, onClose,
       <div className="slc-stage-card-row">
         <span className="slc-stage-card-label">Marks on this drawing</span>
         <span className="slc-stage-spacer" />
-        <button type="button" className={`slc-stage-btn slc-stage-btn--quiet${all ? " slc-stage-btn--on" : ""}`} onClick={() => setAll((a) => !a)}>
-          {all ? "all" : "waiting"}
-        </button>
+        <span className="slc-stage-segment" role="group" aria-label="Which marks to list">
+          <button type="button" className={`slc-stage-segment-btn${all ? "" : " slc-stage-segment-btn--on"}`} aria-pressed={!all} onClick={() => setAll(false)}>
+            Open {open}
+          </button>
+          <button type="button" className={`slc-stage-segment-btn${all ? " slc-stage-segment-btn--on" : ""}`} aria-pressed={all} onClick={() => setAll(true)}>
+            All {marks.length}
+          </button>
+        </span>
         {onClose && (
           <button type="button" className="slc-stage-btn slc-stage-btn--quiet" onClick={onClose} aria-label="Close">
-            ✕
+            <CloseIcon />
           </button>
         )}
       </div>

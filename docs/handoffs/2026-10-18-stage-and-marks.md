@@ -91,9 +91,10 @@ microphone, at 1280×800 and 390×844, on the dev server and again on `next buil
 - **The kit pin.** `scripts/sync-kit-plugin.mjs` writes `mcp/package.json`'s version into the
   kit's `.mcp.json`; run before the publish, it pins an MCP that is not on npm (it did, on this
   branch, and the pin was put back to 0.3.5). Run it after publishing, or restore the pin.
-- **Talking**: a reply's steps are not checked against the drawings before they are posted (a
-  name that does not exist lights nothing); the phone page plays a stepped reply as one voice and
-  does not scroll its steps; a take recorded while a tour step is shown does not carry the step.
+- **Talking**: the phone page plays a stepped reply as one voice and does not scroll its steps.
+  (Landed the same evening: steps checked against their drawings by `mia-listen reply --steps`; a
+  take carries the step on screen; the dock lists a reply's steps and walks from any of them; drawn
+  icons in place of typed symbols; an asked drawing kept when the stage only catches up.)
 - A mark that names a renamed element keeps the old name; marks on the system map; a stage per
   person on a shared hub; tour captions voiced through `miadi-voice` without the agent doing it
   step by step (the step's `audio` field is the seam).

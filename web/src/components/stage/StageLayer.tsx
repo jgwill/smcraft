@@ -16,7 +16,7 @@
  * The sidecar is written through /api/marks; the hub is told after.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { MarkComposer, MarkThread, MarksPanel, StageOverlay, type MarkDraft } from "@miadi/stateloom-canvas";
+import { MarkComposer, MarkIcon, MarksIcon, MarkThread, MarksPanel, StageOverlay, type MarkDraft } from "@miadi/stateloom-canvas";
 import {
   boxesOf,
   fitToBoxes,
@@ -233,7 +233,8 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
           }}
           title={marking ? "Marking: tap an element, or drag around several. Tap ✎ again to stop." : "Mark something for the agent — tap an element or drag around several"}
         >
-          ✎{marking && <span className="text-xs">marking</span>}
+          <MarkIcon />
+          {marking && <span className="text-xs">marking</span>}
         </button>
         <button
           type="button"
@@ -246,10 +247,16 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
           }}
           title="Marks on this drawing"
         >
-          💬
+          <MarksIcon />
           {waiting + questions > 0 && <span className="text-xs text-amber-300">{waiting + questions}</span>}
         </button>
       </div>
+
+      {marking && !draft && (
+        <div className="stage-board-hint" role="status">
+          Tap an element, or drag around several, to say something about it.
+        </div>
+      )}
 
       {(draft || selectedMark || panel) && (
         <div className="stage-board-card">

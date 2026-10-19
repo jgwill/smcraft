@@ -97,6 +97,24 @@ test("a late canvas is shown what is on stage, paused", async () => {
   assert.equal(snap.shown?.step.system, "/d/s.sysdf.json", "and the system with it");
   assert.equal(snap.shown?.title, "Walk");
   assert.equal(shown.length, 1);
+  assert.equal(snap.shown?.caught, true, "a catch-up says so, so a page opened on a drawing can keep it");
+});
+
+test("play on a caught-up step shows it for real; a step sent now is never marked caught", async () => {
+  const { client, fire } = fakeClient({ stage: "default", tour: { stage: "default", tour, from: 0, origin: "mia" } });
+  const shown: (StageShown | null)[] = [];
+  const t = clock();
+  const s = createStageSession({ url: "x", client, onShow: (v) => shown.push(v), setTimer: t.setTimer, clearTimer: t.clearTimer });
+  s.connect();
+  await tick();
+  assert.equal(shown.at(-1)?.caught, true);
+  s.play();
+  assert.equal(shown.length, 2, "the same step is shown again, this time to open its drawing");
+  assert.equal(shown.at(-1)?.caught, undefined);
+  assert.equal(shown.at(-1)?.index, 0);
+  fire("stage-step", { stage: "default", step: { say: "now" }, origin: "mia", at: "" });
+  assert.equal(shown.at(-1)?.caught, undefined);
+  assert.equal(s.getSnapshot().ownVoice, false);
 });
 
 test("a tour plays by reading time, stops at its end, and play starts it over", async () => {

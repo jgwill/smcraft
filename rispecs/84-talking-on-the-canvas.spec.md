@@ -116,10 +116,22 @@ The episode is, in order: `?episode=`, the episode of the drawing when it lives 
 (`<root>/<episode>/diagrams/<file>`), `STATELOOM_COMPANION_EPISODE`, the service's default. The
 dock's list changes it.
 
-The dock sits bottom-left above the machine's zoom bar, and on a phone above the stage's caption
-while one shows. Closed, it is one button that shows the clock while recording, 🔊 while Mia walks
-the diagram, and how many replies are new. A reply with steps folds it while it plays: the board is
-the show.
+The dock opens closed on every visit: the board comes first. It sits bottom-left above the
+machine's zoom bar; open beside a caption on a wide screen it stands above it, and on a phone it is
+a sheet across the bottom, over the caption, one thing at a time. Closed, it is one button that
+shows the clock while recording, a speaker while Mia walks the diagram, and how many replies are
+new. Its icons are drawn outlines in the button's colour, never typed symbols, which iOS renders as
+colour emoji.
+
+A reply with steps reads as its steps: a numbered row each, with its title, the drawing and what
+it lights, and its words. A tap on a row walks the reply from there. While a reply walks the board
+the row on screen is marked; on a phone the dock folds so the board is the show, and on a wider
+screen it stays open and follows the walk. The caption names Mia once and the reply by its time,
+and shows no voice switch for her reply: her recordings are the reply's own voice.
+
+A take spoken while a step is on the board — one of Mia's, or an agent's — carries it: the step's
+title, its words, its place and who showed it, with what it lit. The thread shows "during “…”"
+under the take, and the wake says it to the seat.
 
 ## Agents
 
@@ -162,7 +174,10 @@ way to speak back except typing a mark.
 **Desired outcome**: the person speaks about what is on the canvas, and Mia's answer is heard while
 the canvas walks through it — with the phone page's backup, queue and courtesy intact.
 
+**Landed after the first measurement (2026-10-18, evening)**: a take carries the step on screen;
+`mia-listen reply --steps` refuses steps whose drawing is missing or does not hold a name they light
+(state, event, entity, attribute, participant, message), and lists what the drawing does hold; the
+dock lists a reply's steps and walks from any of them.
+
 **Next (not built here)**: the phone page playing a reply's steps as a list it scrolls through as
-they are heard; a take recorded while a tour step is shown carrying that step; replies voiced by
-`miadi-voice` per step for an agent's own tours (Spec 83's next); the reply's steps checked against
-the drawings before they are posted (names that do not exist light nothing).
+they are heard; replies voiced by `miadi-voice` per step for an agent's own tours (Spec 83's next).

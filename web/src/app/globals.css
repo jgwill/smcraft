@@ -322,4 +322,43 @@ body {
 
 @media (min-width: 768px) {
   .stage-talk-host { bottom: 3.5rem; }
+  /* Open beside a caption, the conversation stands above it rather than over its edge. */
+  .stage-talk-host:has(.slc-talk--open) { bottom: calc(3.5rem + var(--stage-caption-h, 0px)); }
+  .stage-talk-host .slc-talk-panel { max-height: calc(100dvh - 3.5rem - var(--stage-caption-h, 0px) - 4.5rem); }
+}
+
+/* On a phone the open conversation is a sheet across the bottom, over the caption: one
+   thing at a time on a small screen. A reply that walks the board folds it again. */
+@media (max-width: 767px) {
+  .stage-talk-host:has(.slc-talk--open) {
+    left: calc(0.25rem + env(safe-area-inset-left));
+    right: calc(0.25rem + env(safe-area-inset-right));
+    bottom: calc(var(--sm-dock-h) + env(safe-area-inset-bottom) + 0.25rem);
+    z-index: 47;
+  }
+  .stage-talk-host .slc-talk-panel { width: auto; max-height: min(72dvh, 40rem); }
+}
+
+/* While marking is on: what a tap and a drag do, said on the board itself. */
+.stage-board-hint {
+  position: absolute;
+  left: 50%;
+  top: 0.75rem;
+  z-index: 20;
+  transform: translateX(-50%);
+  max-width: calc(100% - 7.5rem);
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgb(251 191 36 / 0.45);
+  background: rgb(17 24 39 / 0.92);
+  color: #fcd34d;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  /* Under the board's controls, across the width, so it never covers them. */
+  .stage-board-hint { left: 0.5rem; right: 0.5rem; max-width: none; transform: none; top: 3.4rem; }
 }

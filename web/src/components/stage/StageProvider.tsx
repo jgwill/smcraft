@@ -50,6 +50,8 @@ export interface StageValue {
   lastReport: () => StageContext | null;
   sendMarks: (env: Omit<MarksEnvelope, "origin" | "stage">) => void;
   onMarks: (cb: (e: MarksEnvelope) => void) => () => void;
+  /** What is on stage now: a live step, or a tour's step with its place. */
+  shown: StageShown | null;
   /** Play a tour from this page in its own voice — a companion's reply (Spec 84). */
   present: UseStage["present"];
   pause: () => void;
@@ -126,6 +128,12 @@ export default function StageProvider({ children }: { children: ReactNode }) {
     }
     const { step } = shown;
     const open = requestedDoc();
+    // A page opened on a drawing keeps it when it only catches up with what the stage held:
+    // the caption says what waits, and ▶ opens it. A step sent now always opens its drawing.
+    if (shown.caught && urlParam("doc")) {
+      setLit({ doc: step.doc, focus: step.focus, spotlight: step.spotlight, region: step.region, nonce: shown.nonce });
+      return;
+    }
     if (step.doc && step.doc !== open) {
       openInSystem({ doc: step.doc, system: step.system ?? undefined, focus: step.focus ?? null });
     } else if (step.focus) {
@@ -210,11 +218,12 @@ export default function StageProvider({ children }: { children: ReactNode }) {
           marksListeners.current.delete(cb);
         };
       },
+      shown: stage.shown,
       present: stage.present,
       pause: stage.pause,
       stop: stage.stop,
     }),
-    [config.stage, stage.status, stage.sendMarks, stage.present, stage.pause, stage.stop, lit, author, listener, answerNonce, report],
+    [config.stage, stage.status, stage.shown, stage.sendMarks, stage.present, stage.pause, stage.stop, lit, author, listener, answerNonce, report],
   );
 
   return (
@@ -226,7 +235,7 @@ export default function StageProvider({ children }: { children: ReactNode }) {
             shown={stage.shown}
             playing={stage.playing}
             speaking={stage.speaking}
-            voice={voiceOn}
+            voice={stage.ownVoice ? undefined : voiceOn}
             onToggleVoice={() => {
               const next = !voiceOn;
               setVoiceOn(next);

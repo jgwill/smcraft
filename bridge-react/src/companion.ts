@@ -39,7 +39,7 @@ export interface CompanionTake {
   at: string;
   text: string;
   /** The canvas the take was spoken at, when it was spoken at one. */
-  canvas?: { doc: string | null; kind: string | null; focus: string | null };
+  canvas?: { doc: string | null; kind: string | null; focus: string | null; step?: { title?: string; index?: number; count?: number } | null };
 }
 
 export interface CompanionReplyStep extends TourStep {
@@ -79,7 +79,8 @@ export function companionUrl(base: string, path: string | null | undefined): str
  */
 export function replyTour(reply: CompanionReply, base: string, who = "Mia"): TourDefinition {
   const when = new Date(reply.at);
-  const name = `${who}${Number.isNaN(when.getTime()) ? "" : ` · ${when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}`;
+  // The caption already names who presents (the tour's origin); its title says which reply.
+  const name = Number.isNaN(when.getTime()) ? `${who}'s reply` : `Reply at ${when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
   // The service renders a voice when its address is asked for, so a reply it can voice is
   // heard even before its files exist. One it cannot voice is read for its reading time.
   const voiced = !reply.unvoiced;
@@ -94,7 +95,10 @@ export function replyTour(reply: CompanionReply, base: string, who = "Mia"): Tou
 }
 
 /** What a take carries of the canvas it was spoken at (the service keeps it as canvas.json). */
-export function takeContext(ctx: Partial<StageContext> | null, extra: { marks?: string[]; spotlight?: string[]; url?: string } = {}): Record<string, unknown> | null {
+export function takeContext(
+  ctx: Partial<StageContext> | null,
+  extra: { marks?: string[]; spotlight?: string[]; url?: string; step?: { title?: string; say?: string; index?: number; count?: number; by?: string } } = {},
+): Record<string, unknown> | null {
   if (!ctx?.doc) return null;
   const out: Record<string, unknown> = {
     stage: ctx.stage, doc: ctx.doc, kind: ctx.kind, system: ctx.system, focus: ctx.focus ?? undefined,

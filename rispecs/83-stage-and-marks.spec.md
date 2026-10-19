@@ -150,7 +150,11 @@ and `elementsInRegion` (a third of an element inside the area) turn a tap and a 
 ## The canvas
 
 `StageProvider` wraps whichever workspace is open and joins the stage (`?stage=`, else
-`STATELOOM_STAGE` from `/api/config`, else `default`). A shown step opens its drawing inside its
+`STATELOOM_STAGE` from `/api/config`, else `default`). What the hub held when the page joined is
+shown paused; a page opened on a drawing (`?doc=`) keeps that drawing and shows only the caption,
+and ▶ opens the step's drawing (`StageShown.caught`). A step or tour sent after the page joined
+always opens its drawing. `show_step` and `play_tour` open a drawing inside the system that lists
+it, found beside the drawing when the active document is not that system. A shown step opens its drawing inside its
 system and focuses its element through `openInSystem` (Spec 82); what it lights is handed to the
 `StageLayer` the open workspace mounts beside its canvas, which alone knows where its elements are:
 
@@ -159,11 +163,11 @@ system and focuses its element through `openInSystem` (Spec 82); what it lights 
   drills to the level of the first lit state; a sequence in its list view switches to the diagram.
 - **The caption**: who presents, the tour and step titles, the words, the step dots; ◀ ▶ ⏯, the
   voice toggle (off by default, remembered), **Answer**, ✕. Above the phone dock on a phone.
-- **Marks**: ✎ turns marking on — a tap marks the element under it, a drag the elements inside the
-  area and the area — and the composer asks what the agent should know, typed or spoken (🎙, where
+- **Marks**: the pencil turns marking on, and a line on the board says what a tap and a drag do —
+  a tap marks the element under it, a drag the elements inside the area and the area — and the composer asks what the agent should know, typed or spoken (🎙, where
   the browser can listen). Pins are numbered and coloured: amber waits on the agent, blue answered,
   violet an agent's question, grey resolved. A pin opens its thread: reply, resolve, reopen,
-  remove. 💬 lists the marks, waiting first, and **Copy for the agent** puts the review on the
+  remove. The speech bubble lists the marks (Open | All), waiting first, and **Copy for the agent** puts the review on the
   clipboard to paste into any agent's prompt.
 - **Context**: the drawing, the element in hand, the visible area and the tour's place go to the
   stage a moment after they settle.

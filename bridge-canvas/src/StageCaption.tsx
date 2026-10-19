@@ -10,6 +10,7 @@
 import type { CSSProperties } from "react";
 import type { TourStep } from "@miadi/stateloom-protocol";
 import { themeStyle, type CanvasTheme } from "./theme.js";
+import { CloseIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon, SpeakerIcon, SpeakerOffIcon } from "./icons.js";
 
 export interface StageCaptionProps {
   shown: {
@@ -81,7 +82,7 @@ export function StageCaption({
         {speaking && <span className="slc-stage-caption-speaking" aria-label="speaking" />}
         {onClose && (
           <button type="button" className="slc-stage-btn slc-stage-btn--quiet" onClick={onClose} aria-label="Close" title="Close">
-            ✕
+            <CloseIcon />
           </button>
         )}
       </header>
@@ -107,19 +108,19 @@ export function StageCaption({
         {inTour && (
           <>
             <button type="button" className="slc-stage-btn" onClick={onPrev} disabled={index === 0} aria-label="Previous step" title="Previous step">
-              ◀
+              <PrevIcon />
             </button>
             {playing ? (
               <button type="button" className="slc-stage-btn slc-stage-btn--main" onClick={onPause} aria-label="Pause" title="Pause">
-                ❚❚
+                <PauseIcon />
               </button>
             ) : (
               <button type="button" className="slc-stage-btn slc-stage-btn--main" onClick={onPlay} aria-label="Play" title="Play">
-                ▶
+                <PlayIcon />
               </button>
             )}
             <button type="button" className="slc-stage-btn" onClick={onNext} disabled={index === count! - 1} aria-label="Next step" title="Next step">
-              ▶▏
+              <NextIcon />
             </button>
           </>
         )}
@@ -132,7 +133,7 @@ export function StageCaption({
             aria-pressed={voice}
             title={voice ? "Voice on — the steps are read aloud" : "Voice off — the steps are read on screen"}
           >
-            {voice ? "🔊" : "🔈"}
+            {voice ? <SpeakerIcon /> : <SpeakerOffIcon />}
           </button>
         )}
         {onAnswer && (
