@@ -19,10 +19,17 @@
  * - once the person presses ▶ or ■, the waiting sequence is over: each reply plays when
  *   they choose it.
  *
+ * The conversation holds the person's marks on the episode's drawings too (the service
+ * reads their sidecars): each mark with its thread, and tapping one opens its drawing at
+ * that mark's thread. On a phone the closed dock is the bar at the top of the sheet at the
+ * bottom of the board, and the open conversation takes the caption's place in that sheet;
+ * it and a mark's card take turns.
+ *
  * Everything reaches the service through `/api/companion/` (this designer's proxy to
  * `STATELOOM_COMPANION_URL`); a reply is never posted from here.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   browserVoice,
   createCompanionThread,
@@ -35,10 +42,11 @@ import {
   type TakeRecorder,
   type ThreadSnapshot,
 } from "@miadi/stateloom-react";
-import { CompanionDock } from "@miadi/stateloom-canvas";
+import { CompanionDock, type DockMark } from "@miadi/stateloom-canvas";
 import { marksWaitingOn, readMarksFile } from "@miadi/stateloom-protocol";
 import { requestedDoc } from "@/lib/docParam";
-import { urlParam } from "@/lib/systemParam";
+import { openInSystem, urlParam } from "@/lib/systemParam";
+import { requestMark } from "@/lib/markRequest";
 import type { StageValue } from "./StageProvider";
 
 const BASE = "/api/companion/";
@@ -316,7 +324,7 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
     const reply = threadRef.current?.getSnapshot().items.find((i): i is CompanionReply => i.kind === "reply" && i.id === id);
     if (!reply) return;
     if (busy(recRef.current.state)) {
-      setNotice(`Send your take first. Then press ▶ to hear ${WHO}.`);
+      setNotice(`Send your take first. Then press play to hear ${WHO}.`);
       return;
     }
     queue.current = [];
@@ -350,11 +358,33 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
 
   const waiting = thread.waiting ? { take: thread.waiting.take, seconds: Math.max(0, Math.floor((now - thread.waiting.since) / 1000)) } : null;
 
-  return (
-    <div className="stage-talk-host">
+  // ── The phone's sheet: the open conversation holds it in the caption's place ──
+  const { narrow, sheet: sheetOwner, claimSheet, releaseSheet } = stage;
+  useEffect(() => {
+    if (open) claimSheet("talk");
+    else releaseSheet("talk");
+  }, [open, claimSheet, releaseSheet]);
+  useEffect(() => () => releaseSheet("talk"), [releaseSheet]);
+  // A mark's card took the sheet: the conversation folds to its bar.
+  const [seenOwner, setSeenOwner] = useState(sheetOwner);
+  if (seenOwner !== sheetOwner) {
+    setSeenOwner(sheetOwner);
+    if (narrow && sheetOwner === "card") setOpenState(false);
+  }
+
+  // A mark in the conversation: its drawing, at its thread.
+  const onOpenMark = useCallback((mark: DockMark) => {
+    if (window.matchMedia("(max-width: 767px)").matches) setOpenState(false);
+    requestMark(mark.doc, mark.id);
+    if (stageRef.current.board !== mark.doc) openInSystem({ doc: mark.doc, focus: null });
+  }, []);
+
+  const dock = (
       <CompanionDock
         open={open}
         onOpenChange={setOpen}
+        variant={narrow ? "bar" : "fab"}
+        onOpenMark={onOpenMark}
         who={WHO}
         episode={episode}
         episodes={episodes}
@@ -377,6 +407,11 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
         notice={notice}
         error={problem ?? thread.error}
       />
-    </div>
   );
+  if (narrow) {
+    // The bar is the sheet's handle; the open conversation is its body.
+    const slot = open ? stage.sheetBody : stage.sheetHandle;
+    return slot ? createPortal(dock, slot) : null;
+  }
+  return <div className="stage-talk-host">{dock}</div>;
 }

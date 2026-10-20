@@ -118,11 +118,27 @@ The episode is, in order: `?episode=`, the episode of the drawing when it lives 
 is remembered in the browser.
 
 The dock opens closed on every visit: the board comes first. It sits bottom-left above the
-machine's zoom bar; open beside a caption on a wide screen it stands above it, and on a phone it is
-a sheet across the bottom, over the caption, one thing at a time. Closed, it is one button that
-shows the clock while recording, a speaker while Mia walks the diagram, and how many replies are
-new. Its icons are drawn outlines in the button's colour, never typed symbols, which iOS renders as
-colour emoji.
+machine's zoom bar; open beside a caption on a wide screen it stands above it. Closed, it is one
+button that shows the clock while recording, a speaker while Mia walks the diagram, and how many
+replies are new. Below 600 px it is the handle of the phone's sheet (Spec 83): a bar across the
+width, "Talk with Mia" and who is in the room in words, the new count, the clock while recording;
+open, the conversation takes the caption's place in that sheet, and a mark's card and the
+conversation take turns. Who is in the room is a word in the dock's header — listening, answering
+take 12, answered, away — never a coloured dot alone; amber is kept for what waits on Mia. Its icons
+are drawn outlines in the button's colour, never typed symbols, which iOS renders as colour emoji;
+the loom's toolbar, the phone's tab bar, the context menu and the delete buttons are drawn the same
+way (`ChromeIcon`).
+
+The conversation holds the person's marks on the episode's drawings (lane U, U1): the thread is
+read with `include=marks`, and the service answers each mark with its drawing, its title, its
+elements, its words, who wrote it, its standing and its thread (a service that predates marks
+answers without them; a kind the client does not know is left out, `readThreadItems`). A mark reads
+"You marked Witnessing on Screenwalk", its words, Mia's replies in its thread, and whether it waits
+for Mia, waits for you, was answered or resolved — no play button and no thumb. Tapping it opens
+that drawing (inside the system open) at that mark's thread, and the view frames the mark. A reply
+that answers a mark says "answers your mark on NameSessions on Screenwalk" and opens it. When
+nothing was said by voice, the conversation names what exists ("7 marks on Screenwalk, 6 answered,
+1 resolved. Nothing said by voice yet.") instead of saying nothing was said.
 
 A reply with steps reads as its steps: a numbered row each, with its title, the drawing and what
 it lights, and its words. A tap on a row walks the reply from there. While a reply walks the board

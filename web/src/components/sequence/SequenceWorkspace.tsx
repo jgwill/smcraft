@@ -218,6 +218,15 @@ export default function SequenceWorkspace() {
   const view = useMemo(() => (def ? drawableSequence(def) : null), [def]);
   const layout = useMemo(() => (view ? sequenceLayout(view) : null), [view]);
   const stageBoxes = useMemo(() => (view && layout ? safely(() => sequenceElementBoxes(view, layout), []) : []), [view, layout]);
+  // A message is named on the marks by its number and its words, as the board shows it.
+  const stageLabels = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const { ref, message } of view ? safely(() => allMessages(view), []) : []) {
+      const words = message?.label ? `${ref}. ${message.label}` : `message ${ref}`;
+      out[`message:${ref}`] = words.length > 48 ? `${words.slice(0, 47)}…` : words;
+    }
+    return out;
+  }, [view]);
   const stageFocus = useUrlParam("focus");
   // A malformed document is reported as one issue, not a crash.
   const problems = useMemo<SqdValidationError[]>(() => {
@@ -586,7 +595,7 @@ export default function SequenceWorkspace() {
           {/* The stage (Spec 83). In the list view nothing is drawn to light, so a
               step that lights something here brings the diagram back. */}
           {def && layout && mode === "diagram" && (
-            <StageLayer docPath={docPath || null} kind="sequence" viewport={viewport} setViewport={setViewport} boxes={stageBoxes} boardRef={boardRef} focus={stageFocus} />
+            <StageLayer docPath={docPath || null} kind="sequence" viewport={viewport} setViewport={setViewport} boxes={stageBoxes} boardRef={boardRef} focus={stageFocus} labels={stageLabels} />
           )}
           {def && layout && mode === "list" && <StageReveal docPath={docPath} onReveal={() => setMode("diagram")} />}
 

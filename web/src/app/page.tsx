@@ -16,6 +16,7 @@ import SequenceWorkspace from "@/components/sequence/SequenceWorkspace";
 import SystemWorkspace from "@/components/system/SystemWorkspace";
 import SystemStrip from "@/components/system/SystemStrip";
 import BoardBoundary from "@/components/BoardBoundary";
+import ChromeIcon from "@/components/ChromeIcon";
 import IssueIcon from "@/components/IssueIcon";
 import StageProvider from "@/components/stage/StageProvider";
 import MachineStageLayer from "@/components/stage/MachineStageLayer";
@@ -137,9 +138,10 @@ function MachineDesigner() {
   const setDrawSource = useDesignerStore((s) => s.setDrawSource);
 
   const tabs: { id: Tab; label: string; icon: ReactNode; badge?: number }[] = [
-    { id: "properties", label: "Properties", icon: "🎛" },
-    { id: "events", label: "Events", icon: "⚡" },
-    { id: "settings", label: "Settings", icon: "⚙" },
+    // Drawn, not typed: 🎛 ⚡ ⚙ are colour emoji on iOS. See ChromeIcon.
+    { id: "properties", label: "Properties", icon: <ChromeIcon name="sliders" size={16} /> },
+    { id: "events", label: "Events", icon: <ChromeIcon name="bolt" size={16} /> },
+    { id: "settings", label: "Settings", icon: <ChromeIcon name="gear" size={16} /> },
     // Drawn, not typed: "⚠" is a bright yellow colour emoji on iOS. See IssueIcon.
     { id: "validation", label: "Errors", icon: <IssueIcon />, badge: errors.length || undefined },
   ];
@@ -305,7 +307,7 @@ function MachineDesigner() {
                   hideContextMenu();
                 }}
               >
-                ↗ Draw transition from here
+                <ChromeIcon name="draw" /> Draw transition from here
               </button>
               <button
                 className="block w-full text-left text-sm text-red-400 hover:bg-gray-800 px-4 py-3 md:text-xs md:px-3 md:py-1.5"
@@ -314,7 +316,7 @@ function MachineDesigner() {
                   hideContextMenu();
                 }}
               >
-                🗑 Delete state
+                <ChromeIcon name="trash" /> Delete state
               </button>
             </>
           ) : (
@@ -327,7 +329,7 @@ function MachineDesigner() {
                   hideContextMenu();
                 }}
               >
-                ＋ Add state here
+                <ChromeIcon name="plus" /> Add state here
               </button>
             </>
           )}

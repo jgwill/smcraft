@@ -9,7 +9,9 @@ import {
   type ExportFormat,
 } from "@/lib/exportImage";
 import type { StateDef } from "@/types/definition";
+import ChromeIcon from "./ChromeIcon";
 import DocSwitcher from "./DocSwitcher";
+import IssueIcon from "./IssueIcon";
 import PresenceChips from "./PresenceChips";
 import { docQuery, useRequestedDoc } from "@/lib/docParam";
 
@@ -40,7 +42,7 @@ export default function Toolbar() {
   const applyRemote = useDesignerStore((s) => s.applyRemote);
 
   // Save and reload must follow the SAME document the page is viewing —
-  // without this, 💾 on a switched document would silently write the default
+  // without this, Disk on a switched document would silently write the default
   // file (the exact mismatch the allowlist exists to prevent).
   const requested = useRequestedDoc();
 
@@ -219,7 +221,9 @@ export default function Toolbar() {
           <span className="text-[10px] text-amber-400" title={remoteMessage ?? ""}>↻ remote changed</span>
         )}
         {remoteStatus === "error" && (
-          <span className="text-[10px] text-red-400" title={remoteMessage ?? ""}>⚠ disk error</span>
+          <span className="inline-flex items-center gap-0.5 text-[10px] text-red-400" title={remoteMessage ?? ""}>
+            <IssueIcon size={11} /> disk error
+          </span>
         )}
         {remoteStatus === "idle" && (
           <span className="text-[10px] text-gray-600" title={remoteMessage ?? "No file bound"}>○ no disk</span>
@@ -239,16 +243,18 @@ export default function Toolbar() {
         disabled={undoStack.length === 0}
         className="toolbar-btn disabled:opacity-30"
         title="Undo (Ctrl+Z)"
+        aria-label="Undo"
       >
-        ↩
+        <ChromeIcon name="undo" />
       </button>
       <button
         onClick={redo}
         disabled={redoStack.length === 0}
         className="toolbar-btn disabled:opacity-30"
         title="Redo (Ctrl+Y)"
+        aria-label="Redo"
       >
-        ↪
+        <ChromeIcon name="redo" />
       </button>
 
       <div className="w-px h-4 bg-gray-700" />
@@ -259,7 +265,7 @@ export default function Toolbar() {
         className="toolbar-btn"
         title="Arrange states into layers (auto-layout)"
       >
-        ⤢ Arrange
+        <ChromeIcon name="arrange" /> Arrange
       </button>
 
       <div className="w-px h-4 bg-gray-700" />
@@ -270,14 +276,14 @@ export default function Toolbar() {
         className={`toolbar-btn ${drawMode === "transition" ? "!bg-amber-700 !text-white" : ""}`}
         title={drawMode === "transition" ? "Exit draw mode (Esc)" : "Draw transition mode"}
       >
-        {drawMode === "transition" ? "✏️ Drawing" : "↗ Draw"}
+        <ChromeIcon name="draw" /> {drawMode === "transition" ? "Drawing" : "Draw"}
       </button>
 
       <div className="w-px h-4 bg-gray-700" />
 
       {/* File ops */}
-      <button onClick={handleOpen} className="toolbar-btn" title="Open local .smdf.json (browser)">
-        📂
+      <button onClick={handleOpen} className="toolbar-btn" title="Open local .smdf.json (browser)" aria-label="Open a local file">
+        <ChromeIcon name="open" />
       </button>
       <button
         onClick={handleSaveDisk}
@@ -285,17 +291,18 @@ export default function Toolbar() {
         className="toolbar-btn disabled:opacity-40"
         title="Save to disk (STATELOOM_PROJECT_FILE)"
       >
-        💾 Disk
+        <ChromeIcon name="save" /> Disk
       </button>
       <button
         onClick={handleReloadFromDisk}
         className="toolbar-btn"
         title="Reload from disk"
+        aria-label="Reload from disk"
       >
-        🔄
+        <ChromeIcon name="reload" />
       </button>
-      <button onClick={handleDownload} className="toolbar-btn" title="Download as file">
-        📥
+      <button onClick={handleDownload} className="toolbar-btn" title="Download as file" aria-label="Download as file">
+        <ChromeIcon name="download" />
       </button>
 
       {/* Export the board — pictures from the canvas as it stands, mermaid and
@@ -322,7 +329,13 @@ export default function Toolbar() {
         className={`toolbar-btn disabled:opacity-40 ${exportError ? "!text-red-400" : ""}`}
         title={exportError ?? `Export the board as ${FORMAT_LABEL[imageFormat]}`}
       >
-        {exporting ? "…" : "🖼 Export"}
+        {exporting ? (
+          "…"
+        ) : (
+          <>
+            <ChromeIcon name="image" /> Export
+          </>
+        )}
       </button>
       {exported && !exportError && (
         <span className="text-[10px] text-emerald-500 truncate max-w-[40vw] md:max-w-[16rem]" title={exported}>
@@ -346,12 +359,16 @@ export default function Toolbar() {
               if (e.key === "Escape") setAddingState(false);
             }}
           />
-          <button onClick={handleAddState} className="toolbar-btn-sm">✓</button>
-          <button onClick={() => setAddingState(false)} className="toolbar-btn-sm">✕</button>
+          <button onClick={handleAddState} className="toolbar-btn-sm" aria-label="Add the state">
+            <ChromeIcon name="check" />
+          </button>
+          <button onClick={() => setAddingState(false)} className="toolbar-btn-sm" aria-label="Cancel">
+            ✕
+          </button>
         </div>
       ) : (
         <button onClick={() => setAddingState(true)} className="toolbar-btn">
-          ＋State
+          <ChromeIcon name="plus" /> State
         </button>
       )}
 
@@ -359,7 +376,7 @@ export default function Toolbar() {
 
       {/* Validate & Generate */}
       <button onClick={() => validate()} className="toolbar-btn">
-        ✓ Validate
+        <ChromeIcon name="check" /> Validate
       </button>
       <select
         value={generateLang}
@@ -370,16 +387,16 @@ export default function Toolbar() {
         <option value="typescript">TypeScript</option>
       </select>
       <button onClick={handleGenerate} className="toolbar-btn">
-        ⚡ Generate
+        <ChromeIcon name="bolt" /> Generate
       </button>
       <button onClick={handleGenerateRispec} className="toolbar-btn" title="Generate RISE rispec markdown">
-        📜 RISE
+        <ChromeIcon name="scroll" /> RISE
       </button>
       <button
         onClick={() => setShowCodePreview(!showCodePreview)}
         className={`toolbar-btn ${showCodePreview ? "text-blue-400" : ""}`}
       >
-        {"</>"} Code
+        <ChromeIcon name="code" /> Code
       </button>
       </div>
     </div>

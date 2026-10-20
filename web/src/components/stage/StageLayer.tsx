@@ -23,20 +23,43 @@
  *   the answer shows one line by the controls for a few seconds ("Mia answered
  *   mark 3"), which opens the thread when tapped. Nothing takes focus and no
  *   card opens by itself.
+ * - Pins: on opening a drawing with open marks and nothing lit, the view frames
+ *   the marks (never below a legible scale); pins stay inside the board, fan out
+ *   when they share a point, and never sit under the board's buttons or under the
+ *   caption (the phone's sheet), where they could not be tapped.
+ * - On a phone the cards open in the sheet at the bottom of the board, in the
+ *   caption's place (StageProvider); the Talk conversation and a card take turns.
+ * - Elements are named as the person sees them; a board that knows words only it
+ *   can give (a sequence's messages) passes `labels`.
+ * - The Talk dock's list of marks opens a mark here (`requestMark`): the thread
+ *   opens and the view frames its mark.
  *
  * The sidecar is written through /api/marks; the hub is told after.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { MarkComposer, MarkIcon, MarkNotice, MarksIcon, MarkThread, MarksPanel, StageOverlay, useMarksRead, type MarkDraft } from "@miadi/stateloom-canvas";
+import { createPortal } from "react-dom";
+import {
+  fitLegibly,
+  markAnchor,
+  MarkComposer,
+  MarkIcon,
+  MarkNotice,
+  MarksIcon,
+  MarkThread,
+  MarksPanel,
+  StageOverlay,
+  useMarksRead,
+  type MarkDraft,
+} from "@miadi/stateloom-canvas";
 import {
   agentWordIn,
   agentWordText,
   boxesOf,
   markCounts,
   unreadMarks,
-  fitToBoxes,
   formatReview,
   screenToWorld,
+  type Box,
   type DocKind,
   type ElementBox,
   type Mark,
@@ -47,6 +70,7 @@ import { useStageContext } from "./StageProvider";
 import { episodeOf } from "./CompanionLayer";
 import { presenceLine, useEpisodePresence } from "./useEpisodePresence";
 import { urlParam } from "@/lib/systemParam";
+import { MARK_REQUEST_EVENT, clearMarkRequest, markRequested } from "@/lib/markRequest";
 
 export interface StageLayerProps {
   /** The drawing this board shows, absolute. Null until the workspace has read it. */
@@ -65,13 +89,25 @@ export interface StageLayerProps {
    * level, a sequence shown as a list. The workspace brings it on.
    */
   onReveal?: (focuses: readonly string[]) => void;
+  /** Words for elements only this board can name (a sequence's messages), by focus key. */
+  labels?: Readonly<Record<string, string>>;
 }
 
 /** How long the line that says an agent answered stays by the controls. */
 const NOTICE_MS = 7000;
 
 const quietButton =
-  "flex h-9 min-w-9 items-center justify-center gap-1 rounded-lg border border-gray-700 bg-gray-900/90 px-2 text-sm text-gray-200 shadow-lg backdrop-blur hover:bg-gray-800";
+  "stage-quiet-btn flex h-9 min-w-9 items-center justify-center gap-1 rounded-lg border border-gray-700 bg-gray-900/90 px-2 text-sm text-gray-200 shadow-lg backdrop-blur hover:bg-gray-800";
+
+/** How much of the board's bottom the caption, or the phone's sheet, covers. */
+function coveredBottom(rect: DOMRect): number {
+  let top = Infinity;
+  for (const sel of [".stage-sheet", ".stage-caption-host .slc-stage-caption"]) {
+    const r = document.querySelector(sel)?.getBoundingClientRect();
+    if (r && r.height > 0 && r.top < rect.bottom) top = Math.min(top, r.top);
+  }
+  return top === Infinity ? 0 : Math.max(0, rect.bottom - top + 8);
+}
 
 async function postMarks(docPath: string, body: unknown): Promise<{ marks: Mark[]; change: { action: "add" | "reply" | "resolve" | "reopen" | "remove"; id: string } }> {
   const r = await fetch(`/api/marks?doc=${encodeURIComponent(docPath)}`, {
@@ -84,7 +120,7 @@ async function postMarks(docPath: string, body: unknown): Promise<{ marks: Mark[
   return data;
 }
 
-export default function StageLayer({ docPath, kind, viewport, setViewport, boxes, boardRef, focus = null, level, onReveal }: StageLayerProps) {
+export default function StageLayer({ docPath, kind, viewport, setViewport, boxes, boardRef, focus = null, level, onReveal, labels }: StageLayerProps) {
   const stage = useStageContext();
   const [marks, setMarks] = useState<Mark[]>([]);
   const [marking, setMarking] = useState(false);
@@ -99,6 +135,26 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
   const selectedRef = useRef<string | null>(null);
   selectedRef.current = selected;
   const { read, markRead } = useMarksRead(docPath);
+
+  // ── The drawing on this board, for the caption ──────────────────────
+  const setBoard = stage?.setBoard;
+  useEffect(() => {
+    if (!setBoard || !docPath) return;
+    setBoard(docPath);
+    return () => setBoard(null);
+  }, [setBoard, docPath]);
+
+  /** Frame `targets` in what the caption (or the phone's sheet) leaves of the board, legibly. */
+  const frame = useCallback(
+    (targets: readonly Box[], opts: { floor?: number } = {}) => {
+      const rect = boardRef.current?.getBoundingClientRect();
+      if (!rect?.width || !targets.length) return;
+      const covered = coveredBottom(rect);
+      const height = Math.max(rect.height * 0.4, rect.height - covered);
+      setViewport(fitLegibly(targets, rect.width, height, { padding: 48, maxScale: 1, floor: opts.floor ?? 0.2 }));
+    },
+    [boardRef, setViewport],
+  );
 
   // ── This drawing's marks ─────────────────────────────────────────────
   const load = useCallback(() => {
@@ -175,24 +231,60 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
       return;
     }
     fitted.current = litHere.nonce;
-    const fit = (): void => {
-      const rect = boardRef.current?.getBoundingClientRect();
-      if (!rect?.width) return;
-      // The caption covers the bottom of the board: fit into what it leaves.
-      const caption = document.querySelector(".stage-caption-host .slc-stage-caption")?.getBoundingClientRect();
-      const covered = caption && caption.top < rect.bottom ? Math.max(0, rect.bottom - caption.top + 8) : 0;
-      const height = Math.max(rect.height * 0.4, rect.height - covered);
-      setViewport(fitToBoxes(targets, rect.width, height, { padding: 48, maxScale: 1 }));
-    };
+    // The caption covers the bottom of the board: fit into what it leaves.
+    const fit = (): void => frame(targets);
     fit();
     // Again after the workspace's own fit or centring has landed. Not cleared
     // when the board's boxes move under it (a live update arrives just after a
     // drawing opens) — only when the layer goes.
     if (refit.current) clearTimeout(refit.current);
     refit.current = setTimeout(fit, 520);
-  }, [litHere, litBoxes, region, spotlight, boardRef, setViewport, onReveal]);
+  }, [litHere, litBoxes, region, spotlight, frame, onReveal]);
   useEffect(() => () => {
     if (refit.current) clearTimeout(refit.current);
+  }, []);
+
+  // ── Opening a drawing with marks: the view frames them ──────────────
+  // Once per drawing, when nothing is lit here (a lit step decides the view): what the marks
+  // point at on this level, and the element in hand. Looked at again after the workspace's
+  // own first view and this browser's remembered view have landed, and framed again only
+  // if that view hides some of them.
+  const marksFramed = useRef<string | null>(null);
+  const marksRefit = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
+  useEffect(() => {
+    if (!docPath || marksFramed.current === docPath) return;
+    if (litHere) {
+      marksFramed.current = docPath;
+      return;
+    }
+    const open = marks.filter((m) => m.status !== "resolved" && (!m.level || !level || m.level === level));
+    if (!open.length || !boxes.length) return;
+    // Marks that name elements wait for the board to draw them (a board still showing the
+    // layout it had before this drawing arrived draws none of them); an area stands alone.
+    const named = open.filter((m) => m.elements?.length);
+    const drawn = named.filter((m) => boxesOf(boxes, m.elements!).length > 0);
+    if (named.length && !drawn.length) return;
+    const anchors = [...drawn, ...open.filter((m) => !m.elements?.length)].map((m) => markAnchor(m, boxes)).filter((b): b is Box => !!b);
+    marksFramed.current = docPath;
+    if (!anchors.length) return;
+    const targets = [...anchors, ...(focus ? boxesOf(boxes, [focus]) : [])];
+    const fitIfHidden = (): void => {
+      const rect = boardRef.current?.getBoundingClientRect();
+      if (!rect?.width) return;
+      const vp = viewportRef.current;
+      const a = screenToWorld(vp, { x: 0, y: 0 });
+      const b = screenToWorld(vp, { x: rect.width, y: rect.height - coveredBottom(rect) });
+      const seen = targets.every((t) => t.x >= a.x && t.y >= a.y && t.x + t.width <= b.x && t.y + t.height <= b.y);
+      if (!seen) frame(targets, { floor: 0.55 });
+    };
+    fitIfHidden();
+    for (const t of marksRefit.current) clearTimeout(t);
+    marksRefit.current = [setTimeout(fitIfHidden, 520), setTimeout(fitIfHidden, 1400)];
+  }, [docPath, marks, boxes, litHere, level, focus, frame, boardRef]);
+  useEffect(() => () => {
+    for (const t of marksRefit.current) clearTimeout(t);
   }, []);
 
   // Answer on the caption: a composer on what is lit (or the element in hand).
@@ -246,13 +338,101 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
     if (selectedMark) markRead(selectedMark);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMark?.id, selectedReplies, markRead]);
-  const openThread = (id: string): void => {
+  const openThread = useCallback((id: string): void => {
     setDraft(null);
     setPanel(false);
     setMarking(false);
     setSelected(id);
     setNotice(null);
-  };
+  }, []);
+
+  // ── A mark asked for from outside the board (the Talk dock's list) ──
+  useEffect(() => {
+    const take = (): void => {
+      const id = markRequested(docPath);
+      const mark = id ? marks.find((m) => m.id === id) : null;
+      if (!mark) return;
+      clearMarkRequest();
+      openThread(mark.id);
+      const at = markAnchor(mark, boxes);
+      if (at) setTimeout(() => frame([at], { floor: 0.55 }), 60);
+    };
+    take();
+    window.addEventListener(MARK_REQUEST_EVENT, take);
+    return () => window.removeEventListener(MARK_REQUEST_EVENT, take);
+  }, [docPath, marks, boxes, openThread, frame]);
+
+  // ── The phone's sheet: a card holds it in the caption's place ───────
+  const cardOpen = !!(draft || selectedMark || panel);
+  const claimSheet = stage?.claimSheet;
+  const releaseSheet = stage?.releaseSheet;
+  useEffect(() => {
+    if (cardOpen) claimSheet?.("card");
+    else releaseSheet?.("card");
+  }, [cardOpen, claimSheet, releaseSheet]);
+  useEffect(() => () => releaseSheet?.("card"), [releaseSheet]);
+  // The conversation took the sheet: the card gives way to it.
+  const narrow = !!stage?.narrow;
+  const sheetOwner = stage?.sheet ?? null;
+  const [seenOwner, setSeenOwner] = useState(sheetOwner);
+  if (seenOwner !== sheetOwner) {
+    setSeenOwner(sheetOwner);
+    if (narrow && sheetOwner === "talk") {
+      setDraft(null);
+      setSelected(null);
+      setPanel(false);
+    }
+  }
+
+  // ── The board's buttons: no pin sits under them ─────────────────────
+  const controlsRef = useRef<HTMLDivElement | null>(null);
+  const [controlsBox, setControlsBox] = useState<Box | null>(null);
+  useEffect(() => {
+    const el = controlsRef.current;
+    if (!el) return;
+    const measure = (): void => {
+      const next = { x: el.offsetLeft, y: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight };
+      setControlsBox((b) => (b && b.x === next.x && b.y === next.y && b.width === next.width && b.height === next.height ? b : next));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    if (typeof ResizeObserver === "undefined") return () => window.removeEventListener("resize", measure);
+    const watch = new ResizeObserver(measure);
+    watch.observe(el);
+    return () => {
+      watch.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [docPath]);
+  // ── And none under the caption, or the phone's sheet: what it covers of the board ──
+  const [coverBox, setCoverBox] = useState<Box | null>(null);
+  const shownNow = stage?.shown ?? null;
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const find = () => document.querySelector(".stage-sheet") ?? document.querySelector(".stage-caption-host .slc-stage-caption");
+    let frameId = 0;
+    const measure = (): void => {
+      cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(() => {
+        const b = board.getBoundingClientRect();
+        const r = find()?.getBoundingClientRect();
+        const next = r && r.height > 0 && r.top < b.bottom ? { x: r.left - b.left, y: r.top - b.top, width: r.width, height: Math.min(r.bottom, b.bottom) - r.top } : null;
+        setCoverBox((c) => (c && next && c.x === next.x && c.y === next.y && c.width === next.width && c.height === next.height ? c : next));
+      });
+    };
+    measure();
+    const el = find();
+    const watch = el && typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    if (el) watch?.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(frameId);
+      watch?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [boardRef, shownNow, cardOpen, sheetOwner, narrow, docPath]);
+  const avoid = useMemo(() => [controlsBox, coverBox].filter((b): b is Box => !!b), [controlsBox, coverBox]);
 
   if (!docPath) return null;
 
@@ -280,9 +460,10 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
           setDraft(d);
         }}
         draft={draft}
+        avoid={avoid}
       />
 
-      <div className="stage-board-controls">
+      <div className="stage-board-controls" ref={controlsRef}>
         {notice && (
           <MarkNotice className="stage-board-notice" onOpen={() => openThread(notice.id)} onDismiss={() => setNotice(null)}>
             {notice.text}
@@ -330,9 +511,8 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
         </div>
       )}
 
-      {(draft || selectedMark || panel) && (
-        <div className="stage-board-card">
-          {draft ? (
+      {cardOpen && (() => {
+        const card = draft ? (
             <MarkComposer
               key={`${draft.elements.join(",")}|${draft.region ? JSON.stringify(draft.region) : ""}`}
               elements={draft.elements}
@@ -344,6 +524,7 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
               busy={busy}
               error={error}
               note={note}
+              labels={labels}
               onCancel={() => {
                 setDraft(null);
                 setError(null);
@@ -365,6 +546,7 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
               busy={busy}
               error={error}
               note={note}
+              labels={labels}
               onClose={() => setSelected(null)}
               onReply={(text) => void write({ action: "reply", id: selectedMark.id, text, author: { name: stage?.author || "someone" } })}
               onResolve={() => void write({ action: "resolve", id: selectedMark.id })}
@@ -385,11 +567,12 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
               onCopy={copy}
               copied={copied}
               note={note}
+              labels={labels}
               onClose={() => setPanel(false)}
             />
-          )}
-        </div>
-      )}
+          );
+        return narrow && stage?.sheetBody ? createPortal(card, stage.sheetBody) : <div className="stage-board-card">{card}</div>;
+      })()}
     </>
   );
 }

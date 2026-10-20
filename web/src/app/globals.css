@@ -19,11 +19,11 @@ body {
 }
 
 .toolbar-btn {
-  @apply text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-2.5 py-1 rounded border border-gray-700;
+  @apply inline-flex items-center justify-center gap-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-2.5 py-1 rounded border border-gray-700;
 }
 
 .toolbar-btn-sm {
-  @apply text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-1.5 py-0.5 rounded;
+  @apply inline-flex items-center justify-center text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-1.5 py-0.5 rounded;
 }
 
 /* --- Mobile shell: phone-first responsive layout -------------------------- */
@@ -297,6 +297,11 @@ body {
   pointer-events: auto;
 }
 
+/* The pencil and the marks list are 44 px targets under a finger. */
+@media (pointer: coarse) {
+  .stage-board-controls .stage-quiet-btn { min-height: 44px; min-width: 44px; }
+}
+
 /* "Mia answered mark 3": left of the controls for a few seconds; under them on a phone. */
 .stage-board-controls .stage-board-notice { max-width: min(22rem, calc(100vw - 12rem)); }
 @media (max-width: 767px) {
@@ -382,3 +387,36 @@ body {
   /* Under the board's controls, across the width, so it never covers them. */
   .stage-board-hint { left: 0.5rem; right: 0.5rem; max-width: none; transform: none; top: 3.4rem; }
 }
+
+/* The phone's one sheet (below 600 px, Spec 83, lane U findings U2 and U10): above the
+   tab dock, across the width. Its handle is the Talk dock's bar; under it one thing at a
+   time — the stage's caption, or what took its place: a mark's card (composer, thread,
+   list) or the Talk conversation. The caption comes back when that closes. The sheet lets
+   every pointer through except on what it holds, and scrolls inside what it holds. */
+.stage-sheet {
+  position: fixed;
+  left: calc(0.25rem + env(safe-area-inset-left));
+  right: calc(0.25rem + env(safe-area-inset-right));
+  bottom: calc(var(--sm-dock-h) + env(safe-area-inset-bottom) + 0.25rem);
+  z-index: 46;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: calc(100dvh - var(--sm-dock-h) - env(safe-area-inset-bottom) - 4.5rem);
+  pointer-events: none;
+}
+.stage-sheet > :empty { display: none; }
+.stage-sheet-handle,
+.stage-sheet-body,
+.stage-sheet-caption { min-height: 0; pointer-events: auto; }
+.stage-sheet-body { display: flex; flex-direction: column; }
+.stage-sheet .slc-stage-caption {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  width: auto;
+  max-height: 50dvh;
+}
+.stage-sheet .slc-stage-card { width: auto; max-height: 62dvh; }
+.stage-sheet .slc-talk-panel { width: auto; max-height: 66dvh; }

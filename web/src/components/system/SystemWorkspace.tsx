@@ -9,7 +9,9 @@
  * A card opens its member inside the system (`?doc=<member>&system=<this>`),
  * where the strip keeps every drawing one tap away.
  *
- * The panel: Members (what each is, and the links between each pair), Checks
+ * The panel: Members (what each is, and the links between each pair; a member's
+ * note shows when it has words, and an empty one waits behind "Add a note" so the
+ * panel opens on what the system holds, not on empty boxes), Checks
  * (`checkSystem` grouped by rule, errors first, then the replay of every path
  * of every scenario, and the reconcile mode with the changes the scenarios
  * imply), and Notes. Same shell as the other workspaces: one header row, the
@@ -109,6 +111,8 @@ export default function SystemWorkspace() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [panelHidden, setPanelHidden] = useState(false);
   const [pair, setPair] = useState<string | null>(null);
+  // Members whose empty note the person asked to write.
+  const [noting, setNoting] = useState<ReadonlySet<string>>(() => new Set());
   const [status, setStatusState] = useState<{ text: string; tone: "ok" | "warn" }>({ text: "loading…", tone: "ok" });
   const setStatus = useCallback((text: string, tone: "ok" | "warn" = "ok") => setStatusState({ text, tone }), []);
   const [busy, setBusy] = useState(false);
@@ -530,16 +534,26 @@ export default function SystemWorkspace() {
                       </span>
                       <span className="shrink-0 text-[11px] text-gray-500">open ›</span>
                     </button>
-                    {/* The system's note about this member — kept in the .sysdf.json, not in the member. */}
-                    <div className="px-2 pb-2 [&_label]:mt-0">
-                      <NotesField
-                        key={`member:${m}`}
-                        label="Note on this member, in the system"
-                        value={note ?? ""}
-                        placeholder={`Why ${memberTitle(system, m)} is part of this system, what is open…`}
-                        onSave={(notes) => void writeSystem(updateMember(def, m, { notes }), "saved")}
-                      />
-                    </div>
+                    {/* The system's note about this member — kept in the .sysdf.json, not in the member.
+                        Shown when it has words; an empty one opens on request. */}
+                    {note || noting.has(m) ? (
+                      <div className="px-2 pb-2 [&_label]:mt-0">
+                        <NotesField
+                          key={`member:${m}`}
+                          label="Note on this member, in the system"
+                          value={note ?? ""}
+                          placeholder={`Why ${memberTitle(system, m)} is part of this system, what is open…`}
+                          onSave={(notes) => void writeSystem(updateMember(def, m, { notes }), "saved")}
+                        />
+                      </div>
+                    ) : (
+                      <button
+                        className="mx-2 mb-1.5 text-[11px] text-gray-500 hover:text-gray-300"
+                        onClick={() => setNoting((n) => new Set(n).add(m))}
+                      >
+                        Add a note on this member
+                      </button>
+                    )}
                     </div>
                   );
                 })}
@@ -553,7 +567,7 @@ export default function SystemWorkspace() {
                       onClick={() => setPair(pair === key ? null : key)}
                     >
                       <span className="truncate">
-                        {memberTitle(system, p.a)} ↔ {memberTitle(system, p.b)}
+                        {memberTitle(system, p.a)} {"\u2194\uFE0E"} {memberTitle(system, p.b)}
                       </span>
                       <span className="shrink-0 text-gray-500">{p.links.length}</span>
                     </button>

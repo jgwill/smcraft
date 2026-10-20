@@ -15,14 +15,29 @@
  * voice the person may turn on, the ears a mark may be spoken into, the name
  * marks are signed with, and the line back to the agents — what the person is
  * looking at, and that a drawing's marks changed.
+ *
+ * The caption's heading is the step's own title. When the step is about a
+ * drawing that is not the one on the board (a page opened on another drawing
+ * caught up with a tour the stage holds), the caption names that drawing,
+ * offers "Open and play", and has no Answer: a mark would land on the wrong
+ * drawing.
+ *
+ * On a phone (below 600 px) the bottom of the board holds one sheet: the Talk
+ * dock's bar as its handle, then one of the caption, a mark's card (composer,
+ * thread, list) or the Talk conversation. A card or the conversation takes the
+ * caption's place while it is open, and the caption comes back when it closes.
+ * Layers claim the sheet (`claimSheet`) and render into its slots
+ * (`sheetHandle`, `sheetBody`); on a wider screen there is no sheet and each
+ * keeps its own corner.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { browserDictation, browserVoice, useStage, type StageShown, type UseStage } from "@miadi/stateloom-react";
 import { StageCaption, type ListenerLike } from "@miadi/stateloom-canvas";
-import { DEFAULT_STAGE, isStageName, type Box, type MarksEnvelope, type StageContext } from "@miadi/stateloom-protocol";
+import { DEFAULT_STAGE, isStageName, isSysdfPath, type Box, type MarksEnvelope, type StageContext } from "@miadi/stateloom-protocol";
 import { loadRuntimeConfig } from "@/lib/runtimeConfig";
 import { requestedDoc } from "@/lib/docParam";
 import { FOCUS_REQUEST_EVENT, openInSystem, urlParam } from "@/lib/systemParam";
+import { useNarrow } from "@/lib/useNarrow";
 import CompanionLayer from "./CompanionLayer";
 
 /** What the step on stage lights inside its drawing. `doc` absent: whatever drawing is open. */
@@ -36,6 +51,9 @@ export interface Lit {
 
 /** What a layer reports about the board it sits on. */
 export type BoardReport = Omit<StageContext, "stage" | "at" | "tour" | "who">;
+
+/** Who holds the phone's sheet in place of the caption: a mark's card, or the Talk conversation. */
+export type SheetOwner = "card" | "talk";
 
 export interface StageValue {
   stage: string;
@@ -58,6 +76,18 @@ export interface StageValue {
   companion: boolean;
   pause: () => void;
   stop: () => void;
+  /** The drawing on the board now (absolute), as its layer says; null on the system map. */
+  board: string | null;
+  setBoard: (doc: string | null) => void;
+  /** Below 600 px: the caption, the cards and the conversation share one sheet. */
+  narrow: boolean;
+  /** Who holds the sheet instead of the caption. */
+  sheet: SheetOwner | null;
+  claimSheet: (owner: SheetOwner) => void;
+  releaseSheet: (owner: SheetOwner) => void;
+  /** The sheet's slots on a phone: the handle (the Talk bar), and the body (a card, the conversation). */
+  sheetHandle: HTMLElement | null;
+  sheetBody: HTMLElement | null;
 }
 
 const StageCtx = createContext<StageValue | null>(null);
@@ -83,6 +113,24 @@ function writeLocal(key: string, value: string): void {
   } catch {
     // Private mode: the choice holds for this page only.
   }
+}
+
+/** The drawing's own name (settings.name), read once per drawing; its file name meanwhile. */
+const drawingTitles = new Map<string, Promise<string | null>>();
+function drawingTitle(doc: string): Promise<string | null> {
+  let found = drawingTitles.get(doc);
+  if (!found) {
+    found = fetch(`/api/file?doc=${encodeURIComponent(doc)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { content?: string } | null) => {
+        const def = data?.content ? JSON.parse(data.content) : null;
+        const name = (def?.settings ?? def?.stateMachine?.settings)?.name;
+        return typeof name === "string" && name ? name : null;
+      })
+      .catch(() => null);
+    drawingTitles.set(doc, found);
+  }
+  return found;
 }
 
 /** Ask the open workspace to select and centre `focus` on the drawing already open. */
@@ -122,6 +170,16 @@ export default function StageProvider({ children }: { children: ReactNode }) {
 
   const [lit, setLit] = useState<Lit | null>(null);
   const marksListeners = useRef(new Set<(e: MarksEnvelope) => void>());
+  // The drawing on the board, and the one the stage just asked the page to open — asked
+  // while `from` was on the board, so it counts only until the board changes.
+  const [board, setBoardState] = useState<string | null>(null);
+  const [opening, setOpeningState] = useState<{ doc: string; from: string | null } | null>(null);
+  const boardNow = useRef<string | null>(null);
+  const setOpening = useCallback((doc: string) => setOpeningState({ doc, from: boardNow.current }), []);
+  const setBoard = useCallback((doc: string | null) => {
+    boardNow.current = doc;
+    setBoardState(doc);
+  }, []);
 
   const show = useCallback((shown: StageShown | null) => {
     if (!shown) {
@@ -137,13 +195,14 @@ export default function StageProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (step.doc && step.doc !== open) {
+      setOpening(step.doc);
       openInSystem({ doc: step.doc, system: step.system ?? undefined, focus: step.focus ?? null });
     } else if (step.focus) {
       if (step.system && urlParam("system") !== step.system && open) openInSystem({ doc: open, system: step.system, focus: step.focus });
       else requestFocus(step.focus);
     }
     setLit({ doc: step.doc, focus: step.focus, spotlight: step.spotlight, region: step.region, nonce: shown.nonce });
-  }, []);
+  }, [setOpening]);
 
   const stage = useStage({
     url: config.bridgeUrl ?? "",
@@ -180,8 +239,49 @@ export default function StageProvider({ children }: { children: ReactNode }) {
 
   const [answerNonce, setAnswerNonce] = useState(0);
 
-  // How tall the caption stands, for what must sit above it on a phone (the Talk dock).
-  const captionUp = !!stage.shown;
+  // ── The phone's sheet ────────────────────────────────────────────────
+  const narrow = useNarrow();
+  const [sheet, setSheet] = useState<SheetOwner | null>(null);
+  const claimSheet = useCallback((owner: SheetOwner) => setSheet(owner), []);
+  const releaseSheet = useCallback((owner: SheetOwner) => setSheet((s) => (s === owner ? null : s)), []);
+  const [sheetHandle, setSheetHandle] = useState<HTMLElement | null>(null);
+  const [sheetBody, setSheetBody] = useState<HTMLElement | null>(null);
+
+  // ── A step about a drawing that is not on the board ─────────────────
+  const shownStep = stage.shown?.step ?? null;
+  // Until the board's layer has said which drawing it shows, the page's `?doc=` stands for it.
+  const asked = urlParam("doc");
+  const onBoard = board ?? (asked && !isSysdfPath(asked) ? asked : null);
+  const openingDoc = opening && opening.from === board ? opening.doc : null;
+  const heldDoc = shownStep?.doc && shownStep.doc !== onBoard && shownStep.doc !== openingDoc ? shownStep.doc : null;
+  const [heldTitle, setHeldTitle] = useState<{ doc: string; title: string | null } | null>(null);
+  useEffect(() => {
+    if (!heldDoc) return;
+    let live = true;
+    void drawingTitle(heldDoc).then((title) => live && setHeldTitle({ doc: heldDoc, title }));
+    return () => {
+      live = false;
+    };
+  }, [heldDoc]);
+  const play = stage.play;
+  const held = useMemo(() => {
+    if (!heldDoc || !shownStep) return null;
+    const title = heldTitle?.doc === heldDoc ? heldTitle.title : null;
+    const drawing = title ?? (heldDoc.split("/").pop() ?? heldDoc).replace(/\.(smdf|erdf|sqdf|sysdf)\.json$/i, "").replace(/\.json$/i, "");
+    const inTour = stage.shown?.index !== null && stage.shown?.index !== undefined;
+    return {
+      drawing,
+      label: inTour ? "Open and play" : "Open the drawing",
+      onOpen: () => {
+        setOpening(heldDoc);
+        openInSystem({ doc: heldDoc, system: shownStep.system ?? undefined, focus: shownStep.focus ?? null });
+        if (inTour) play();
+      },
+    };
+  }, [heldDoc, heldTitle, shownStep, stage.shown?.index, play, setOpening]);
+
+  // How tall the caption stands, for what must sit above it beside the board (the Talk dock).
+  const captionUp = !!stage.shown && !narrow;
   useEffect(() => {
     const root = document.documentElement;
     const caption = captionUp ? document.querySelector<HTMLElement>(".stage-caption-host .slc-stage-caption") : null;
@@ -225,34 +325,55 @@ export default function StageProvider({ children }: { children: ReactNode }) {
       companion: config.companion,
       pause: stage.pause,
       stop: stage.stop,
+      board,
+      setBoard,
+      narrow,
+      sheet,
+      claimSheet,
+      releaseSheet,
+      sheetHandle,
+      sheetBody,
     }),
-    [config.stage, config.companion, stage.status, stage.shown, stage.sendMarks, stage.present, stage.pause, stage.stop, lit, author, listener, answerNonce, report],
+    [
+      config.stage, config.companion, stage.status, stage.shown, stage.sendMarks, stage.present, stage.pause, stage.stop, lit, author, listener, answerNonce, report,
+      board, setBoard, narrow, sheet, claimSheet, releaseSheet, sheetHandle, sheetBody,
+    ],
   );
+
+  const caption = stage.shown ? (
+    <StageCaption
+      shown={stage.shown}
+      playing={stage.playing}
+      speaking={stage.speaking}
+      voice={stage.ownVoice ? undefined : voiceOn}
+      onToggleVoice={() => {
+        const next = !voiceOn;
+        setVoiceOn(next);
+        writeLocal(VOICE_KEY, next ? "1" : "0");
+      }}
+      onPlay={stage.play}
+      onPause={stage.pause}
+      onNext={stage.next}
+      onPrev={stage.prev}
+      onGoto={stage.goto}
+      onClose={stage.dismiss}
+      onAnswer={() => setAnswerNonce((n) => n + 1)}
+      held={held}
+    />
+  ) : null;
 
   return (
     <StageCtx.Provider value={value}>
       {children}
-      {stage.shown && (
-        <div className="stage-caption-host">
-          <StageCaption
-            shown={stage.shown}
-            playing={stage.playing}
-            speaking={stage.speaking}
-            voice={stage.ownVoice ? undefined : voiceOn}
-            onToggleVoice={() => {
-              const next = !voiceOn;
-              setVoiceOn(next);
-              writeLocal(VOICE_KEY, next ? "1" : "0");
-            }}
-            onPlay={stage.play}
-            onPause={stage.pause}
-            onNext={stage.next}
-            onPrev={stage.prev}
-            onGoto={stage.goto}
-            onClose={stage.dismiss}
-            onAnswer={() => setAnswerNonce((n) => n + 1)}
-          />
+      {narrow ? (
+        // One sheet at the bottom of the board: the handle, then the caption or what took its place.
+        <div className="stage-sheet">
+          <div className="stage-sheet-handle" ref={setSheetHandle} />
+          <div className="stage-sheet-body" ref={setSheetBody} />
+          {!sheet && caption && <div className="stage-sheet-caption">{caption}</div>}
         </div>
+      ) : (
+        caption && <div className="stage-caption-host">{caption}</div>
       )}
       {config.companion && <CompanionLayer stage={value} defaultEpisode={config.companionEpisode} />}
     </StageCtx.Provider>

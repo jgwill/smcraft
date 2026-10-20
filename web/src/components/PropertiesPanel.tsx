@@ -1,6 +1,7 @@
 "use client";
 
 import { useDesignerStore, collectAllStates, collectEventIds } from "@/store/useDesignerStore";
+import ChromeIcon from "@/components/ChromeIcon";
 import type { StateDef, ActionDef } from "@/types/definition";
 
 function ActionEditor({ label, actions, onChange }: { label: string; actions: ActionDef[]; onChange: (actions: ActionDef[]) => void }) {
@@ -175,7 +176,7 @@ export default function PropertiesPanel() {
           onClick={() => removeState(selection.id!)}
           className="text-red-500 hover:text-red-400 text-xs mt-2"
         >
-          🗑 Delete State
+          <ChromeIcon name="trash" /> Delete State
         </button>
       </div>
     );
@@ -235,7 +236,7 @@ export default function PropertiesPanel() {
           onClick={() => removeTransition(stateName, idx)}
           className="text-red-500 hover:text-red-400 text-xs"
         >
-          🗑 Delete Transition
+          <ChromeIcon name="trash" /> Delete Transition
         </button>
       </div>
     );

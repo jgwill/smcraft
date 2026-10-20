@@ -55,6 +55,7 @@ import {
   normalizeNotes,
 } from "@miadi/stateloom-protocol";
 import BoardBoundary from "@/components/BoardBoundary";
+import ChromeIcon from "@/components/ChromeIcon";
 import DocSwitcher from "@/components/DocSwitcher";
 import IssueIcon from "@/components/IssueIcon";
 import LockIcon from "@/components/LockIcon";
@@ -724,7 +725,7 @@ export default function ErdWorkspace() {
                         setSelection(null);
                       }}
                     >
-                      🗑 Delete {selected.name}
+                      <ChromeIcon name="trash" /> Delete {selected.name}
                     </button>
                   </>
                 )}

@@ -167,14 +167,42 @@ system and focuses its element through `openInSystem` (Spec 82); what it lights 
 - **Lit**: a scrim with a hole and a ring around each spotlighted element, a dashed frame for an
   area; the view fits them above the caption, after the workspace's own fit or centring. A machine
   drills to the level of the first lit state; a sequence in its list view switches to the diagram.
-- **The caption**: who presents, the tour and step titles, the words, the step dots; ◀ ▶ ⏯, the
-  voice toggle (off by default, remembered), **Answer**, ✕. Above the phone dock on a phone.
+- **The caption**: who presents, the step's own title as the heading (two lines at most), its place
+  and the tour's name on the line under it ("1 / 6 · What the screenwalk drawings hold"), the words,
+  the step dots; ◀ ▶ ⏯, the voice toggle (off by default, remembered), **Answer**, ✕. When the step's
+  drawing is not the one on the board (a caught-up step on a page opened on another drawing, or the
+  system map), the caption says which drawing it is about ("About ScreenwalkRecords, not the drawing
+  open here"), its main button is **Open and play** (**Open the drawing** for a live step), and
+  **Answer** is absent until that drawing is on the board: a mark made then would land on the wrong
+  drawing. The board's layer says which drawing it shows (`setBoard`); until it has, the page's
+  `?doc=` stands for it. Under a finger every caption button and each step dot is a 44 px target;
+  past seven steps the dots give way to the count and the arrows.
+- **The phone's sheet** (below 600 px, lane U, U2 and U10): the bottom of the board holds one sheet
+  above the tab dock. Its handle is the Talk dock's bar (Spec 84); under it, one of the caption, a
+  mark's card (composer, thread, list) or the Talk conversation. A card or the conversation takes the
+  caption's place while open (it never stacks under or over it) and the caption returns when it
+  closes; a card and the conversation take turns. A thread scrolls its words and keeps its reply row
+  and Resolve in reach at the card's bottom. Wider screens keep the caption at the bottom centre, the
+  cards under the board's buttons and the dock bottom-left.
 - **Marks**: the pencil turns marking on, and a line on the board says what a tap and a drag do —
   a tap marks the element under it, a drag the elements inside the area and the area — and the composer asks what the agent should know, typed or spoken (🎙, where
   the browser can listen). Pins are numbered and coloured: amber waits on the agent, blue answered,
   violet an agent's question, grey resolved. A pin opens its thread: reply, resolve, reopen,
   remove. The speech bubble lists the marks (Open | All), waiting first, and **Copy for the agent** puts the review on the
-  clipboard to paste into any agent's prompt.
+  clipboard to paste into any agent's prompt. The pencil and the speech bubble are 44 px targets
+  under a finger.
+- **Pins** (U3): a drawing opened with open marks and nothing lit frames what those marks point at on
+  its level (with the element in hand), never below a scale of 0.55 — past that it starts at their top
+  (`fitLegibly`); it looks again after the workspace's and the browser's remembered view land and frames
+  again only if they hide a mark. Every pin stays inside the board, 8 px from its edges; pins that land
+  on one point fan down the anchor's right edge (upward when the board ends first); no pin sits
+  under the board's buttons or under the caption (the phone's sheet), where it could not be tapped
+  (`placePins`, `avoid`).
+- **The person's words** (U12): the list, the thread's chips and the composer name elements as the
+  board shows them — "Witnessing", "id in WaveCount", a message by its number and words (the sequence
+  passes `labels`) — never by focus key; an entity's attributes are left to the entity when both are
+  marked, and more than three names read "A, B and 4 more". Agents still read focus keys
+  (`markAnchorText`, `formatReview`).
 - **When an agent answers**: the speech bubble's main number is what waits on the person (answered
   marks, an agent's questions: `marksWaitingOn(marks, "person")`), shown "N for you", and what waits
   on the agent follows it, quieter; an answer moves a mark from one to the other instead of making
