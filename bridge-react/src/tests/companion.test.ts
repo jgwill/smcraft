@@ -11,8 +11,11 @@ import {
   companionUrl,
   createCompanionThread,
   createTakeRecorder,
+  readThreadItems,
   replyTour,
   takeContext,
+  threadKey,
+  type CompanionMark,
   type CompanionReply,
   type RecorderLike,
 } from "../companion.js";
@@ -204,4 +207,47 @@ test("a reply is a tour: its steps with their own voices, or one caption with th
   const { at, ...rest } = takeContext({ stage: "default", doc: "/d/w.smdf.json", kind: "machine", focus: null }, { marks: ["m-1"] })!;
   assert.ok(Date.parse(String(at)), "stamped when spoken");
   assert.deepEqual(rest, { stage: "default", doc: "/d/w.smdf.json", kind: "machine", marks: ["m-1"] }, "nothing empty is kept");
+});
+
+test("the thread reads marks: asked with include=marks, each mark whole, unknown kinds left out", async () => {
+  const mark = {
+    kind: "mark", id: "m-1", doc: "/e/diagrams/w.smdf.json", drawing: "w.smdf.json", title: "Screenwalk",
+    elements: ["state:Witnessing", 7, ""], text: "Is this one more machine?", author: { name: "Guillaume", role: "person" },
+    at: "2026-10-19T23:30:00Z", lastAt: "2026-10-19T23:41:00Z", status: "answered",
+    replies: [{ author: { name: "Mia", role: "agent" }, text: "Yes.", at: "2026-10-19T23:41:00Z" }, { author: {}, text: "" }],
+  };
+  const items = readThreadItems([
+    { kind: "take", take: "261019233000", at: "2026-10-19T23:30:00Z", text: "hello" },
+    mark,
+    { kind: "reply", id: "r-1", episode: "e", take: null, text: "answered", at: "2026-10-19T23:42:00Z", audio: null, mark: { id: "m-1", doc: mark.doc } },
+    { kind: "walk", id: "w-1" },
+    { kind: "mark", id: "m-2" },
+    null,
+  ]);
+  assert.deepEqual(items.map((i) => i.kind), ["take", "mark", "reply"], "a kind this client does not know, and a mark with no drawing, are left out");
+  const m = items[1] as CompanionMark;
+  assert.deepEqual(m.elements, ["state:Witnessing"]);
+  assert.equal(m.status, "answered");
+  assert.equal(m.title, "Screenwalk");
+  assert.deepEqual(m.replies, [{ author: { name: "Mia", role: "agent" }, text: "Yes.", at: "2026-10-19T23:41:00Z" }], "an empty reply is dropped");
+  const odd = readThreadItems([{ kind: "mark", id: "m-3", doc: "/d.json", status: "weird", author: "x" }])[0] as CompanionMark;
+  assert.equal(odd.status, "open");
+  assert.deepEqual(odd.author, { name: "someone", role: "person" });
+  assert.deepEqual(odd.replies, []);
+  assert.equal((items[2] as CompanionReply).mark?.id, "m-1", "a reply keeps the mark it answers");
+  assert.deepEqual(readThreadItems(undefined), []);
+
+  const before = threadKey(items, { state: "away" });
+  const answered = items.map((i) => (i.kind === "mark" ? { ...i, replies: [...i.replies, { author: { name: "Guillaume", role: "person" as const }, text: "ok", at: "" }] } : i));
+  assert.notEqual(threadKey(answered, { state: "away" }), before, "a mark's new reply changes the thread");
+  const resolved = items.map((i) => (i.kind === "mark" ? { ...i, status: "resolved" as const } : i));
+  assert.notEqual(threadKey(resolved, { state: "away" }), before, "a mark's standing changes the thread");
+
+  const { calls, fetchFn } = service(() => ({ success: true, items: [mark], presence: { state: "away" } }));
+  const t = createCompanionThread({ base: "/api/companion/", fetch: fetchFn, everyMs: 60_000 });
+  t.setEpisode("2026-10-01-episode-550-x");
+  await wait(10);
+  assert.match(calls[0].url, /thread\?episode=2026-10-01-episode-550-x&include=marks$/);
+  assert.equal(t.getSnapshot().items[0].kind, "mark");
+  t.destroy();
 });

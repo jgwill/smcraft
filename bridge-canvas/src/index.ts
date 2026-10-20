@@ -37,6 +37,14 @@ export type {
 // and the cards marks are written and read in.
 export { StageOverlay, markAnchor } from "./StageOverlay.js";
 export type { StageOverlayProps, MarkDraft } from "./StageOverlay.js";
+// Where pins stand (inside the board, fanned, clear of the board's buttons), and a view
+// that frames the marks without going below a legible scale.
+export { placePins, fitLegibly } from "./pins.js";
+export type { PinSpot, PinLayout, LegibleFitOptions } from "./pins.js";
+// Elements and marks in the person's words: "Witnessing", "id in WaveCount", "message 8";
+// "Witnessing and 2 more"; "7 marks on Screenwalk, 6 answered".
+export { elementName, markedNames, namesText, markPlace, drawingName, markStanding, marksSummary } from "./names.js";
+export type { ElementLabels, MarkLike, MarkStanding } from "./names.js";
 export { StageCaption } from "./StageCaption.js";
 export type { StageCaptionProps } from "./StageCaption.js";
 export { MarkComposer, MarkThread, MarksPanel, MarkNotice } from "./MarkCards.js";
@@ -50,7 +58,7 @@ export { MarkComposer, MarkThread, MarksPanel, MarkNotice } from "./MarkCards.js
 export { useMarksRead, loadMarksRead, saveMarksRead, marksReadKey } from "./marksRead.js";
 // Talking with a companion from the canvas (Spec 84).
 export { CompanionDock } from "./CompanionDock.js";
-export type { CompanionDockProps, DockItem, DockReply, DockStep, DockTake } from "./CompanionDock.js";
+export type { CompanionDockProps, DockItem, DockMark, DockReply, DockStep, DockTake } from "./CompanionDock.js";
 export {
   MicIcon,
   SpeakerIcon,
@@ -65,6 +73,7 @@ export {
   ThumbUpIcon,
   ThumbDownIcon,
   CloseIcon,
+  PinIcon,
 } from "./icons.js";
 export type { MarkComposerProps, MarkThreadProps, MarksPanelProps, MarkNoticeProps, ListenerLike } from "./MarkCards.js";
 

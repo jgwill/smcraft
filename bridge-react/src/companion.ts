@@ -16,9 +16,11 @@
  *   kept for Send again, diagnostics on what went wrong, and a heartbeat while the
  *   microphone is open so a reply posted then waits in silence. It records audio/mp4
  *   where the browser can, and WAV where it cannot (the service takes no webm).
- * - `createCompanionThread` — the conversation: takes and replies in order, who is in
- *   the room, polled every 10 s and every 4 s while a take waits for its reply; a reply
- *   that arrives while the page is open is announced once (`onReply`).
+ * - `createCompanionThread` — the conversation: takes, replies and the person's marks on
+ *   the episode's drawings (asked with `include=marks`; a service that predates marks
+ *   answers without them) in order, who is in the room, polled every 10 s and every 4 s
+ *   while a take waits for its reply; a reply that arrives while the page is open is
+ *   announced once (`onReply`). An item of a kind this client does not know is dropped.
  *
  * `base` is where the service's `/api/` answers from this page: the canvas proxies it
  * as `/api/companion/` (`companionUrl` turns the service's own relative audio paths
@@ -60,9 +62,92 @@ export interface CompanionReply {
   feedback?: "up" | "down";
   related?: { label: string; href: string; kind: string }[];
   steps?: CompanionReplyStep[];
+  /** The mark this reply answers: its id and its drawing, absolute. */
+  mark?: { id: string; doc: string };
 }
 
-export type CompanionItem = CompanionTake | CompanionReply;
+/** A mark on one of the episode's drawings, with its thread (the service reads the sidecars). */
+export interface CompanionMark {
+  kind: "mark";
+  id: string;
+  /** The drawing, absolute. */
+  doc: string;
+  /** Its file name. */
+  drawing?: string;
+  /** Its own name (settings.name), when it has one. */
+  title?: string;
+  elements: string[];
+  region?: { x: number; y: number; width: number; height: number };
+  text: string;
+  author: { name: string; role: "person" | "agent" };
+  at: string;
+  /** When its thread last moved. */
+  lastAt?: string;
+  status: "open" | "answered" | "resolved";
+  replies: { author: { name: string; role: "person" | "agent" }; text: string; at: string }[];
+}
+
+export type CompanionItem = CompanionTake | CompanionReply | CompanionMark;
+
+const str = (v: unknown): string => (typeof v === "string" ? v : "");
+const authorOf = (v: unknown): { name: string; role: "person" | "agent" } => {
+  const o = (v && typeof v === "object" ? v : {}) as { name?: unknown; role?: unknown };
+  const role = o.role === "agent" ? "agent" : "person";
+  return { name: str(o.name) || (role === "agent" ? "agent" : "someone"), role };
+};
+
+/**
+ * The thread's items as this client reads them: takes, replies and marks, each with the
+ * fields it needs; anything else — a kind added after this client, an item missing its
+ * id — is left out rather than drawn wrong.
+ */
+export function readThreadItems(raw: unknown): CompanionItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CompanionItem[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const i = item as Record<string, unknown>;
+    if (i.kind === "take" && str(i.take)) out.push({ ...(i as unknown as CompanionTake), text: str(i.text), at: str(i.at) });
+    else if (i.kind === "reply" && str(i.id)) out.push({ ...(i as unknown as CompanionReply), text: str(i.text), at: str(i.at) });
+    else if (i.kind === "mark" && str(i.id) && str(i.doc)) {
+      const region = i.region as CompanionMark["region"] | undefined;
+      out.push({
+        kind: "mark",
+        id: str(i.id),
+        doc: str(i.doc),
+        ...(str(i.drawing) ? { drawing: str(i.drawing) } : {}),
+        ...(str(i.title) ? { title: str(i.title) } : {}),
+        elements: Array.isArray(i.elements) ? i.elements.filter((e): e is string => typeof e === "string" && !!e) : [],
+        ...(region && typeof region === "object" && typeof region.x === "number" ? { region } : {}),
+        text: str(i.text),
+        author: authorOf(i.author),
+        at: str(i.at),
+        ...(str(i.lastAt) ? { lastAt: str(i.lastAt) } : {}),
+        status: i.status === "answered" || i.status === "resolved" ? i.status : "open",
+        replies: (Array.isArray(i.replies) ? i.replies : []).flatMap((r) => {
+          const o = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
+          return str(o.text) ? [{ author: authorOf(o.author), text: str(o.text), at: str(o.at) }] : [];
+        }),
+      });
+    }
+  }
+  return out;
+}
+
+/** What changes the thread on screen: a reply's voice or thumb, a take's words, a mark's standing or its thread. */
+export function threadKey(items: readonly CompanionItem[], presence?: CompanionPresence | null): string {
+  return (
+    items
+      .map((i) =>
+        i.kind === "reply"
+          ? `${i.id}:${i.audio ? 1 : 0}:${i.feedback ?? ""}`
+          : i.kind === "mark"
+            ? `m${i.id}:${i.status}:${i.replies.length}`
+            : `${i.take}:${i.text.length}`,
+      )
+      .join(",") + `|${presence?.state ?? ""}`
+  );
+}
 
 /** The service's relative path (`api/replies/…`) as this page reaches it. */
 export function companionUrl(base: string, path: string | null | undefined): string | undefined {
@@ -572,12 +657,12 @@ export function createCompanionThread(opts: CompanionThreadOptions): CompanionTh
     if (!episode) return;
     const mine = generation;
     try {
-      const r = await doFetch(`${base}thread?episode=${encodeURIComponent(episode)}`, { cache: "no-store" });
-      const answer = (await r.json()) as { success?: boolean; error?: string; items?: CompanionItem[]; presence?: CompanionPresence };
+      const r = await doFetch(`${base}thread?episode=${encodeURIComponent(episode)}&include=marks`, { cache: "no-store" });
+      const answer = (await r.json()) as { success?: boolean; error?: string; items?: unknown; presence?: CompanionPresence };
       if (mine !== generation) return;
       if (!answer.success) return set({ error: answer.error ?? `HTTP ${r.status}` });
-      const items = answer.items ?? [];
-      const nextKey = items.map((i) => (i.kind === "reply" ? `${i.id}:${i.audio ? 1 : 0}:${i.feedback ?? ""}` : `${i.take}:${i.text.length}`)).join(",") + `|${answer.presence?.state}`;
+      const items = readThreadItems(answer.items);
+      const nextKey = threadKey(items, answer.presence);
       const fresh = items.filter((i): i is CompanionReply => i.kind === "reply" && !seen.has(i.id));
       for (const r2 of fresh) seen.add(r2.id);
       if (nextKey !== key || snap.error) {

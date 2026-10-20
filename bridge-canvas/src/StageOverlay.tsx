@@ -12,7 +12,9 @@
  * - **pins** each mark at what it points at, numbered, coloured by whether it
  *   waits (open), was answered, or is done — a tap opens its thread; a mark
  *   the host lists in `unread` (an agent's word not yet opened) wears a quiet
- *   "new" ring and dot;
+ *   "new" ring and dot. Every pin stays inside the board, pins that land on one
+ *   point fan out down its right edge, and none sits under a box the host says
+ *   to keep clear (`avoid`: the board's own buttons) — `placePins`;
  * - **takes a mark** when the host turns marking on: a tap names the element
  *   under it, a drag names the elements inside the area drawn (and the area).
  *   A mouse or pen tap on empty board marks a small area there; a finger's tap
@@ -23,7 +25,7 @@
  * box); it lets every pointer through to the canvas except on its pins and
  * while marking.
  */
-import { useId, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import {
   boxesOf,
   elementAt,
@@ -39,6 +41,7 @@ import {
   type Viewport,
 } from "@miadi/stateloom-protocol";
 import { themeStyle, type CanvasTheme } from "./theme.js";
+import { placePins } from "./pins.js";
 
 /** What a person pointed at while marking, before they say anything about it. */
 export interface MarkDraft {
@@ -70,6 +73,8 @@ export interface StageOverlayProps {
   onDraft?: (draft: MarkDraft) => void;
   /** A mark being written: its elements ringed, its area framed. */
   draft?: MarkDraft | null;
+  /** Boxes no pin may cover, in the board's screen coordinates: the host's buttons over the board. */
+  avoid?: readonly Box[];
   theme?: Partial<CanvasTheme>;
   className?: string;
   style?: CSSProperties;
@@ -106,6 +111,7 @@ export function StageOverlay({
   marking = false,
   onDraft,
   draft = null,
+  avoid,
   theme,
   className,
   style,
@@ -114,6 +120,27 @@ export function StageOverlay({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const press = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
   const [drag, setDrag] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  // The board's size, for keeping pins inside it; and whether a finger (bigger pins) points.
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const [coarse, setCoarse] = useState(false);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const measure = (): void => {
+      const r = el.getBoundingClientRect();
+      setSize((s) => (s && s.w === r.width && s.h === r.height ? s : { w: r.width, h: r.height }));
+    };
+    measure();
+    try {
+      setCoarse(window.matchMedia("(pointer: coarse)").matches);
+    } catch {
+      // No media queries here: mouse-sized pins.
+    }
+    if (typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(measure);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
 
   const holes = useMemo(() => (spotlight?.length ? boxesOf(boxes, spotlight).map((b) => padBox(b, HOLE_PAD)) : []), [boxes, spotlight]);
   const vt = viewportTransform(viewport);
@@ -128,7 +155,7 @@ export function StageOverlay({
   }, [boxes, selected, draft]);
   const framed = [selected?.region, draft?.region].filter((b): b is Box => !!b);
 
-  const pins = (marks ?? [])
+  const anchored = (marks ?? [])
     .map((m, i) => ({ mark: m, n: i + 1 }))
     .filter(({ mark }) => !(hideResolved && mark.status === "resolved" && mark.id !== selectedMark))
     .map(({ mark, n }) => {
@@ -138,6 +165,8 @@ export function StageOverlay({
       return { mark, n, x: p.x, y: p.y };
     })
     .filter((p): p is NonNullable<typeof p> => p !== null);
+  const placed = size?.w ? placePins(anchored, { width: size.w, height: size.h, size: coarse ? 30 : 22, avoid }) : anchored;
+  const pins = anchored.map((p, i) => ({ ...p, x: placed[i].x, y: placed[i].y }));
 
   const local = (e: ReactPointerEvent): { x: number; y: number } => {
     const r = rootRef.current?.getBoundingClientRect();

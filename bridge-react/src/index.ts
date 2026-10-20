@@ -35,9 +35,12 @@ export {
   takeContext,
   recordingType,
   wavRecorder,
+  readThreadItems,
+  threadKey,
 } from "./companion.js";
 export type {
   CompanionItem,
+  CompanionMark,
   CompanionPresence,
   CompanionReply,
   CompanionReplyStep,

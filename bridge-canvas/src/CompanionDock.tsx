@@ -4,16 +4,25 @@
  * The phone page's conversation, folded into a corner of the board: one button records a
  * take (Record → Stop & send → Sending…, Send again when a send failed), the line under
  * it says what happened, and the conversation reads newest first — the person's takes
- * (with the drawing they were looking at) and the companion's replies, each with ▶ to
- * hear it walk the diagram again, and a thumb. Closed, it is one round button that shows
- * the clock while recording and how many replies are new.
+ * (with the drawing they were looking at), the companion's replies, each with ▶ to hear
+ * it walk the diagram again and a thumb, and the person's marks on the episode's drawings
+ * with their threads ("You marked Witnessing on Screenwalk", the words, the companion's
+ * answers, whether it waits). A mark has no play button and no thumb; tapping it opens
+ * that drawing at that mark (`onOpenMark`). A reply that answers a mark says which.
+ *
+ * Who is in the room is said in words in the header ("listening", "answering take 12",
+ * "away"), never by a coloured dot alone. Closed, it is one round button (`variant:
+ * "fab"`) that shows the clock while recording and how many replies are new, or — on a
+ * phone, where the host makes it the handle of the sheet at the bottom of the board —
+ * a bar across the width (`variant: "bar"`) that says the same in words.
  *
  * Props in, callbacks out: the host holds the recorder, the conversation and the stage
  * (`createTakeRecorder`, `createCompanionThread`, `present` in `@miadi/stateloom-react`).
  */
 import type { CSSProperties } from "react";
 import { themeStyle, type CanvasTheme } from "./theme.js";
-import { CloseIcon, MicIcon, PlayIcon, SpeakerIcon, StopIcon, ThumbDownIcon, ThumbUpIcon } from "./icons.js";
+import { CloseIcon, MicIcon, PinIcon, PlayIcon, SpeakerIcon, StopIcon, ThumbDownIcon, ThumbUpIcon } from "./icons.js";
+import { drawingName, markPlace, markStanding, marksSummary } from "./names.js";
 
 export interface DockTake {
   kind: "take";
@@ -42,13 +51,39 @@ export interface DockReply {
   unvoiced?: string;
   feedback?: "up" | "down";
   steps?: DockStep[];
+  /** The mark this reply answers, in its thread and in the companion's voice. */
+  mark?: { id: string; doc: string };
 }
 
-export type DockItem = DockTake | DockReply;
+/** A person's (or the companion's) mark on one of the episode's drawings, with its thread. */
+export interface DockMark {
+  kind: "mark";
+  id: string;
+  /** The drawing, absolute. */
+  doc: string;
+  /** Its file name. */
+  drawing?: string;
+  /** Its own name (settings.name), when it has one. */
+  title?: string;
+  elements: string[];
+  region?: { x: number; y: number; width: number; height: number };
+  text: string;
+  author: { name: string; role: "person" | "agent" };
+  at: string;
+  lastAt?: string;
+  status: "open" | "answered" | "resolved";
+  replies: { author: { name: string; role: "person" | "agent" }; text: string; at: string }[];
+}
+
+export type DockItem = DockTake | DockReply | DockMark;
 
 export interface CompanionDockProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Closed: a round button (default), or a bar across the width that names the room in words. */
+  variant?: "fab" | "bar";
+  /** Open the drawing a mark is on, at that mark's thread. Absent: marks are read, not opened. */
+  onOpenMark?: (mark: DockMark) => void;
   /** Who answers. Default "Mia". */
   who?: string;
   episode: string | null;
@@ -96,19 +131,31 @@ function litOf(step: DockStep): string {
   return bare.length <= 2 ? bare.join(", ") : `${bare.slice(0, 2).join(", ")} +${bare.length - 2}`;
 }
 
-function presenceLine(who: string, presence: CompanionDockProps["presence"], episode: string | null): { text: string; away: boolean } {
-  if (!episode) return { text: "Choose the episode you are speaking in.", away: true };
+function presenceLine(who: string, presence: CompanionDockProps["presence"], episode: string | null): { text: string; word: string; away: boolean } {
+  if (!episode) return { text: "Choose the episode you are speaking in.", word: "no episode", away: true };
   switch (presence?.state) {
     case "listening":
-      return { text: `${who} is listening.`, away: false };
-    case "answering":
-      return { text: `${who} is answering${presence.takes?.length ? ` take ${presence.takes.join(", ")}` : ""}.`, away: false };
+      return { text: `${who} is listening.`, word: "listening", away: false };
+    case "answering": {
+      const takes = presence.takes?.length ? ` take ${presence.takes.join(", ")}` : "";
+      return { text: `${who} is answering${takes}.`, word: `answering${takes}`, away: false };
+    }
     case "answered":
-      return { text: `${who} has answered and is getting ready to listen again.`, away: false };
+      return { text: `${who} has answered and is getting ready to listen again.`, word: "answered", away: false };
     default:
-      return { text: `Nobody is listening yet. A take waits in the episode until ${who} does.`, away: true };
+      return { text: `Nobody is listening yet. A take waits in the episode until ${who} does.`, word: "away", away: true };
   }
 }
+
+/** Who said it, as the conversation names them: the person is "You". */
+const speaker = (author: { name?: string; role?: string }, who: string) => (author.role === "agent" ? author.name || who : "You");
+
+const STANDING_TEXT = (who: string): Record<ReturnType<typeof markStanding>, string> => ({
+  "waits for agent": `waits for ${who}`,
+  "waits for you": "waits for you",
+  answered: "answered",
+  resolved: "resolved",
+});
 
 const RECORD_LABEL: Record<CompanionDockProps["recorder"]["state"], string> = {
   idle: "● Record",
@@ -121,6 +168,8 @@ const RECORD_LABEL: Record<CompanionDockProps["recorder"]["state"], string> = {
 export function CompanionDock({
   open,
   onOpenChange,
+  variant = "fab",
+  onOpenMark,
   who = "Mia",
   episode,
   episodes,
@@ -148,6 +197,32 @@ export function CompanionDock({
   const busy = recorder.state === "starting" || recorder.state === "sending";
   const fresh = unheard.length;
 
+  const line = presenceLine(who, presence, episode);
+
+  if (!open && variant === "bar") {
+    return (
+      <div className={`slc-talk slc-talk--bar${className ? ` ${className}` : ""}`} style={{ ...themeStyle(theme), ...style }}>
+        <button
+          type="button"
+          className={`slc-talk-bar${live ? " slc-talk-bar--live" : ""}${!live && playing ? " slc-talk-bar--speaking" : ""}`}
+          onClick={() => (live ? onRecord() : onOpenChange(true))}
+          aria-label={live ? `Stop and send (${clock(recorder.seconds)})` : `Talk with ${who}: ${line.word}${fresh ? `, ${fresh} new` : ""}. Open the conversation`}
+          title={live ? "Stop and send your take" : `Talk with ${who} about what is on the canvas`}
+        >
+          {live ? <StopIcon /> : playing ? <SpeakerIcon /> : <MicIcon />}
+          <span className="slc-talk-bar-title">{live ? "Stop and send" : playing ? `${who} is speaking` : `Talk with ${who}`}</span>
+          {live ? (
+            <span className="slc-talk-clock">{clock(recorder.seconds)}</span>
+          ) : (
+            !playing && <span className={`slc-talk-state${line.away ? " slc-talk-state--away" : ""}`}>{line.word}</span>
+          )}
+          <span className="slc-stage-spacer" />
+          {!live && fresh > 0 && <span className="slc-talk-new">{fresh} new</span>}
+        </button>
+      </div>
+    );
+  }
+
   if (!open) {
     return (
       <div className={`slc-talk${className ? ` ${className}` : ""}`} style={{ ...themeStyle(theme), ...style }}>
@@ -167,8 +242,13 @@ export function CompanionDock({
     );
   }
 
-  const line = presenceLine(who, presence, episode);
   const newest = [...items].reverse();
+  const marks = items.filter((i): i is DockMark => i.kind === "mark");
+  const marksById = new Map(marks.map((m) => [m.id, m]));
+  const saidAny = items.some((i) => i.kind === "take" || i.kind === "reply");
+  const standing = STANDING_TEXT(who);
+  /** "Witnessing on Screenwalk": what a mark points at, on which drawing. */
+  const placeOf = (m: DockMark) => `${markPlace(m)} on ${drawingName(m.doc ?? m.drawing, m.title)}`;
 
   return (
     <div className={`slc-talk slc-talk--open${className ? ` ${className}` : ""}`} style={{ ...themeStyle(theme), ...style }}>
@@ -177,7 +257,9 @@ export function CompanionDock({
           <span className="slc-talk-title">
             <MicIcon /> Talk with {who}
           </span>
-          <span className={`slc-talk-presence${line.away ? " slc-talk-presence--away" : ""}`} title={line.text} />
+          <span className={`slc-talk-state${line.away ? " slc-talk-state--away" : ""}`} title={line.text}>
+            {line.word}
+          </span>
           <span className="slc-stage-spacer" />
           <button type="button" className="slc-stage-btn slc-stage-btn--quiet" onClick={() => onOpenChange(false)} aria-label="Close the conversation">
             <CloseIcon />
@@ -227,9 +309,51 @@ export function CompanionDock({
         </label>
 
         <ol className="slc-talk-thread">
-          {newest.length === 0 && <li className="slc-stage-empty">Nothing said in this episode yet. Look at a drawing, press Record, and speak.</li>}
+          {newest.length === 0 && (
+            <li className="slc-stage-empty">Nothing said or marked in this episode yet. Look at a drawing, press Record, and speak, or mark it.</li>
+          )}
+          {!saidAny && marks.length > 0 && (
+            <li className="slc-stage-empty">
+              {marksSummary(marks, who)}. Nothing said by voice yet.
+            </li>
+          )}
           {newest.map((item) =>
-            item.kind === "take" ? (
+            item.kind === "mark" ? (
+              <li key={`m${item.id}`} className={`slc-talk-entry slc-talk-entry--mark${markStanding(item) === "waits for agent" ? " slc-talk-entry--waits" : ""}`}>
+                <button
+                  type="button"
+                  className="slc-talk-mark"
+                  onClick={() => onOpenMark?.(item)}
+                  disabled={!onOpenMark}
+                  title={`Open ${drawingName(item.doc ?? item.drawing, item.title)} at this mark`}
+                >
+                  <span className="slc-talk-who">
+                    <PinIcon size={14} />
+                    <span className="slc-talk-mark-head">
+                      <strong>{speaker(item.author, who)}</strong> marked {placeOf(item)}
+                    </span>
+                    <span>{when(item.at)}</span>
+                  </span>
+                  <span className="slc-talk-text">{item.text}</span>
+                  {item.replies.length > 0 && (
+                    <span className="slc-talk-mark-replies">
+                      {item.replies.map((r, i) => (
+                        <span key={i} className={`slc-talk-mark-reply slc-talk-mark-reply--${r.author.role}`}>
+                          <span className="slc-talk-mark-by">
+                            {speaker(r.author, who)}
+                            {r.at ? ` · ${when(r.at)}` : ""}
+                          </span>
+                          <span className="slc-talk-text">{r.text}</span>
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  <span className={`slc-talk-mark-state${markStanding(item) === "waits for agent" ? " slc-talk-mark-state--waits" : ""}`}>
+                    {standing[markStanding(item)]}
+                  </span>
+                </button>
+              </li>
+            ) : item.kind === "take" ? (
               <li key={`t${item.take}`} className="slc-talk-entry slc-talk-entry--take">
                 <div className="slc-talk-who">
                   <strong>You</strong>
@@ -291,6 +415,20 @@ export function CompanionDock({
                     </span>
                   )}
                 </div>
+                {item.mark && (
+                  <button
+                    type="button"
+                    className="slc-talk-answers"
+                    onClick={() => {
+                      const m = marksById.get(item.mark!.id);
+                      if (m) onOpenMark?.(m);
+                    }}
+                    disabled={!onOpenMark || !marksById.has(item.mark.id)}
+                  >
+                    <PinIcon size={13} />
+                    answers your mark on {marksById.has(item.mark.id) ? placeOf(marksById.get(item.mark.id)!) : drawingName(item.mark.doc)}
+                  </button>
+                )}
                 {(item.steps?.length ?? 0) > 0 ? (
                   <ol className="slc-talk-steps" aria-label={`${who}'s walk through the diagram`}>
                     {item.steps!.map((step, i) => {

@@ -803,7 +803,7 @@
 
 .slc-stage-caption-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   min-width: 0;
   font-size: 11px;
@@ -819,17 +819,49 @@
   font-weight: 600;
 }
 
-.slc-stage-caption-title {
-  min-width: 0;
+/* The step's own title, then its place and the tour's name on the line under it. */
+.slc-stage-caption-heading {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 1px;
+}
+
+.slc-stage-caption-title {
+  color: var(--slc-label);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.slc-stage-caption-count {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--slc-label);
-  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-.slc-stage-caption-count { flex: none; font-variant-numeric: tabular-nums; }
+.slc-stage-caption-origin { margin-top: 1px; }
+
+/* The step is about a drawing that is not on the board. */
+.slc-stage-caption-held {
+  margin: 0;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.05);
+  color: var(--slc-muted);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.slc-stage-caption-held strong { color: var(--slc-label); font-weight: 600; }
 
 .slc-stage-caption-speaking {
   flex: none;
@@ -853,20 +885,39 @@
   white-space: pre-wrap;
 }
 
-.slc-stage-dots { display: flex; flex-wrap: wrap; gap: 5px; }
+.slc-stage-dots { display: flex; flex-wrap: wrap; gap: 0; margin: 0 -3px; }
 
+/* The button is the hit area; the dot is drawn inside it. */
 .slc-stage-dot {
-  width: 9px;
-  height: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
   padding: 0;
-  border-radius: 50%;
-  border: 1px solid var(--slc-faint);
+  border: 0;
   background: transparent;
   cursor: pointer;
 }
+.slc-stage-dot::before {
+  content: "";
+  box-sizing: border-box;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid var(--slc-faint);
+}
 
-.slc-stage-dot--seen { background: var(--slc-faint); }
-.slc-stage-dot--current { background: var(--slc-stage-light); border-color: var(--slc-stage-light); }
+.slc-stage-dot--seen::before { background: var(--slc-faint); }
+.slc-stage-dot--current::before { background: var(--slc-stage-light); border-color: var(--slc-stage-light); }
+
+/* Under a finger each dot is a 44 px target; past seven steps the count and the arrows say where the tour stands. */
+@media (pointer: coarse) {
+  .slc-stage-dots { margin: -6px -14px; }
+  .slc-stage-dot { width: 44px; height: 44px; }
+  .slc-stage-dot::before { width: 10px; height: 10px; }
+  .slc-stage-dots--many { display: none; }
+}
 
 .slc-stage-caption-controls,
 .slc-stage-card-row {
@@ -907,7 +958,7 @@
 .slc-stage-btn--answer { border-color: var(--slc-mark-open); color: var(--slc-mark-open); }
 
 @media (pointer: coarse) {
-  .slc-stage-btn { min-height: 40px; min-width: 40px; font-size: 15px; }
+  .slc-stage-btn { min-height: 44px; min-width: 44px; font-size: 15px; }
 }
 
 /* Cards: the composer, a thread, the list of marks. */
@@ -1026,6 +1077,11 @@
 
 .slc-stage-thread-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 
+/* A thread scrolls its words and keeps the reply row in reach at the card's bottom. */
+.slc-stage-thread { overflow: hidden; }
+.slc-stage-thread > * { flex: none; }
+.slc-stage-thread > .slc-stage-thread-list { flex: 1 1 auto; min-height: 3.5em; overflow-y: auto; overscroll-behavior: contain; }
+
 .slc-stage-said {
   display: flex;
   flex-direction: column;
@@ -1131,6 +1187,29 @@
 
 .slc-talk-fab--speaking { border-color: var(--slc-stage-light); box-shadow: 0 0 0 3px rgb(251 191 36 / 0.25); }
 
+/* Closed, on a phone: the handle of the sheet at the bottom of the board, in words. */
+.slc-talk--bar { width: 100%; }
+.slc-talk-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--slc-panel-border);
+  background: var(--slc-panel-bg);
+  color: var(--slc-label);
+  font: 600 14px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+  backdrop-filter: blur(6px);
+}
+.slc-talk-bar-title { flex: none; white-space: nowrap; }
+.slc-talk-bar--live { background: var(--slc-talk-live); border-color: var(--slc-talk-live); color: white; animation: slc-talk-ring 1.4s ease-in-out infinite; }
+.slc-talk-bar--speaking { border-color: var(--slc-stage-light); }
+
 .slc-talk-fab-clock { font: 700 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: white; }
 
 .slc-talk-fab-badge {
@@ -1165,19 +1244,25 @@
 .slc-talk-head { display: flex; align-items: center; gap: 8px; }
 .slc-talk-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
 
-.slc-talk-presence {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 8px #22c55e;
+/* Who is in the room, in words: "listening", "answering take 12", "away". */
+.slc-talk-state {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid rgb(34 197 94 / 0.5);
+  color: #86efac;
+  font-size: 11.5px;
+  font-weight: 500;
 }
-
-.slc-talk-presence--away { background: var(--slc-faint); box-shadow: none; }
+.slc-talk-state--away { border-color: var(--slc-panel-border); color: var(--slc-muted); }
 
 .slc-talk-episode { width: 100%; }
 .slc-talk-meta { color: var(--slc-muted); font-size: 12px; line-height: 1.4; }
-.slc-talk-meta--away { color: var(--slc-mark-open); }
+/* Amber is kept for what waits on the companion; "nobody is listening" is said quietly. */
+.slc-talk-meta--away { color: var(--slc-muted); }
 .slc-talk-meta--error { color: var(--slc-danger); }
 
 .slc-talk-notice {
@@ -1237,6 +1322,52 @@
 }
 
 .slc-talk-entry--reply { border-left-color: var(--slc-mark-question); background: rgb(167 139 250 / 0.07); }
+
+/* A mark on one of the episode's drawings: the whole entry opens that drawing at that mark. */
+.slc-talk-entry--mark { padding: 0; border-left-color: var(--slc-panel-border); }
+.slc-talk-entry--waits { border-left-color: var(--slc-mark-open); }
+.slc-talk-mark {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--slc-label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.slc-talk-mark:hover:not(:disabled) { background: rgb(255 255 255 / 0.04); }
+.slc-talk-mark:disabled { cursor: default; }
+.slc-talk-mark > span { display: flex; }
+.slc-talk-mark > .slc-talk-text { display: block; }
+.slc-talk-mark-head { flex: 1; min-width: 0; color: var(--slc-muted); overflow-wrap: anywhere; }
+.slc-talk-mark-head strong { color: var(--slc-label); }
+.slc-talk-mark-replies { flex-direction: column; gap: 6px; margin-top: 3px; padding-left: 9px; border-left: 2px solid var(--slc-panel-border); }
+.slc-talk-mark-reply { display: flex; flex-direction: column; gap: 1px; }
+.slc-talk-mark-by { font-size: 11px; font-weight: 600; color: var(--slc-muted); }
+.slc-talk-mark-reply--agent .slc-talk-mark-by { color: var(--slc-mark-question); }
+.slc-talk-mark-state { margin-top: 2px; font-size: 11.5px; color: var(--slc-muted); }
+.slc-talk-mark-state--waits { color: var(--slc-mark-open); }
+
+/* A reply that answers a mark says which, and opens it. */
+.slc-talk-answers {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--slc-accent-ink);
+  font: 11.5px ui-sans-serif, system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+.slc-talk-answers:disabled { cursor: default; color: var(--slc-muted); }
 .slc-talk-entry--new { box-shadow: inset 0 0 0 1px var(--slc-mark-question); }
 
 .slc-talk-who { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--slc-muted); }
@@ -1320,6 +1451,7 @@
 .slc-talk-step-say { line-height: 1.4; overflow-wrap: anywhere; }
 
 @media (pointer: coarse) {
+  .slc-talk-answers { min-height: 32px; }
   .slc-talk-play { min-height: 34px; min-width: 40px; }
   .slc-talk-thumb { min-width: 36px; min-height: 36px; }
   .slc-talk-step { padding: 8px 6px; }

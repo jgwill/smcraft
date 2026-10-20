@@ -10,6 +10,10 @@
  * - `<MarkNotice>`: one line near the board's controls when an agent answers
  *   ("Mia answered mark 3"); a tap opens that thread. It takes no focus.
  *
+ * Elements are named as the person sees them on the board ("Witnessing", "id in
+ * WaveCount", "message 8"), never by their focus keys; a host passes `labels`
+ * (focus key → words) for what only it can name, such as a message's words.
+ *
  * Props in, callbacks out, as the canvases: the host writes the sidecar and
  * tells the hub. A host that knows who will answer says so in `note`: one quiet
  * line under the card ("Mia is listening in episode 412: she answers here"). The listener is any object shaped like
@@ -17,8 +21,9 @@
  * socket and no speech code of its own.
  */
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { MARK_KINDS, lastWordOf, markAnchorText, type Box, type Mark, type MarkKind } from "@miadi/stateloom-protocol";
+import { MARK_KINDS, lastWordOf, type Box, type Mark, type MarkKind } from "@miadi/stateloom-protocol";
 import { themeStyle, type CanvasTheme } from "./theme.js";
+import { elementName, markPlace, type ElementLabels } from "./names.js";
 import { CloseIcon, MicIcon } from "./icons.js";
 
 /** Something that turns speech into words (`browserDictation()`). */
@@ -55,13 +60,19 @@ function useListening(listener: ListenerLike | null | undefined, onText: (t: str
   return { listening, toggle };
 }
 
-function Anchor({ elements, region }: { elements?: readonly string[]; region?: Box }) {
+function Anchor({ elements, region, labels }: { elements?: readonly string[]; region?: Box; labels?: ElementLabels }) {
   if (!elements?.length && !region) return <span className="slc-stage-chip slc-stage-chip--quiet">the drawing</span>;
+  // An entity's attributes are left to the entity when it is marked too.
+  const marked = new Set(elements ?? []);
+  const shown = (elements ?? []).filter((e) => {
+    const owner = /^attribute:([^.]+)\./.exec(e);
+    return !owner || !marked.has(`entity:${owner[1]}`);
+  });
   return (
     <>
-      {elements?.map((e) => (
-        <span key={e} className="slc-stage-chip">
-          {e}
+      {shown.map((e) => (
+        <span key={e} className="slc-stage-chip" title={e}>
+          {elementName(e, labels)}
         </span>
       ))}
       {region && !elements?.length && <span className="slc-stage-chip slc-stage-chip--quiet">an area</span>}
@@ -105,6 +116,8 @@ export interface MarkComposerProps {
   placeholder?: string;
   /** Who will answer the mark, from the host: one quiet line under the card. */
   note?: ReactNode;
+  /** Words for elements only the host can name (a message's words), by focus key. */
+  labels?: ElementLabels;
   theme?: Partial<CanvasTheme>;
   className?: string;
   style?: CSSProperties;
@@ -123,6 +136,7 @@ export function MarkComposer({
   error,
   placeholder = "What should the agent know about this?",
   note,
+  labels,
   theme,
   className,
   style,
@@ -161,7 +175,7 @@ export function MarkComposer({
     >
       <div className="slc-stage-card-anchor">
         <span className="slc-stage-card-label">On</span>
-        <Anchor elements={elements} region={region} />
+        <Anchor elements={elements} region={region} labels={labels} />
       </div>
       <textarea
         ref={area}
@@ -233,6 +247,8 @@ export interface MarkThreadProps {
    * agent: the last word is a person's and the mark is not resolved.
    */
   note?: ReactNode;
+  /** Words for elements only the host can name (a message's words), by focus key. */
+  labels?: ElementLabels;
   theme?: Partial<CanvasTheme>;
   className?: string;
   style?: CSSProperties;
@@ -250,6 +266,7 @@ export function MarkThread({
   busy = false,
   error,
   note,
+  labels,
   theme,
   className,
   style,
@@ -280,7 +297,7 @@ export function MarkThread({
         </button>
       </div>
       <div className="slc-stage-card-anchor">
-        <Anchor elements={mark.elements} region={mark.region} />
+        <Anchor elements={mark.elements} region={mark.region} labels={labels} />
       </div>
       <ol className="slc-stage-thread-list">
         <li className={`slc-stage-said slc-stage-said--${mark.author.role}`}>
@@ -352,12 +369,14 @@ export interface MarksPanelProps {
    * marked "new". `unreadMarks(marks, read)` from the protocol.
    */
   unread?: readonly string[];
+  /** Words for elements only the host can name (a message's words), by focus key. */
+  labels?: ElementLabels;
   theme?: Partial<CanvasTheme>;
   className?: string;
   style?: CSSProperties;
 }
 
-export function MarksPanel({ marks, selected, onSelect, onCopy, copied, onClose, note, unread, theme, className, style }: MarksPanelProps) {
+export function MarksPanel({ marks, selected, onSelect, onCopy, copied, onClose, note, unread, labels, theme, className, style }: MarksPanelProps) {
   const [all, setAll] = useState(false);
   const unreadIds = new Set(unread ?? []);
   // Numbered as on the board; the ones with an agent's word not yet read first.
@@ -398,7 +417,7 @@ export function MarksPanel({ marks, selected, onSelect, onCopy, copied, onClose,
                 <span className="slc-stage-panel-said">{m.text}</span>
                 <span className="slc-stage-panel-meta">
                   {unreadIds.has(m.id) && <span className="slc-stage-new">new</span>}
-                  {m.author.name} · {markAnchorText(m)}
+                  {m.author.name} · {markPlace(m, labels)}
                   {m.replies?.length ? ` · ${m.replies.length} repl${m.replies.length === 1 ? "y" : "ies"}` : ""}
                 </span>
               </span>

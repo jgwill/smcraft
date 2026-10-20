@@ -1,11 +1,18 @@
 /**
  * The words of the step on stage, and the buttons that move a tour (Spec 83).
  *
- * A card over the bottom of the board: who is presenting, the tour and the
- * step's title, what the agent says, where the tour stands. The controls are
- * the person's: back, play or pause, forward, the voice on or off, answer
- * (the host opens a mark on what is lit), close. Nothing here plays anything;
- * the buttons call the host, which holds the stage session.
+ * A card over the bottom of the board: who is presenting, the step's own title
+ * as the heading (it may wrap to two lines), the step's place and the tour's
+ * name on the line under it, what the agent says, where the tour stands. The
+ * controls are the person's: back, play or pause, forward, the voice on or off,
+ * answer (the host opens a mark on what is lit), close. Nothing here plays
+ * anything; the buttons call the host, which holds the stage session.
+ *
+ * When the step is about a drawing that is not on the board (`held`: a page
+ * opened on another drawing caught up with what the stage holds), the caption
+ * says which drawing it is about, its main button opens that drawing and plays
+ * ("Open and play"), and Answer is absent — a mark would land on the wrong
+ * drawing.
  */
 import type { CSSProperties } from "react";
 import type { TourStep } from "@miadi/stateloom-protocol";
@@ -33,6 +40,11 @@ export interface StageCaptionProps {
   onClose?: () => void;
   /** Answer what is lit: the host opens a mark on it. Absent: no answer button. */
   onAnswer?: () => void;
+  /**
+   * The step is about a drawing that is not on the board: its name, and what opens it.
+   * The caption names it, its main button says `label` ("Open and play"), and Answer is absent.
+   */
+  held?: { drawing: string; label?: string; onOpen: () => void } | null;
   theme?: Partial<CanvasTheme>;
   className?: string;
   style?: CSSProperties;
@@ -54,6 +66,7 @@ export function StageCaption({
   onGoto,
   onClose,
   onAnswer,
+  held = null,
   theme,
   className,
   style,
@@ -61,7 +74,10 @@ export function StageCaption({
   if (!shown) return null;
   const { step, index, count, title, origin } = shown;
   const inTour = index !== null && count !== null;
-  const heading = [title, step.title].filter(Boolean).join(" · ");
+  // The step's own title is the heading; the tour's name goes beside the count.
+  const heading = step.title || title || "";
+  const place = [inTour ? `${index! + 1} / ${count}` : "", step.title ? title : ""].filter(Boolean).join(" · ");
+  const many = inTour && count! > 7;
 
   return (
     <section
@@ -73,12 +89,10 @@ export function StageCaption({
     >
       <header className="slc-stage-caption-head">
         {origin && <span className="slc-stage-caption-origin">{origin}</span>}
-        {heading && <span className="slc-stage-caption-title">{heading}</span>}
-        {inTour && (
-          <span className="slc-stage-caption-count">
-            {index! + 1} / {count}
-          </span>
-        )}
+        <span className="slc-stage-caption-heading">
+          {heading && <span className="slc-stage-caption-title">{heading}</span>}
+          {place && <span className="slc-stage-caption-count">{place}</span>}
+        </span>
         {speaking && <span className="slc-stage-caption-speaking" aria-label="speaking" />}
         {onClose && (
           <button type="button" className="slc-stage-btn slc-stage-btn--quiet" onClick={onClose} aria-label="Close" title="Close">
@@ -87,10 +101,16 @@ export function StageCaption({
         )}
       </header>
 
+      {held && (
+        <p className="slc-stage-caption-held">
+          About <strong>{held.drawing}</strong>, not the drawing open here.
+        </p>
+      )}
+
       <p className="slc-stage-caption-say">{step.say}</p>
 
       {inTour && count! <= MAX_DOTS && count! > 1 && (
-        <nav className="slc-stage-dots" aria-label="Steps">
+        <nav className={`slc-stage-dots${many ? " slc-stage-dots--many" : ""}`} aria-label="Steps">
           {Array.from({ length: count! }, (_, i) => (
             <button
               key={i}
@@ -110,7 +130,12 @@ export function StageCaption({
             <button type="button" className="slc-stage-btn" onClick={onPrev} disabled={index === 0} aria-label="Previous step" title="Previous step">
               <PrevIcon />
             </button>
-            {playing ? (
+            {held ? (
+              <button type="button" className="slc-stage-btn slc-stage-btn--main" onClick={held.onOpen} title={`Open ${held.drawing} and play from this step`}>
+                <PlayIcon />
+                {held.label ?? "Open and play"}
+              </button>
+            ) : playing ? (
               <button type="button" className="slc-stage-btn slc-stage-btn--main" onClick={onPause} aria-label="Pause" title="Pause">
                 <PauseIcon />
               </button>
@@ -124,6 +149,11 @@ export function StageCaption({
             </button>
           </>
         )}
+        {!inTour && held && (
+          <button type="button" className="slc-stage-btn slc-stage-btn--main" onClick={held.onOpen} title={`Open ${held.drawing}`}>
+            {held.label ?? "Open the drawing"}
+          </button>
+        )}
         <span className="slc-stage-spacer" />
         {voice !== undefined && (
           <button
@@ -136,7 +166,7 @@ export function StageCaption({
             {voice ? <SpeakerIcon /> : <SpeakerOffIcon />}
           </button>
         )}
-        {onAnswer && (
+        {onAnswer && !held && (
           <button type="button" className="slc-stage-btn slc-stage-btn--answer" onClick={onAnswer} title="Answer — mark what is lit and say something about it">
             Answer
           </button>
