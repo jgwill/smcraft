@@ -12,6 +12,10 @@
  *   marks an area and what is inside it — and the composer asks what the agent
  *   should know. Answer on the caption opens the composer on what is lit.
  * - What the person is looking at goes back to the agents through the stage.
+ * - Who answers a mark: under the composer, the panel, and a thread whose last
+ *   word is the person's, one line says whether a Mia seat listens in the
+ *   drawing's chronicle episode (Spec 84's presence). No line when the drawing
+ *   is not in an episode or no companion is configured.
  *
  * The sidecar is written through /api/marks; the hub is told after.
  */
@@ -29,6 +33,8 @@ import {
   type Viewport,
 } from "@miadi/stateloom-protocol";
 import { useStageContext } from "./StageProvider";
+import { episodeOf } from "./CompanionLayer";
+import { presenceLine, useEpisodePresence } from "./useEpisodePresence";
 import { urlParam } from "@/lib/systemParam";
 
 export interface StageLayerProps {
@@ -193,6 +199,11 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
     });
   };
 
+  // ── Who answers a mark ───────────────────────────────────────────────
+  const episode = stage?.companion ? episodeOf(docPath) : null;
+  const presence = useEpisodePresence(episode, !!(draft || selected || panel));
+  const note = presenceLine(presence, episode);
+
   if (!docPath) return null;
   const waiting = marks.filter((m) => m.status === "open" && m.author.role === "person").length;
   const questions = marks.filter((m) => m.status === "open" && m.author.role === "agent").length;
@@ -271,6 +282,7 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
               listenAtOnce={!!draft.listen}
               busy={busy}
               error={error}
+              note={note}
               onCancel={() => {
                 setDraft(null);
                 setError(null);
@@ -291,6 +303,7 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
               listener={stage?.listener}
               busy={busy}
               error={error}
+              note={note}
               onClose={() => setSelected(null)}
               onReply={(text) => void write({ action: "reply", id: selectedMark.id, text, author: { name: stage?.author || "someone" } })}
               onResolve={() => void write({ action: "resolve", id: selectedMark.id })}
@@ -309,6 +322,7 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
               }}
               onCopy={copy}
               copied={copied}
+              note={note}
               onClose={() => setPanel(false)}
             />
           )}

@@ -916,6 +916,8 @@
 .slc-stage-card-label { color: var(--slc-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
 .slc-stage-card-anchor { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .slc-stage-card-error { color: var(--slc-danger); font-size: 12px; }
+/* Who will answer the marks: the host's one line, quiet. */
+.slc-stage-card-note { color: var(--slc-muted); font-size: 12px; line-height: 1.35; }
 
 .slc-stage-chip {
   padding: 1px 7px;

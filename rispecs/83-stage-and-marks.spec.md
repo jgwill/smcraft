@@ -169,6 +169,11 @@ system and focuses its element through `openInSystem` (Spec 82); what it lights 
   violet an agent's question, grey resolved. A pin opens its thread: reply, resolve, reopen,
   remove. The speech bubble lists the marks (Open | All), waiting first, and **Copy for the agent** puts the review on the
   clipboard to paste into any agent's prompt.
+- **Who answers**: on a drawing in a chronicle episode, with a companion configured (Spec 84), one
+  muted line under the composer, the list, and a thread whose last word is the person's says
+  whether a Mia seat listens there ("Mia is listening in episode 412: she answers here", "Mia is
+  answering", "No seat is listening in episode 412: your mark waits until one does"); elsewhere no
+  line. The cards take it as `note` (any `ReactNode`), so another host says its own.
 - **Context**: the drawing, the element in hand, the visible area and the tour's place go to the
   stage a moment after they settle.
 
@@ -203,6 +208,8 @@ turned it on. A step's `audio` is played instead when it has one: an agent rende
 its own voice service — in the Miadi ecosystem the `miadi-voice` MCP, the one sanctioned voice path
 — and puts the recording there. The person's spoken marks use `browserDictation` (Web Speech
 recognition) where the browser has it; where it does not, the 🎙 button is absent and they type.
+Final segments are joined with one space (`joinHeard`): Safari hands them with none between, and a
+spoken mark read "in betweenWhen it hasn't been".
 
 ## Reuse
 

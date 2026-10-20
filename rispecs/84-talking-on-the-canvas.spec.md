@@ -134,6 +134,11 @@ A take spoken while a step is on the board — one of Mia's, or an agent's — c
 title, its words, its place and who showed it, with what it lit. The thread shows "during “…”"
 under the take, and the wake says it to the seat.
 
+The marks say who answers too. On a drawing in a chronicle episode, the mark cards read the same
+presence for that drawing's episode (not the dock's), polled every 10 s while a card is open, and
+show it in one muted line: listening, answering, just answered (the mark waits until she listens
+again), or away (no seat: the mark waits until one does).
+
 ## Agents
 
 The seat composes a reply as steps when what it says is about the drawings:

@@ -54,6 +54,8 @@ export interface StageValue {
   shown: StageShown | null;
   /** Play a tour from this page in its own voice — a companion's reply (Spec 84). */
   present: UseStage["present"];
+  /** A companion answers behind `/api/companion` (Spec 84): the mark cards say who answers. */
+  companion: boolean;
   pause: () => void;
   stop: () => void;
 }
@@ -220,10 +222,11 @@ export default function StageProvider({ children }: { children: ReactNode }) {
       },
       shown: stage.shown,
       present: stage.present,
+      companion: config.companion,
       pause: stage.pause,
       stop: stage.stop,
     }),
-    [config.stage, stage.status, stage.shown, stage.sendMarks, stage.present, stage.pause, stage.stop, lit, author, listener, answerNonce, report],
+    [config.stage, config.companion, stage.status, stage.shown, stage.sendMarks, stage.present, stage.pause, stage.stop, lit, author, listener, answerNonce, report],
   );
 
   return (

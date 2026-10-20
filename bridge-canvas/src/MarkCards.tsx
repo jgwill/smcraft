@@ -8,12 +8,13 @@
  *   button that copies them as a review for an agent.
  *
  * Props in, callbacks out, as the canvases: the host writes the sidecar and
- * tells the hub. The listener is any object shaped like
+ * tells the hub. A host that knows who will answer says so in `note`: one quiet
+ * line under the card ("Mia is listening in episode 412: she answers here"). The listener is any object shaped like
  * `@miadi/stateloom-react`'s `browserDictation()`, so this package needs no
  * socket and no speech code of its own.
  */
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { MARK_KINDS, markAnchorText, type Box, type Mark, type MarkKind } from "@miadi/stateloom-protocol";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { MARK_KINDS, markAnchorText, type Box, type Mark, type MarkKind, type MarkRole } from "@miadi/stateloom-protocol";
 import { themeStyle, type CanvasTheme } from "./theme.js";
 import { CloseIcon, MicIcon } from "./icons.js";
 
@@ -65,6 +66,21 @@ function Anchor({ elements, region }: { elements?: readonly string[]; region?: B
   );
 }
 
+/** Who will answer, as the host knows it: one muted line, nothing when the host has nothing to say. */
+function Note({ children }: { children?: ReactNode }) {
+  if (children === undefined || children === null || children === false || children === "") return null;
+  return (
+    <div className="slc-stage-card-note" role="status">
+      {children}
+    </div>
+  );
+}
+
+/** Whose word is last in a mark's thread: the mark's author, or the last reply's. */
+function lastWordBy(mark: Mark): MarkRole {
+  return mark.replies?.length ? mark.replies[mark.replies.length - 1].author.role : mark.author.role;
+}
+
 export interface MarkComposerProps {
   elements: readonly string[];
   region?: Box;
@@ -80,6 +96,8 @@ export interface MarkComposerProps {
   busy?: boolean;
   error?: string | null;
   placeholder?: string;
+  /** Who will answer the mark, from the host: one quiet line under the card. */
+  note?: ReactNode;
   theme?: Partial<CanvasTheme>;
   className?: string;
   style?: CSSProperties;
@@ -97,6 +115,7 @@ export function MarkComposer({
   busy = false,
   error,
   placeholder = "What should the agent know about this?",
+  note,
   theme,
   className,
   style,
@@ -181,6 +200,7 @@ export function MarkComposer({
           {busy ? "Saving…" : "Mark"}
         </button>
       </div>
+      <Note>{note}</Note>
       {error && <div className="slc-stage-card-error">{error}</div>}
     </form>
   );
@@ -198,6 +218,11 @@ export interface MarkThreadProps {
   listener?: ListenerLike | null;
   busy?: boolean;
   error?: string | null;
+  /**
+   * Who will answer, from the host. Shown under the thread only while it waits on an
+   * agent: the last word is a person's and the mark is not resolved.
+   */
+  note?: ReactNode;
   theme?: Partial<CanvasTheme>;
   className?: string;
   style?: CSSProperties;
@@ -214,6 +239,7 @@ export function MarkThread({
   listener,
   busy = false,
   error,
+  note,
   theme,
   className,
   style,
@@ -258,6 +284,7 @@ export function MarkThread({
           </li>
         ))}
       </ol>
+      {mark.status !== "resolved" && lastWordBy(mark) === "person" && <Note>{note}</Note>}
       {onReply && (
         <form className="slc-stage-card-row" onSubmit={send}>
           <input
@@ -308,12 +335,14 @@ export interface MarksPanelProps {
   onCopy?: () => void;
   copied?: boolean;
   onClose?: () => void;
+  /** Who will answer the marks, from the host: one quiet line under the list. */
+  note?: ReactNode;
   theme?: Partial<CanvasTheme>;
   className?: string;
   style?: CSSProperties;
 }
 
-export function MarksPanel({ marks, selected, onSelect, onCopy, copied, onClose, theme, className, style }: MarksPanelProps) {
+export function MarksPanel({ marks, selected, onSelect, onCopy, copied, onClose, note, theme, className, style }: MarksPanelProps) {
   const [all, setAll] = useState(false);
   const numbered = marks.map((m, i) => ({ m, n: i + 1 }));
   const shown = all ? numbered : numbered.filter(({ m }) => m.status !== "resolved");
@@ -358,6 +387,7 @@ export function MarksPanel({ marks, selected, onSelect, onCopy, copied, onClose,
           </li>
         ))}
       </ul>
+      <Note>{note}</Note>
       {onCopy && (
         <div className="slc-stage-card-row">
           <span className="slc-stage-spacer" />
