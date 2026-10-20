@@ -24,7 +24,7 @@ export { createStageSession } from "./stage.js";
 export type { StageSession, StageSessionOptions, StageSnapshot, StageShown, StageVoice } from "./stage.js";
 export { useStage } from "./useStage.js";
 export type { UseStage, UseStageOptions } from "./useStage.js";
-export { browserVoice, browserDictation } from "./speech.js";
+export { browserVoice, browserDictation, joinHeard } from "./speech.js";
 // Talking with a companion from the canvas (Spec 84): the phone page's recorder and
 // conversation, for any page that reaches a phone-capture service.
 export {

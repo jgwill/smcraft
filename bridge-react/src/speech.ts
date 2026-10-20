@@ -129,6 +129,18 @@ export interface Dictation {
   stop(): void;
 }
 
+/**
+ * Two pieces of heard speech as one text. The browser hands each final segment as it
+ * was recognised, and Safari's segments carry no space between them: "in between" then
+ * "When it" read "in betweenWhen it". A space joins them when neither side has one, and
+ * a space on both sides stays one.
+ */
+export function joinHeard(said: string, more: string): string {
+  if (!more) return said;
+  if (!said) return more;
+  return `${said.trimEnd()} ${more.trimStart()}`;
+}
+
 /** The person speaks instead of typing. Null where the browser cannot listen (Firefox, most webviews). */
 export function browserDictation(options: { lang?: string } = {}): Dictation | null {
   if (typeof window === "undefined") return null;
@@ -150,10 +162,10 @@ export function browserDictation(options: { lang?: string } = {}): Dictation | n
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const result = e.results[i];
           const words = result[0]?.transcript ?? "";
-          if (result.isFinal) finalText += words;
-          else interim += words;
+          if (result.isFinal) finalText = joinHeard(finalText, words);
+          else interim = joinHeard(interim, words);
         }
-        onText((finalText + interim).trim(), interim === "");
+        onText(joinHeard(finalText, interim).trim(), interim === "");
       };
       r.onerror = (e) => onEnd?.(e.error ?? "error");
       r.onend = () => {
