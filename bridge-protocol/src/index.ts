@@ -161,3 +161,30 @@ export type {
   ElementRef,
   SystemLink,
 } from "./system/check.js";
+export {
+  TOUR_FORMAT,
+  MARK_FORMAT,
+  TOUR_EXTENSION,
+  MARKS_FILE,
+  DEFAULT_HOLD_MS,
+  MARK_KINDS,
+  isTourPath,
+  readTour,
+  tourMembers,
+  stepSpeech,
+  readMarks,
+  markFromDraft,
+  markLine,
+  describeMark,
+} from "./stage/tour.js";
+export type {
+  TourStep,
+  StageTour,
+  MarkKind,
+  MarkStatus,
+  StageMark,
+  MarkDraft,
+  FormatResult,
+} from "./stage/tour.js";
+export { pathToState, machineStatesOf, machineFrame, erdFrame, sequenceFrame } from "./stage/frame.js";
+export type { StageFrame, MachineFrame } from "./stage/frame.js";

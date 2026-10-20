@@ -61,6 +61,7 @@ import type {
   Viewport,
 } from "@miadi/stateloom-protocol";
 import { childStatesAt, definedEvents, livePath } from "./drill.js";
+import { spotClass, spotlightSet } from "./spotlight.js";
 import { themeStyle, type CanvasTheme } from "./theme.js";
 
 // ─── Public shapes ───────────────────────────────────────────────────────────
@@ -106,6 +107,13 @@ export interface StateMachineCanvasProps {
   activeStates?: readonly string[];
   /** Names that failed validation — drawn with the danger outline. */
   errorElements?: readonly string[];
+  /**
+   * What someone is being shown, as focus strings: `state:Name`,
+   * `transition:<state>:<index>` (the id `onSelect` reports), `event:Name`.
+   * Those are drawn with the spotlight ring and the rest of the level dims.
+   * Empty or absent, nothing dims.
+   */
+  spotlight?: readonly string[];
 
   drawMode?: DrawMode;
   drawSource?: string | null;
@@ -285,6 +293,7 @@ export const StateMachineCanvas = forwardRef<StateMachineCanvasHandle, StateMach
       selection = NO_SELECTION,
       activeStates,
       errorElements,
+      spotlight,
       drawMode = "select",
       drawSource = null,
       readOnly = false,
@@ -382,6 +391,7 @@ export const StateMachineCanvas = forwardRef<StateMachineCanvasHandle, StateMach
     const allEvents = useMemo(() => definedEvents(definition), [definition]);
     const activeSet = useMemo(() => new Set(activeStates ?? []), [activeStates]);
     const errorSet = useMemo(() => new Set(errorElements ?? []), [errorElements]);
+    const lit = useMemo(() => spotlightSet(spotlight), [spotlight]);
 
     /** Pointer position relative to the canvas element — the space zoom anchors in. */
     const toCanvasPoint = useCallback((clientX: number, clientY: number) => {
@@ -1216,6 +1226,7 @@ export const StateMachineCanvas = forwardRef<StateMachineCanvasHandle, StateMach
             {/* Transition arrows */}
             {edges.map(({ arrow, id: edgeId, curve, spot }) => {
               const isSelected = selection.kind === "transition" && selection.id === edgeId;
+              const edgeSpot = spotClass(lit, lit.has("transition", edgeId) || lit.has("event", arrow.event));
               // A new edge (flagged in the commit effect) draws itself on.
               const edgeEntering = enteringEdges.has(edgeId);
               // A chip that had to move is drawn back to its own curve with a hair
@@ -1224,7 +1235,7 @@ export const StateMachineCanvas = forwardRef<StateMachineCanvasHandle, StateMach
               const strayed = Math.hypot(anchor.x - spot.cx, anchor.y - spot.cy) > 4;
 
               return (
-                <g key={`arrow-${edgeId}`}>
+                <g key={`arrow-${edgeId}`} className={edgeSpot || undefined}>
                   {/* A 1.5px thread is a fair target for a cursor and none at all
                       for a fingertip. This traces the same curve with a wide
                       invisible stroke underneath it — same selection, same path,
@@ -1333,6 +1344,7 @@ export const StateMachineCanvas = forwardRef<StateMachineCanvasHandle, StateMach
               const hasEntry = (state.onEntry?.actions?.length ?? 0) > 0;
               const hasExit = (state.onExit?.actions?.length ?? 0) > 0;
               const isActive = activeSet.has(state.name);
+              const nodeSpot = spotClass(lit, lit.has("state", state.name));
               // A node first seen this session (flagged in the commit effect)
               // carries slc-node-enter; the bloom only fires on the freshly-mounted
               // element, so the marker staying set for existing nodes is inert.
@@ -1352,7 +1364,7 @@ export const StateMachineCanvas = forwardRef<StateMachineCanvasHandle, StateMach
               return (
                 <g
                   key={state.name}
-                  className={cursor}
+                  className={[cursor, nodeSpot].filter(Boolean).join(" ") || undefined}
                   onPointerDown={(e) => handleNodePointerDown(e, state.name)}
                   onDoubleClick={(e) => {
                     e.stopPropagation();

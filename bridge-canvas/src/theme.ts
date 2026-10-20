@@ -46,6 +46,8 @@ export interface CanvasTheme {
   composite: string;
   /** Runtime-active glow. */
   active: string;
+  /** The ring on what someone is being shown (the `spotlight` prop). */
+  spot: string;
   /** Floating chrome: HUD, breadcrumb, event picker. */
   panelBg: string;
   panelBorder: string;
@@ -74,6 +76,7 @@ const VAR: Record<keyof CanvasTheme, string> = {
   exit: "--slc-exit",
   composite: "--slc-composite",
   active: "--slc-active",
+  spot: "--slc-spot",
   panelBg: "--slc-panel-bg",
   panelBorder: "--slc-panel-border",
   panelHover: "--slc-panel-hover",

@@ -54,6 +54,7 @@ import {
   type SqdParticipant,
   type Viewport,
 } from "@miadi/stateloom-protocol";
+import { spotClass, spotlightSet } from "./spotlight.js";
 import { themeStyle, type CanvasTheme } from "./theme.js";
 
 export type SequenceTargetKind = "message" | "participant";
@@ -80,6 +81,11 @@ export interface SequenceCanvasProps {
   errorElements?: readonly string[];
   /** Elements with a warning (the replay's stops), drawn quieter than errors. */
   warningElements?: readonly string[];
+  /**
+   * What someone is being shown: `message:9`, `participant:Chart`. Those keep
+   * the spotlight ring; the rest of the drawing dims. Empty or absent, nothing dims.
+   */
+  spotlight?: readonly string[];
   /** Change this to re-fit the board to the whole drawing. */
   fitKey?: string | number;
   onSelect?: (kind: SequenceTargetKind, id: string) => void;
@@ -222,6 +228,7 @@ export function SequenceCanvas({
   selection = null,
   errorElements,
   warningElements,
+  spotlight,
   fitKey,
   onSelect,
   onClearSelection,
@@ -376,6 +383,7 @@ export function SequenceCanvas({
 
   const errors = new Set(errorElements ?? []);
   const warnings = new Set(warningElements ?? []);
+  const spot = spotlightSet(spotlight);
   const isSel = (kind: SequenceTargetKind, id: string) => selection?.kind === kind && selection.id === id;
   const selectedMessage = selection?.kind === "message" ? messages.get(selection.id) : undefined;
 
@@ -422,7 +430,10 @@ export function SequenceCanvas({
           {layout.participants.map((box) => {
             const selected = isSel("participant", box.name);
             return (
-              <g key={`l-${box.name}`} onPointerDown={(e) => onPointerDown(e, { kind: "participant", id: box.name })}>
+              <g
+                key={`l-${box.name}`}
+                className={spotClass(spot, spot.has("participant", box.name)) || undefined}
+                onPointerDown={(e) => onPointerDown(e, { kind: "participant", id: box.name })}>
                 <path d={`M ${box.x} ${layout.lifelineTop} V ${layout.lifelineBottom}`} className="slc-sqd-hit" />
                 <path
                   d={`M ${box.x} ${layout.lifelineTop} V ${layout.lifelineBottom}`}
@@ -528,7 +539,7 @@ export function SequenceCanvas({
             return (
               <g
                 key={`m-${row.ref}`}
-                className="slc-sqd-message"
+                className={["slc-sqd-message", spotClass(spot, spot.has("message", row.ref))].filter(Boolean).join(" ")}
                 onPointerDown={(e) => onPointerDown(e, { kind: "message", id: row.ref })}
                 onContextMenu={menu({ kind: "message", id: row.ref })}
               >
@@ -588,7 +599,9 @@ export function SequenceCanvas({
             return (
               <g
                 key={`p-${box.name}`}
-                className="slc-node--static slc-sqd-participant"
+                className={["slc-node--static slc-sqd-participant", spotClass(spot, spot.has("participant", box.name))]
+                  .filter(Boolean)
+                  .join(" ")}
                 onPointerDown={(e) => onPointerDown(e, { kind: "participant", id: box.name })}
                 onContextMenu={menu({ kind: "participant", id: box.name })}
               >

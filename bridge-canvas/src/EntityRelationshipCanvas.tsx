@@ -56,6 +56,7 @@ import {
   type LayoutBox,
   type Viewport,
 } from "@miadi/stateloom-protocol";
+import { spotClass, spotlightSet } from "./spotlight.js";
 import { themeStyle, type CanvasTheme } from "./theme.js";
 
 export interface ErdCanvasTarget {
@@ -75,6 +76,11 @@ export interface EntityRelationshipCanvasProps {
   selection?: string | null;
   /** Entities failing validation. */
   errorElements?: readonly string[];
+  /**
+   * What someone is being shown: `entity:WaveCount`. Those keep the spotlight
+   * ring; a relationship stays lit when both its ends are. The rest dims.
+   */
+  spotlight?: readonly string[];
   readOnly?: boolean;
   /** Change this to re-fit the board to its boxes (a new document, a re-layout). */
   fitKey?: string | number;
@@ -182,6 +188,7 @@ export function EntityRelationshipCanvas({
   onViewportChange,
   selection = null,
   errorElements,
+  spotlight,
   readOnly = false,
   fitKey,
   onSelect,
@@ -357,6 +364,9 @@ export function EntityRelationshipCanvas({
   };
 
   const errors = new Set(errorElements ?? []);
+  const spot = spotlightSet(spotlight);
+  const relSpot = (rel: { from: string; to: string }) =>
+    spotClass(spot, spot.has("entity", rel.from) && spot.has("entity", rel.to));
 
   return (
     <div className={`slc-pane${className ? ` ${className}` : ""}`} style={{ ...themeStyle(theme), ...style }}>
@@ -381,7 +391,7 @@ export function EntityRelationshipCanvas({
               const a = curve.at(0.12);
               const b = curve.at(0.88);
               return (
-                <g key={`r${i}`} className="slc-erd-rel">
+                <g key={`r${i}`} className={["slc-erd-rel", relSpot(rel)].filter(Boolean).join(" ")}>
                   {/* The router's line ends on the corridor; these carry it on to the rectangle itself. */}
                   <path d={stubTo(geometry.get(rel.from)?.rect, curve.p0)} className="slc-erd-line" />
                   <path d={stubTo(geometry.get(rel.to)?.rect, curve.p3)} className="slc-erd-line" />
@@ -397,7 +407,7 @@ export function EntityRelationshipCanvas({
             }
             const [fromEnd, toEnd] = ENDS[rel.cardinality] ?? ENDS["1:N"];
             return (
-              <g key={`r${i}`} className="slc-erd-rel">
+              <g key={`r${i}`} className={["slc-erd-rel", relSpot(rel)].filter(Boolean).join(" ")}>
                 <path d={curve.path} className="slc-erd-line" />
                 <path d={endMark(curve.p0, curve.p1, fromEnd)} className="slc-erd-mark" />
                 <path d={endMark(curve.p3, curve.p2, toEnd)} className="slc-erd-mark" />
@@ -422,7 +432,9 @@ export function EntityRelationshipCanvas({
               return (
                 <g
                   key={entity.name}
-                  className={readOnly ? "slc-node--static" : "slc-node--draggable"}
+                  className={[readOnly ? "slc-node--static" : "slc-node--draggable", spotClass(spot, spot.has("entity", entity.name))]
+                    .filter(Boolean)
+                    .join(" ")}
                   onPointerDown={(e) => onPointerDown(e, entity.name)}
                   onContextMenu={(e) => {
                     if (!onContextMenu) return;
@@ -493,7 +505,9 @@ export function EntityRelationshipCanvas({
             return (
               <g
                 key={entity.name}
-                className={readOnly ? "slc-node--static" : "slc-node--draggable"}
+                className={[readOnly ? "slc-node--static" : "slc-node--draggable", spotClass(spot, spot.has("entity", entity.name))]
+                  .filter(Boolean)
+                  .join(" ")}
                 onPointerDown={(e) => onPointerDown(e, entity.name)}
                 onContextMenu={(e) => {
                   if (!onContextMenu) return;
@@ -573,7 +587,7 @@ export function EntityRelationshipCanvas({
             const hw = chenDiamondHalfWidth(spot.label.rel.label ?? "");
             const hh = CHEN.diamondHalfHeight;
             return (
-              <g key={`d${i}`} pointerEvents="none">
+              <g key={`d${i}`} pointerEvents="none" className={relSpot(spot.label.rel) || undefined}>
                 <path
                   d={`M ${cx - hw} ${cy} L ${cx} ${cy - hh} L ${cx + hw} ${cy} L ${cx} ${cy + hh} Z`}
                   className="slc-erd-diamond"
@@ -585,7 +599,7 @@ export function EntityRelationshipCanvas({
             );
           })}
           {!chen && labels.map((spot, i) => (
-            <g key={`l${i}`} pointerEvents="none">
+            <g key={`l${i}`} pointerEvents="none" className={relSpot(spot.label.rel) || undefined}>
               <rect x={spot.x} y={spot.y} width={spot.width} height={spot.height} rx={4} className="slc-chip-plate" />
               <text x={spot.cx} y={spot.cy - 5} textAnchor="middle" className="slc-erd-rel-label">
                 {spot.label.event}
