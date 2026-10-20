@@ -1,0 +1,230 @@
+/*
+ * @miadi/stateloom-stage — the chrome around the board: drawing tabs, the
+ * caption and its controls, the picked elements, the mark composer, the list
+ * of marks. Import after `@miadi/stateloom-canvas/styles.css`.
+ *
+ * Every colour is a `--sls-*` variable on `.sls-stage`, defaulting to the
+ * canvas's dark palette, so a host restyles the stage the way it restyles the
+ * board. Touch targets are at least 40px: the stage is used on a phone.
+ */
+.sls-stage {
+  --sls-bg: #0b1120;
+  --sls-panel: #111827;
+  --sls-border: #1f2937;
+  --sls-text: #e5e7eb;
+  --sls-muted: #94a3b8;
+  --sls-accent: #3b82f6;
+  --sls-accent-ink: #ffffff;
+  --sls-spot: #f5b942;
+  --sls-live: #ef4444;
+  --sls-radius: 10px;
+  --sls-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--sls-text);
+  font-family: var(--sls-font);
+  font-size: 14px;
+  outline: none;
+}
+
+.sls-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.sls-tabs::-webkit-scrollbar { display: none; }
+
+.sls-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--sls-border);
+  border-radius: 999px;
+  background: var(--sls-panel);
+  color: var(--sls-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.sls-tab--on { color: var(--sls-text); border-color: var(--sls-accent); }
+.sls-tab--marks { margin-left: auto; }
+
+.sls-kind {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--sls-border);
+  color: var(--sls-muted);
+}
+.sls-kind--machine { color: #93c5fd; }
+.sls-kind--erd { color: #86efac; }
+.sls-kind--sequence { color: #f9a8d4; }
+
+.sls-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--sls-spot);
+  color: #111;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.sls-board {
+  position: relative;
+  min-height: 280px;
+  border: 1px solid var(--sls-border);
+  border-radius: var(--sls-radius);
+  overflow: hidden;
+  background: var(--sls-bg);
+}
+
+.sls-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 16px;
+  color: var(--sls-muted);
+  text-align: center;
+}
+
+.sls-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--sls-spot);
+  color: #111;
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.sls-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--sls-border);
+  border-radius: var(--sls-radius);
+  background: var(--sls-panel);
+}
+.sls-panel--pick { border-color: var(--sls-spot); }
+
+.sls-caption-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.sls-step { color: var(--sls-muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.sls-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sls-by { margin-left: auto; color: var(--sls-muted); font-size: 12px; }
+
+.sls-text { margin: 0; line-height: 1.5; }
+.sls-text--cue { border-left: 3px solid var(--sls-spot); padding-left: 8px; }
+.sls-hint { margin: 0; color: var(--sls-muted); font-size: 13px; }
+.sls-notice { margin: 0; color: var(--sls-spot); font-size: 13px; }
+
+.sls-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sls-grow { flex: 1; }
+
+.sls-btn {
+  min-height: 40px;
+  min-width: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--sls-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sls-text);
+  font: inherit;
+  cursor: pointer;
+}
+.sls-btn:disabled { opacity: 0.4; cursor: default; }
+.sls-btn--primary { background: var(--sls-accent); border-color: var(--sls-accent); color: var(--sls-accent-ink); font-weight: 600; }
+.sls-btn--live { border-color: var(--sls-live); color: var(--sls-live); }
+
+.sls-picked { display: flex; gap: 6px; flex-wrap: wrap; }
+.sls-chip {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--sls-spot);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sls-spot);
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: pointer;
+}
+
+.sls-compose { display: flex; flex-direction: column; gap: 8px; }
+.sls-kinds { display: flex; gap: 6px; flex-wrap: wrap; }
+.sls-kindchip {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--sls-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sls-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.sls-kindchip--on { border-color: var(--sls-accent); color: var(--sls-text); background: rgb(59 130 246 / 0.15); }
+
+.sls-note {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--sls-border);
+  border-radius: 8px;
+  background: var(--sls-bg);
+  color: var(--sls-text);
+  font: inherit;
+  font-size: 16px; /* 16px keeps a phone from zooming the page on focus */
+  resize: vertical;
+}
+
+.sls-marks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sls-mark-open {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--sls-border);
+  border-radius: 8px;
+  background: var(--sls-panel);
+  color: var(--sls-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sls-mark--resolved .sls-mark-open { opacity: 0.55; }
+.sls-glyph {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--sls-border);
+  font-weight: 700;
+}
+.sls-glyph--question { color: #93c5fd; }
+.sls-glyph--concern { color: #fca5a5; }
+.sls-glyph--change { color: #fcd34d; }
+.sls-glyph--agree { color: #86efac; }
+.sls-mark-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.sls-mark-where { color: var(--sls-muted); font-size: 12px; overflow-wrap: anywhere; }
+.sls-mark-note { overflow-wrap: anywhere; }
+.sls-mark-answer { color: var(--sls-spot); overflow-wrap: anywhere; }
+.sls-mark-status { color: var(--sls-muted); font-size: 11px; }

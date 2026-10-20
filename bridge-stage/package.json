@@ -1,0 +1,69 @@
+{
+  "name": "@miadi/stateloom-stage",
+  "version": "0.1.0",
+  "description": "A stage for stateloom drawings: an agent's tour plays on it like a short presentation, and a person's taps and words on it become marks the agent reads",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jgwill/smcraft.git",
+    "directory": "bridge-stage"
+  },
+  "homepage": "https://github.com/jgwill/smcraft#readme",
+  "bugs": {
+    "url": "https://github.com/jgwill/smcraft/issues"
+  },
+  "author": "Guillaume Isabelle <jgi@jgwill.com>",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./live": {
+      "types": "./dist/live.d.ts",
+      "import": "./dist/live.js",
+      "default": "./dist/live.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "scripts": {
+    "build": "tsc && node scripts/copy-styles.mjs",
+    "test": "node --test dist/tests/*.test.js",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "stateloom",
+    "diagram",
+    "tour",
+    "presentation",
+    "annotation",
+    "agent",
+    "react"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@miadi/stateloom-canvas": "file:../bridge-canvas",
+    "@miadi/stateloom-client": "file:../bridge-client",
+    "@miadi/stateloom-protocol": "file:../bridge-protocol"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "react": "^19",
+    "typescript": "^5.7"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/styles.css",
+    "!dist/tests/"
+  ]
+}
