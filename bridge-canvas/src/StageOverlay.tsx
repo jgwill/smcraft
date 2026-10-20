@@ -10,9 +10,14 @@
  *   scrim with a hole around each spotlighted element, and each hole is ringed;
  * - **frames** an area the agent names;
  * - **pins** each mark at what it points at, numbered, coloured by whether it
- *   waits (open), was answered, or is done — a tap opens its thread;
+ *   waits (open), was answered, or is done — a tap opens its thread; a mark
+ *   the host lists in `unread` (an agent's word not yet opened) wears a quiet
+ *   "new" ring and dot;
  * - **takes a mark** when the host turns marking on: a tap names the element
  *   under it, a drag names the elements inside the area drawn (and the area).
+ *   A mouse or pen tap on empty board marks a small area there; a finger's tap
+ *   on empty board does nothing, so a phone's stray touch never makes a mark
+ *   (a finger's drag still frames an area).
  *
  * Positioned over the canvas by the host (both in one `position: relative`
  * box); it lets every pointer through to the canvas except on its pins and
@@ -52,6 +57,12 @@ export interface StageOverlayProps {
   marks?: readonly Mark[];
   selectedMark?: string | null;
   onSelectMark?: (id: string) => void;
+  /**
+   * Marks with an agent's word the person has not opened yet (their ids): the
+   * pin wears a quiet "new" ring. `unreadMarks(marks, read)` from the protocol,
+   * with `read` from `useMarksRead`.
+   */
+  unread?: readonly string[];
   /** Resolved marks keep no pin. Default true. */
   hideResolved?: boolean;
   /** Take the next tap or drag as a mark. */
@@ -90,6 +101,7 @@ export function StageOverlay({
   marks,
   selectedMark = null,
   onSelectMark,
+  unread,
   hideResolved = true,
   marking = false,
   onDraft,
@@ -107,6 +119,7 @@ export function StageOverlay({
   const vt = viewportTransform(viewport);
 
   const selected = marks?.find((m) => m.id === selectedMark) ?? null;
+  const unreadIds = useMemo(() => new Set(unread ?? []), [unread]);
   const ringed = useMemo(() => {
     const out: Box[] = [];
     if (selected?.elements?.length) out.push(...boxesOf(boxes, selected.elements));
@@ -161,6 +174,8 @@ export function StageOverlay({
     const w = screenToWorld(viewport, p);
     const hit = elementAt(boxes, w.x, w.y);
     if (hit) return onDraft?.({ elements: [hit] });
+    // A finger's tap on empty board is a pan or a dismiss gone astray, not a mark.
+    if (e.pointerType === "touch") return;
     const half = TAP_AREA / 2 / (viewport.scale || 1);
     onDraft?.({ elements: [], region: { x: w.x - half, y: w.y - half, width: half * 2, height: half * 2 } });
   };
@@ -210,10 +225,10 @@ export function StageOverlay({
         <button
           key={mark.id}
           type="button"
-          className={`slc-stage-pin slc-stage-pin--${pinTone(mark)}${mark.id === selectedMark ? " slc-stage-pin--selected" : ""}`}
+          className={`slc-stage-pin slc-stage-pin--${pinTone(mark)}${unreadIds.has(mark.id) ? " slc-stage-pin--new" : ""}${mark.id === selectedMark ? " slc-stage-pin--selected" : ""}`}
           style={{ left: x, top: y }}
-          title={`${mark.author.name}: ${mark.text}${mark.replies?.length ? ` (${mark.replies.length} repl${mark.replies.length === 1 ? "y" : "ies"})` : ""}`}
-          aria-label={`Mark ${n}, ${mark.status}: ${mark.text}`}
+          title={`${mark.author.name}: ${mark.text}${mark.replies?.length ? ` (${mark.replies.length} repl${mark.replies.length === 1 ? "y" : "ies"})` : ""}${unreadIds.has(mark.id) ? " · new" : ""}`}
+          aria-label={`Mark ${n}, ${mark.status}${unreadIds.has(mark.id) ? ", new" : ""}: ${mark.text}`}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();

@@ -7,6 +7,7 @@
  *   --host <h>     STATELOOM_BRIDGE_HOST   / SMCRAFT_BRIDGE_HOST   (default 127.0.0.1)
  *   --doc <path>   STATELOOM_PROJECT_FILE  / SMCRAFT_PROJECT_FILE  (default docId; durable truth + docId source)
  *   --token <t>    STATELOOM_BRIDGE_TOKEN  / SMCRAFT_BRIDGE_TOKEN  (optional handshake auth token)
+ *                  STATELOOM_STAGE_STEP_TTL_MS                     (how long a live step stays for late joiners; default 600000)
  *
  * Until 0.1.3 this binary read the environment ONLY, and every `--port` on
  * every command line in this repo — scripts/live-loop.sh included — was parsed
@@ -35,7 +36,11 @@ Options
 
 Environment (flags win; the legacy SMCRAFT_* twin of each name is honored)
   STATELOOM_BRIDGE_PORT   STATELOOM_BRIDGE_HOST
-  STATELOOM_PROJECT_FILE  STATELOOM_BRIDGE_TOKEN`;
+  STATELOOM_PROJECT_FILE  STATELOOM_BRIDGE_TOKEN
+  STATELOOM_STAGE_STEP_TTL_MS
+                 how long a live step an agent showed stays on a stage for a
+                 canvas that joins late, in ms (default 600000, 10 minutes;
+                 0 keeps it until stopped). A loaded tour stays until stopped.`;
 
 function parseArgs(argv: string[]): Record<string, string> {
   const out: Record<string, string> = {};
@@ -67,7 +72,7 @@ function parseArgs(argv: string[]): Record<string, string> {
   return out;
 }
 
-const VERSION = "0.1.3";
+const VERSION = "0.1.8";
 
 async function main(): Promise<void> {
   const flags = parseArgs(process.argv.slice(2));

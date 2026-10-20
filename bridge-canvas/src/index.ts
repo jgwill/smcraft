@@ -39,7 +39,15 @@ export { StageOverlay, markAnchor } from "./StageOverlay.js";
 export type { StageOverlayProps, MarkDraft } from "./StageOverlay.js";
 export { StageCaption } from "./StageCaption.js";
 export type { StageCaptionProps } from "./StageCaption.js";
-export { MarkComposer, MarkThread, MarksPanel } from "./MarkCards.js";
+export { MarkComposer, MarkThread, MarksPanel, MarkNotice } from "./MarkCards.js";
+// Whether an agent's word has been read, per drawing in this browser, and
+// what a marks button counts — for any host that shows marks (Miadi's room
+// as the loom): `useMarksRead(doc)` + `unreadMarks(marks, read)` give the
+// pins' and the list's `unread`; `markCounts(marks, read)` gives `forYou`
+// (what waits on the person: the main number) and `forAgent` (the quiet one);
+// `agentWordIn(envelope)` + `agentWordText(word)` turn a `marks:changed` that
+// carries an agent's answer into the line for `<MarkNotice>`.
+export { useMarksRead, loadMarksRead, saveMarksRead, marksReadKey } from "./marksRead.js";
 // Talking with a companion from the canvas (Spec 84).
 export { CompanionDock } from "./CompanionDock.js";
 export type { CompanionDockProps, DockItem, DockReply, DockStep, DockTake } from "./CompanionDock.js";
@@ -58,7 +66,7 @@ export {
   ThumbDownIcon,
   CloseIcon,
 } from "./icons.js";
-export type { MarkComposerProps, MarkThreadProps, MarksPanelProps, ListenerLike } from "./MarkCards.js";
+export type { MarkComposerProps, MarkThreadProps, MarksPanelProps, MarkNoticeProps, ListenerLike } from "./MarkCards.js";
 
 export { themeStyle, CANVAS_THEME_VARS } from "./theme.js";
 export type { CanvasTheme } from "./theme.js";
@@ -105,6 +113,14 @@ export {
   elementAt,
   boxesOf,
   unionBox,
+  marksWaitingOn,
+  markCounts,
+  unreadMarks,
+  isMarkUnread,
+  withMarkRead,
+  lastWordOf,
+  agentWordIn,
+  agentWordText,
 } from "@miadi/stateloom-protocol";
 export type {
   AutoLayoutOptions,
@@ -123,6 +139,9 @@ export type {
   ElementBox,
   Mark,
   MarkKind,
+  MarksRead,
+  MarksEnvelope,
+  AgentWord,
   TourStep,
   TourDefinition,
 } from "@miadi/stateloom-protocol";

@@ -31,6 +31,7 @@ smcraft-bridge                # once installed
 | `STATELOOM_BRIDGE_HOST` | `127.0.0.1` | Interface to bind |
 | `STATELOOM_PROJECT_FILE` | — | Default `docId`, and the durable file the watcher follows |
 | `STATELOOM_BRIDGE_TOKEN` | — | Optional handshake auth token |
+| `STATELOOM_STAGE_STEP_TTL_MS` | `600000` | How long a live step an agent showed stays on a stage for a canvas that joins late (and in `GET /stage/<name>`); `0` keeps it until stopped. A loaded tour stays until stopped |
 
 The legacy `SMCRAFT_*` twin of each name is still honored.
 

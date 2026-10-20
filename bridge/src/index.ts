@@ -12,6 +12,6 @@ export type {
   RingEntry,
   LivePresence,
 } from "./hub.js";
-export { DEDUP_RING_SIZE } from "./hub.js";
+export { DEDUP_RING_SIZE, DEFAULT_STAGE_STEP_TTL_MS, stageStepTtlFromEnv } from "./hub.js";
 export { normalizeDocId, readDefFile, mtimeOf } from "./docio.js";
 export { watchRoom, type RoomWatcher } from "./watcher.js";

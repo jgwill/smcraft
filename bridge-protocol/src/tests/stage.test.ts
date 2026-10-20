@@ -7,6 +7,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   addMark,
+  agentWordIn,
+  agentWordText,
+  isMarkUnread,
+  markCounts,
+  unreadMarks,
+  withMarkRead,
   docKindOfPath,
   docPathOfMarks,
   elementAt,
@@ -87,6 +93,40 @@ test("a mark is made, answered by the other side, followed up, resolved and remo
   file = removeMark(file, "m-1");
   assert.equal(file.marks.length, 0);
   assert.throws(() => removeMark(file, "m-1"), /no mark/);
+});
+
+test("an agent's answer moves a mark to what waits on the person, and stays new until the thread is opened", () => {
+  let file: MarksFile = { doc: "wave.smdf.json", marks: [] };
+  file = addMark(file, { elements: ["state:A"], text: "why here?", author: person }, AT, "m-1");
+  file = addMark(file, { elements: ["state:B"], text: "and here?", author: person }, AT, "m-2");
+  assert.deepEqual(markCounts(file.marks), { forYou: 0, forAgent: 2, unread: 0 });
+
+  file = replyToMark(file, "m-2", { author: agent, text: "the guard" }, AT);
+  assert.deepEqual(markCounts(file.marks), { forYou: 1, forAgent: 1, unread: 1 }, "the answer counts for the person, not down to nothing");
+  assert.deepEqual(unreadMarks(file.marks).map((m) => m.id), ["m-2"]);
+
+  const word = agentWordIn({ marks: file.marks, change: { action: "reply", id: "m-2" } });
+  assert.deepEqual(word && { action: word.action, number: word.number, name: word.name }, { action: "reply", number: 2, name: "Mia" });
+  assert.equal(agentWordText(word!), "Mia answered mark 2");
+
+  let read = withMarkRead({}, file.marks[1]);
+  assert.equal(isMarkUnread(file.marks[1], read), false, "opened: read");
+  file = replyToMark(file, "m-2", { author: person, text: "which guard?" }, AT);
+  assert.equal(agentWordIn({ marks: file.marks, change: { action: "reply", id: "m-2" } }), null, "a person's reply is no agent's word");
+  assert.equal(isMarkUnread(file.marks[1], read), false, "the person's own word is never new to them");
+  file = replyToMark(file, "m-2", { author: agent, text: "wave_label" }, AT);
+  assert.equal(isMarkUnread(file.marks[1], read), true, "a further answer is new again");
+  read = withMarkRead(read, file.marks[1]);
+  assert.deepEqual(unreadMarks(file.marks, read), []);
+
+  // An agent's question is new and waits on the person; resolved threads never are.
+  file = addMark(file, { elements: ["state:C"], text: "is C final?", author: agent }, AT, "m-3");
+  assert.equal(agentWordText(agentWordIn({ marks: file.marks, change: { action: "add", id: "m-3" } })!), "Mia asked about mark 3");
+  assert.deepEqual(unreadMarks(file.marks, read).map((m) => m.id), ["m-3"]);
+  file = resolveMark(file, "m-3");
+  assert.deepEqual(unreadMarks(file.marks, read), []);
+  assert.equal(agentWordIn({ marks: file.marks, change: { action: "resolve", id: "m-3" } }), null);
+  assert.equal(agentWordIn({ marks: file.marks }), null);
 });
 
 test("a mark refuses what it cannot point at", () => {

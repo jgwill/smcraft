@@ -143,6 +143,12 @@ and `elementsInRegion` (a third of an element inside the area) turn a tap and a 
   never a path, so it never collides with a drawing's room; no file, no seq, no watcher.
 - **What the hub keeps** of a stage — the step on screen, the tour, the last context — is in memory,
   as presence is, so a canvas opening late catches up. Gone when the hub restarts; marks are files.
+  A live step leaves it 10 minutes after the hub received it (`STATELOOM_STAGE_STEP_TTL_MS`, `0`
+  keeps it until stopped): the join ack and `GET /stage/<name>` stop returning it, so a canvas
+  opened hours later does not catch up on a conversation that moved on. A loaded tour stays until stopped.
+- **An agent's word in `marks:changed`**: `change.action` is `reply` (`smcx marks reply`,
+  `answer_mark` with text, even when it also resolves) or `add` (`add_mark`), and the mark's last
+  reply, or the mark, is signed `role: agent`; `agentWordIn(envelope)` reads it.
 - **The token** is checked on every stage frame, as on `view:show`; a sender need not have joined.
 - **`GET /stage/<name>`** answers the `StageState` in JSON (`Authorization: Bearer <token>` when the
   hub has one), and `GET /health` the room and stage counts — for a script, a listener, a person.
@@ -169,6 +175,17 @@ system and focuses its element through `openInSystem` (Spec 82); what it lights 
   violet an agent's question, grey resolved. A pin opens its thread: reply, resolve, reopen,
   remove. The speech bubble lists the marks (Open | All), waiting first, and **Copy for the agent** puts the review on the
   clipboard to paste into any agent's prompt.
+- **When an agent answers**: the speech bubble's main number is what waits on the person (answered
+  marks, an agent's questions: `marksWaitingOn(marks, "person")`), shown "N for you", and what waits
+  on the agent follows it, quieter; an answer moves a mark from one to the other instead of making
+  the count fall. A thread whose last word is an agent's and that the person has not opened since is
+  new — its pin wears a quiet ring and dot, the list puts it first with "new" — kept per drawing in
+  the browser (`stateloom.marks.read.v1:<doc>`, mark id → reply count when opened); and the
+  `marks:changed` that carries the answer shows one line by the controls for a few seconds ("Mia
+  answered mark 3"), which opens the thread when tapped, takes no focus, and opens no card by itself.
+- **Touch**: while marking, a finger's tap on empty board makes nothing (a drag still frames an
+  area; a mouse tap still marks a small area), and the composer takes focus by itself only under a
+  fine pointer or after **Answer**, so a phone's keyboard does not rise over the board unasked.
 - **Who answers**: on a drawing in a chronicle episode, with a companion configured (Spec 84), one
   muted line under the composer, the list, and a thread whose last word is the person's says
   whether a Mia seat listens there ("Mia is listening in episode 412: she answers here", "Mia is
@@ -215,7 +232,9 @@ spoken mark read "in betweenWhen it hasn't been".
 
 `@miadi/stateloom-canvas` holds the drawing parts (props in, callbacks out, `--slc-*` themed):
 `StageOverlay` over any board that shares a viewport, `StageCaption`, `MarkComposer`, `MarkThread`,
-`MarksPanel`. `@miadi/stateloom-react` holds the behaviour: `createStageSession` (no React, tested
+`MarksPanel`, `MarkNotice`, and `useMarksRead(doc)` with the protocol's `markCounts`, `unreadMarks`,
+`agentWordIn` and `agentWordText` re-exported, so another host (Miadi's episode room) counts,
+marks new and announces an answer the same way. `@miadi/stateloom-react` holds the behaviour: `createStageSession` (no React, tested
 in Node), `useStage`, `browserVoice`, `browserDictation`. A host needs a viewport, the boxes from
 the protocol, a place to keep sidecars (or none: marks are optional), and a hub URL.
 

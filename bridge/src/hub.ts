@@ -66,6 +66,14 @@ export interface StartBridgeOpts {
   file?: string;
   token?: string;
   cors?: boolean;
+  /**
+   * How long a live step (`stage:step`) stays for a canvas that joins late, in
+   * ms. Default `STATELOOM_STAGE_STEP_TTL_MS`, else 10 minutes; 0 keeps it until
+   * stopped. A loaded tour is not a live step: it stays until stopped.
+   */
+  stepTtlMs?: number;
+  /** The hub's clock, in ms (tests move it). Default `Date.now`. */
+  now?: () => number;
 }
 
 export interface BridgeHandle {
@@ -78,6 +86,17 @@ const RING_SIZE = 20;
 
 /** How many entries the dedup ring retains (exported for tests/consumers). */
 export const DEDUP_RING_SIZE = RING_SIZE;
+
+/** A live step stays for late joiners this long unless `STATELOOM_STAGE_STEP_TTL_MS` says otherwise. */
+export const DEFAULT_STAGE_STEP_TTL_MS = 10 * 60 * 1000;
+
+/** `STATELOOM_STAGE_STEP_TTL_MS` as a number of ms, or undefined when unset or not one. */
+export function stageStepTtlFromEnv(env: Record<string, string | undefined> = process.env): number | undefined {
+  const raw = envAlias("STAGE_STEP_TTL_MS", env);
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
 
 function pushRing(room: Room, entry: RingEntry): void {
   room.ring.push(entry);
@@ -106,10 +125,28 @@ export function startBridge(opts: StartBridgeOpts = {}): Promise<BridgeHandle> {
   // hub keeps of one is what a canvas opening late needs to catch up — the
   // step on screen, the tour loaded, what the person was last looking at —
   // in memory, as presence is kept, and gone when the hub restarts.
+  //
+  // A live step is what an agent showed while talking: it leaves the stage
+  // `stepTtlMs` after the hub received it, so a canvas opening hours later
+  // does not catch up on a conversation that has moved on. A loaded tour stays
+  // until stopped. Expiry is read lazily, where the state is handed out.
   const stages = new Map<string, StageState>();
+  const stepTtlMs = opts.stepTtlMs ?? stageStepTtlFromEnv() ?? DEFAULT_STAGE_STEP_TTL_MS;
+  const now = opts.now ?? Date.now;
+  const stepAt = new Map<string, number>();
   const stageOf = (name: string): StageState => {
     let st = stages.get(name);
     if (!st) stages.set(name, (st = { stage: name }));
+    return st;
+  };
+  /** The stage as a joiner receives it: an expired live step dropped first. */
+  const stageNow = (name: string): StageState => {
+    const st = stages.get(name);
+    if (!st) return { stage: name };
+    if (st.step && stepTtlMs > 0 && now() - (stepAt.get(name) ?? 0) >= stepTtlMs) {
+      delete st.step;
+      stepAt.delete(name);
+    }
     return st;
   };
   const authorized = (header: string | undefined): boolean => !token || header === `Bearer ${token}`;
@@ -133,7 +170,7 @@ export function startBridge(opts: StartBridgeOpts = {}): Promise<BridgeHandle> {
       if (!authorized(req.headers.authorization)) return send(401, { error: "bridge: invalid or missing auth token" });
       const name = decodeURIComponent(m[1]);
       if (!isStageName(name)) return send(400, { error: `not a stage name: ${name}` });
-      return send(200, stages.get(name) ?? { stage: name });
+      return send(200, stageNow(name));
     }
     send(404, { error: "not found" });
   });
@@ -365,7 +402,7 @@ export function startBridge(opts: StartBridgeOpts = {}): Promise<BridgeHandle> {
       const stagesJoined: Set<string> = socket.data.stages ?? (socket.data.stages = new Set<string>());
       stagesJoined.add(name);
       socket.join(stageRoom(name));
-      if (typeof ack === "function") ack({ selfId: socket.id, state: stageOf(name) });
+      if (typeof ack === "function") ack({ selfId: socket.id, state: stageNow(name) });
     });
 
     socket.on(EV.STAGE_LEAVE, (payload: { stage?: string }) => {
@@ -376,8 +413,9 @@ export function startBridge(opts: StartBridgeOpts = {}): Promise<BridgeHandle> {
 
     socket.on(EV.STAGE_STEP_IN, (env: StageStepEnvelope) => {
       if (refuse() || !env || !isStageName(env.stage) || !env.step) return;
-      const out: StageStepEnvelope = { ...env, origin: env.origin || socket.id, at: env.at ?? new Date().toISOString() };
+      const out: StageStepEnvelope = { ...env, origin: env.origin || socket.id, at: env.at ?? new Date(now()).toISOString() };
       stageOf(env.stage).step = out;
+      stepAt.set(env.stage, now());
       io.to(stageRoom(env.stage)).emit(EV.STAGE_STEP_OUT, out);
     });
 
@@ -387,6 +425,7 @@ export function startBridge(opts: StartBridgeOpts = {}): Promise<BridgeHandle> {
       const st = stageOf(env.stage);
       st.tour = out;
       delete st.step;
+      stepAt.delete(env.stage);
       io.to(stageRoom(env.stage)).emit(EV.STAGE_LOAD_OUT, out);
     });
 
@@ -396,6 +435,7 @@ export function startBridge(opts: StartBridgeOpts = {}): Promise<BridgeHandle> {
         const st = stageOf(env.stage);
         delete st.tour;
         delete st.step;
+        stepAt.delete(env.stage);
       }
       io.to(stageRoom(env.stage)).emit(EV.STAGE_CONTROL_OUT, { ...env, origin: env.origin || socket.id });
     });

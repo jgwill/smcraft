@@ -4,8 +4,11 @@
  * - `<MarkComposer>`: what was pointed at, and a box to say something about
  *   it — typed, or spoken when the host hands it something that listens.
  * - `<MarkThread>`: one mark and its replies; reply, resolve, reopen, remove.
- * - `<MarksPanel>`: every mark on the drawing, waiting ones first, and the
- *   button that copies them as a review for an agent.
+ * - `<MarksPanel>`: every mark on the drawing, the ones with an agent's word
+ *   not yet read first (marked "new"), and the button that copies them as a
+ *   review for an agent.
+ * - `<MarkNotice>`: one line near the board's controls when an agent answers
+ *   ("Mia answered mark 3"); a tap opens that thread. It takes no focus.
  *
  * Props in, callbacks out, as the canvases: the host writes the sidecar and
  * tells the hub. A host that knows who will answer says so in `note`: one quiet
@@ -14,7 +17,7 @@
  * socket and no speech code of its own.
  */
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { MARK_KINDS, markAnchorText, type Box, type Mark, type MarkKind, type MarkRole } from "@miadi/stateloom-protocol";
+import { MARK_KINDS, lastWordOf, markAnchorText, type Box, type Mark, type MarkKind } from "@miadi/stateloom-protocol";
 import { themeStyle, type CanvasTheme } from "./theme.js";
 import { CloseIcon, MicIcon } from "./icons.js";
 
@@ -76,9 +79,13 @@ function Note({ children }: { children?: ReactNode }) {
   );
 }
 
-/** Whose word is last in a mark's thread: the mark's author, or the last reply's. */
-function lastWordBy(mark: Mark): MarkRole {
-  return mark.replies?.length ? mark.replies[mark.replies.length - 1].author.role : mark.author.role;
+/** A mouse or trackpad: the composer may take focus without raising a keyboard. */
+function finePointer(): boolean {
+  try {
+    return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: fine)").matches;
+  } catch {
+    return false;
+  }
 }
 
 export interface MarkComposerProps {
@@ -128,7 +135,10 @@ export function MarkComposer({
 
   useEffect(() => {
     if (listenAtOnce && listener) toggle("");
-    else area.current?.focus();
+    // On a phone, focusing raises the keyboard over the board before the person
+    // asked to type: the box takes focus by itself only under a fine pointer,
+    // or when they pressed Answer (by voice, where nothing listens).
+    else if (listenAtOnce || finePointer()) area.current?.focus();
     // Once, when the composer opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -284,7 +294,7 @@ export function MarkThread({
           </li>
         ))}
       </ol>
-      {mark.status !== "resolved" && lastWordBy(mark) === "person" && <Note>{note}</Note>}
+      {mark.status !== "resolved" && lastWordOf(mark) === "person" && <Note>{note}</Note>}
       {onReply && (
         <form className="slc-stage-card-row" onSubmit={send}>
           <input
@@ -337,15 +347,23 @@ export interface MarksPanelProps {
   onClose?: () => void;
   /** Who will answer the marks, from the host: one quiet line under the list. */
   note?: ReactNode;
+  /**
+   * Marks with an agent's word not yet opened (their ids): listed first and
+   * marked "new". `unreadMarks(marks, read)` from the protocol.
+   */
+  unread?: readonly string[];
   theme?: Partial<CanvasTheme>;
   className?: string;
   style?: CSSProperties;
 }
 
-export function MarksPanel({ marks, selected, onSelect, onCopy, copied, onClose, note, theme, className, style }: MarksPanelProps) {
+export function MarksPanel({ marks, selected, onSelect, onCopy, copied, onClose, note, unread, theme, className, style }: MarksPanelProps) {
   const [all, setAll] = useState(false);
+  const unreadIds = new Set(unread ?? []);
+  // Numbered as on the board; the ones with an agent's word not yet read first.
   const numbered = marks.map((m, i) => ({ m, n: i + 1 }));
-  const shown = all ? numbered : numbered.filter(({ m }) => m.status !== "resolved");
+  const ordered = [...numbered.filter(({ m }) => unreadIds.has(m.id)), ...numbered.filter(({ m }) => !unreadIds.has(m.id))];
+  const shown = all ? ordered : ordered.filter(({ m }) => m.status !== "resolved");
   const open = marks.filter((m) => m.status !== "resolved").length;
   return (
     <div
@@ -375,10 +393,11 @@ export function MarksPanel({ marks, selected, onSelect, onCopy, copied, onClose,
         {shown.map(({ m, n }) => (
           <li key={m.id}>
             <button type="button" className={`slc-stage-panel-item${m.id === selected ? " slc-stage-panel-item--selected" : ""}`} onClick={() => onSelect(m.id)}>
-              <span className={`slc-stage-pin slc-stage-pin--inline slc-stage-pin--${m.status === "resolved" ? "resolved" : m.author.role === "agent" && m.status === "open" ? "question" : m.status}`}>{n}</span>
+              <span className={`slc-stage-pin slc-stage-pin--inline slc-stage-pin--${m.status === "resolved" ? "resolved" : m.author.role === "agent" && m.status === "open" ? "question" : m.status}${unreadIds.has(m.id) ? " slc-stage-pin--new" : ""}`}>{n}</span>
               <span className="slc-stage-panel-text">
                 <span className="slc-stage-panel-said">{m.text}</span>
                 <span className="slc-stage-panel-meta">
+                  {unreadIds.has(m.id) && <span className="slc-stage-new">new</span>}
                   {m.author.name} · {markAnchorText(m)}
                   {m.replies?.length ? ` · ${m.replies.length} repl${m.replies.length === 1 ? "y" : "ies"}` : ""}
                 </span>
@@ -395,6 +414,44 @@ export function MarksPanel({ marks, selected, onSelect, onCopy, copied, onClose,
             {copied ? "Copied" : "Copy for the agent"}
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+export interface MarkNoticeProps {
+  /** The line: `agentWordText(agentWordIn(envelope))`, e.g. "Mia answered mark 3". */
+  children: ReactNode;
+  /** Open the thread it speaks of. */
+  onOpen: () => void;
+  onDismiss?: () => void;
+  theme?: Partial<CanvasTheme>;
+  className?: string;
+  style?: CSSProperties;
+}
+
+/**
+ * One line that says an agent answered, near the board's controls. A polite
+ * live region: read out, never focused, never a card over the board. The host
+ * decides how long it stays (a few seconds) and what a tap opens.
+ */
+export function MarkNotice({ children, onOpen, onDismiss, theme, className, style }: MarkNoticeProps) {
+  return (
+    <div
+      className={`slc-stage-notice${className ? ` ${className}` : ""}`}
+      style={{ ...themeStyle(theme), ...style }}
+      role="status"
+      aria-live="polite"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <button type="button" className="slc-stage-notice-open" onClick={onOpen} title="Open the thread">
+        <span className="slc-stage-notice-dot" aria-hidden="true" />
+        <span className="slc-stage-notice-text">{children}</span>
+      </button>
+      {onDismiss && (
+        <button type="button" className="slc-stage-notice-close" onClick={onDismiss} aria-label="Dismiss">
+          <CloseIcon />
+        </button>
       )}
     </div>
   );

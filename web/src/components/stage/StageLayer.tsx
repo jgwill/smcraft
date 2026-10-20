@@ -16,13 +16,24 @@
  *   word is the person's, one line says whether a Mia seat listens in the
  *   drawing's chronicle episode (Spec 84's presence). No line when the drawing
  *   is not in an episode or no companion is configured.
+ * - When an agent answers: the speech bubble counts what waits on the person
+ *   ("1 for you") before what waits on the agent (quiet); a thread with an
+ *   agent's word not yet opened is "new" on its pin and first in the list
+ *   (read state per drawing in this browser); and a `marks:changed` carrying
+ *   the answer shows one line by the controls for a few seconds ("Mia answered
+ *   mark 3"), which opens the thread when tapped. Nothing takes focus and no
+ *   card opens by itself.
  *
  * The sidecar is written through /api/marks; the hub is told after.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { MarkComposer, MarkIcon, MarksIcon, MarkThread, MarksPanel, StageOverlay, type MarkDraft } from "@miadi/stateloom-canvas";
+import { MarkComposer, MarkIcon, MarkNotice, MarksIcon, MarkThread, MarksPanel, StageOverlay, useMarksRead, type MarkDraft } from "@miadi/stateloom-canvas";
 import {
+  agentWordIn,
+  agentWordText,
   boxesOf,
+  markCounts,
+  unreadMarks,
   fitToBoxes,
   formatReview,
   screenToWorld,
@@ -56,6 +67,9 @@ export interface StageLayerProps {
   onReveal?: (focuses: readonly string[]) => void;
 }
 
+/** How long the line that says an agent answered stays by the controls. */
+const NOTICE_MS = 7000;
+
 const quietButton =
   "flex h-9 min-w-9 items-center justify-center gap-1 rounded-lg border border-gray-700 bg-gray-900/90 px-2 text-sm text-gray-200 shadow-lg backdrop-blur hover:bg-gray-800";
 
@@ -80,6 +94,11 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [notice, setNotice] = useState<{ id: string; text: string } | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedRef = useRef<string | null>(null);
+  selectedRef.current = selected;
+  const { read, markRead } = useMarksRead(docPath);
 
   // ── This drawing's marks ─────────────────────────────────────────────
   const load = useCallback(() => {
@@ -100,10 +119,23 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
   useEffect(
     () =>
       stage?.onMarks((e) => {
-        if (docPath && e.docId === docPath && Array.isArray(e.marks)) setMarks(e.marks);
+        if (!docPath || e.docId !== docPath || !Array.isArray(e.marks)) return;
+        setMarks(e.marks);
+        // An agent's answer (or question) reaches a person who is not reading that thread: one line, for a while.
+        const word = agentWordIn(e);
+        if (!word || word.mark.id === selectedRef.current) return;
+        setNotice({ id: word.mark.id, text: agentWordText(word) });
+        if (noticeTimer.current) clearTimeout(noticeTimer.current);
+        noticeTimer.current = setTimeout(() => setNotice(null), NOTICE_MS);
       }),
     [stage, docPath],
   );
+  useEffect(() => {
+    setNotice(null);
+    return () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    };
+  }, [docPath]);
 
   const write = async (body: unknown): Promise<boolean> => {
     if (!docPath) return false;
@@ -204,10 +236,25 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
   const presence = useEpisodePresence(episode, !!(draft || selected || panel));
   const note = presenceLine(presence, episode);
 
-  if (!docPath) return null;
-  const waiting = marks.filter((m) => m.status === "open" && m.author.role === "person").length;
-  const questions = marks.filter((m) => m.status === "open" && m.author.role === "agent").length;
+  // ── What waits on whom, and what is new ─────────────────────────────
+  const unread = useMemo(() => unreadMarks(marks, read).map((m) => m.id), [marks, read]);
+  const counts = markCounts(marks, read);
   const selectedMark = marks.find((m) => m.id === selected) ?? null;
+  // A thread on screen is read, and stays read as replies land in it.
+  const selectedReplies = selectedMark?.replies?.length ?? 0;
+  useEffect(() => {
+    if (selectedMark) markRead(selectedMark);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMark?.id, selectedReplies, markRead]);
+  const openThread = (id: string): void => {
+    setDraft(null);
+    setPanel(false);
+    setMarking(false);
+    setSelected(id);
+    setNotice(null);
+  };
+
+  if (!docPath) return null;
 
   return (
     <>
@@ -217,6 +264,7 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
         spotlight={spotlight}
         region={region}
         marks={marks}
+        unread={unread}
         selectedMark={selected}
         onSelectMark={(id) => {
           setDraft(null);
@@ -228,12 +276,18 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
           setMarking(false);
           setSelected(null);
           setPanel(false);
+          setNotice(null);
           setDraft(d);
         }}
         draft={draft}
       />
 
       <div className="stage-board-controls">
+        {notice && (
+          <MarkNotice className="stage-board-notice" onOpen={() => openThread(notice.id)} onDismiss={() => setNotice(null)}>
+            {notice.text}
+          </MarkNotice>
+        )}
         <button
           type="button"
           className={`${quietButton} ${marking ? "!border-amber-400 !text-amber-300" : ""}`}
@@ -254,16 +308,23 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
           onClick={() => {
             setDraft(null);
             setSelected(null);
+            setNotice(null);
             setPanel((p) => !p);
           }}
-          title="Marks on this drawing"
+          title={`Marks on this drawing${counts.forYou ? ` · ${counts.forYou} for you` : ""}${counts.forAgent ? ` · ${counts.forAgent} waiting on the agent` : ""}`}
+          aria-label={`Marks on this drawing: ${counts.forYou} for you${counts.unread ? ` (${counts.unread} new)` : ""}, ${counts.forAgent} waiting on the agent`}
         >
           <MarksIcon />
-          {waiting + questions > 0 && <span className="text-xs text-amber-300">{waiting + questions}</span>}
+          {counts.forYou > 0 && (
+            <span className={`stage-for-you${counts.unread ? " stage-for-you--new" : ""}`}>
+              {counts.forYou} for you
+            </span>
+          )}
+          {counts.forAgent > 0 && <span className="text-xs text-gray-400">{counts.forAgent}</span>}
         </button>
       </div>
 
-      {marking && !draft && (
+      {marking && !draft && !notice && (
         <div className="stage-board-hint" role="status">
           Tap an element, or drag around several, to say something about it.
         </div>
@@ -315,6 +376,7 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
           ) : (
             <MarksPanel
               marks={marks}
+              unread={unread}
               selected={selected}
               onSelect={(id) => {
                 setPanel(false);

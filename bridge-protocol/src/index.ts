@@ -174,7 +174,15 @@ export {
   removeMark,
   marksWaitingOn,
   markAnchorText,
+  lastWordOf,
+  isMarkUnread,
+  unreadMarks,
+  withMarkRead,
+  markCounts,
+  agentWordIn,
+  agentWordText,
 } from "./stage/marks.js";
+export type { MarksRead, AgentWord } from "./stage/marks.js";
 export {
   validateStep,
   validateTour,

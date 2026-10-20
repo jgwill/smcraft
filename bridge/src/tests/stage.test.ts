@@ -17,7 +17,7 @@ import {
   type StageState,
   type StageStepEnvelope,
 } from "@miadi/stateloom-protocol";
-import { startBridge, type BridgeHandle } from "../index.js";
+import { DEFAULT_STAGE_STEP_TTL_MS, stageStepTtlFromEnv, startBridge, type BridgeHandle } from "../index.js";
 
 const connect = (url: string, token?: string): ClientSocket =>
   ioClient(url, { transports: ["websocket"], reconnection: false, forceNew: true, auth: { token } });
@@ -76,6 +76,73 @@ test("a step reaches the stage's canvases, is kept for a late one, and a stop cl
     assert.equal((await stopped).action, "stop");
     const after = (await (await fetch(`${hub.url}/stage/trading`)).json()) as StageState;
     assert.equal(after.step, undefined);
+  } finally {
+    for (const s of sockets) s.disconnect();
+    await hub?.close();
+  }
+});
+
+test("a live step leaves the stage for late joiners after its time; a tour stays until stopped", async () => {
+  let hub: BridgeHandle | undefined;
+  const sockets: ClientSocket[] = [];
+  let clock = 1_000_000;
+  try {
+    hub = await startBridge({ port: 0, now: () => clock, stepTtlMs: 10 * 60 * 1000 });
+    const agent = connect(hub.url);
+    const canvas = connect(hub.url);
+    sockets.push(agent, canvas);
+    await joinStage(canvas, "default");
+    const got = waitEvent<StageStepEnvelope>(canvas, EV.STAGE_STEP_OUT);
+    agent.emit(EV.STAGE_STEP_IN, { stage: "default", step: { doc: "/d/w.smdf.json", spotlight: ["event:Upload"], say: "where YouTube comes in" }, origin: "mia" });
+    await got;
+
+    clock += 9 * 60 * 1000;
+    const early = connect(hub.url);
+    sockets.push(early);
+    assert.equal((await joinStage(early, "default")).state?.step?.step.say, "where YouTube comes in", "within its time a late canvas catches up");
+
+    clock += 60 * 1000;
+    const late = connect(hub.url);
+    sockets.push(late);
+    assert.equal((await joinStage(late, "default")).state?.step, undefined, "past its time the join ack holds no step");
+    const body = (await (await fetch(`${hub.url}/stage/default`)).json()) as StageState;
+    assert.equal(body.step, undefined, "nor does GET /stage/<name>");
+
+    const loaded = waitEvent<StageLoadEnvelope>(canvas, EV.STAGE_LOAD_OUT);
+    agent.emit(EV.STAGE_LOAD_IN, { stage: "default", tour: { settings: { namespace: "t", name: "walk" }, steps: [{ say: "a" }] }, origin: "mia" });
+    await loaded;
+    clock += 24 * 60 * 60 * 1000;
+    const tomorrow = connect(hub.url);
+    sockets.push(tomorrow);
+    assert.equal((await joinStage(tomorrow, "default")).state?.tour?.tour.settings.name, "walk", "a tour stays until stopped");
+  } finally {
+    for (const s of sockets) s.disconnect();
+    await hub?.close();
+  }
+});
+
+test("a step's time comes from STATELOOM_STAGE_STEP_TTL_MS, and 0 keeps it until stopped", async () => {
+  assert.equal(stageStepTtlFromEnv({ STATELOOM_STAGE_STEP_TTL_MS: "30000" }), 30000);
+  assert.equal(stageStepTtlFromEnv({ SMCRAFT_STAGE_STEP_TTL_MS: "0" }), 0);
+  assert.equal(stageStepTtlFromEnv({ STATELOOM_STAGE_STEP_TTL_MS: "soon" }), undefined);
+  assert.equal(stageStepTtlFromEnv({}), undefined);
+  assert.equal(DEFAULT_STAGE_STEP_TTL_MS, 600000);
+
+  let hub: BridgeHandle | undefined;
+  const sockets: ClientSocket[] = [];
+  let clock = 0;
+  try {
+    hub = await startBridge({ port: 0, now: () => clock, stepTtlMs: 0 });
+    const agent = connect(hub.url);
+    const canvas = connect(hub.url);
+    sockets.push(agent, canvas);
+    await joinStage(canvas, "default");
+    const got = waitEvent<StageStepEnvelope>(canvas, EV.STAGE_STEP_OUT);
+    agent.emit(EV.STAGE_STEP_IN, { stage: "default", step: { say: "kept" }, origin: "mia" });
+    await got;
+    clock += 365 * 24 * 60 * 60 * 1000;
+    const body = (await (await fetch(`${hub.url}/stage/default`)).json()) as StageState;
+    assert.equal(body.step?.step.say, "kept");
   } finally {
     for (const s of sockets) s.disconnect();
     await hub?.close();

@@ -292,9 +292,29 @@ body {
   top: 0.5rem;
   z-index: 20;
   display: flex;
+  align-items: center;
   gap: 0.375rem;
   pointer-events: auto;
 }
+
+/* "Mia answered mark 3": left of the controls for a few seconds; under them on a phone. */
+.stage-board-controls .stage-board-notice { max-width: min(22rem, calc(100vw - 12rem)); }
+@media (max-width: 767px) {
+  .stage-board-controls .stage-board-notice { position: absolute; top: calc(100% + 0.375rem); right: 0; width: max-content; max-width: calc(100vw - 1.5rem); }
+}
+
+/* What waits on the person: the speech bubble's main number. */
+.stage-for-you {
+  border-radius: 999px;
+  background: rgb(59 130 246 / 0.9);
+  color: white;
+  padding: 0 0.4rem;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.15rem;
+  white-space: nowrap;
+}
+.stage-for-you--new { box-shadow: 0 0 0 2px rgb(255 255 255 / 0.35); }
 
 /* The mark cards open under those controls. */
 .stage-board-card {
