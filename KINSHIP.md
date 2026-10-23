@@ -17,6 +17,11 @@ Extracted from the **Caishen** legacy C# platform's `StateForge.StateMachine` li
 | 72 | `rispecs/72-code-generator.spec.md` | Python + TS targets, CLI, codegen unification |
 | 73 | `rispecs/73-mcp-server.spec.md` | 11 MCP tools, design session protocol |
 | 74 | `rispecs/74-web-designer.spec.md` | Components, store, canvas, MMOT drill-down vision |
+| 80 | `rispecs/80-erdf-format.spec.md` | ERDF — the data beside the machines, E001–E005, L001–L004 |
+| 81 | `rispecs/81-sqdf-format.spec.md` | SQDF — usage scenarios as sequences, S001–S006 |
+| 82 | `rispecs/82-sysdf-system.spec.md` | SYSDF — the drawings as one system: checks, the scenario replay, reconcile (propose / auto) |
+| 83 | `rispecs/83-stage-and-marks.spec.md` | The stage and the marks — tours an agent plays on the canvas, marks a person leaves on any drawing |
+| 84 | `rispecs/84-talking-on-the-canvas.spec.md` | Talking on the canvas — a take recorded about a drawing, Mia's reply heard while the canvas walks it (the episode companion's phone page, reused) |
 
 ## Relationships
 
@@ -35,6 +40,7 @@ Extracted from the **Caishen** legacy C# platform's `StateForge.StateMachine` li
 ### Siblings
 - **jgtml** — Both are tooling packages; jgtml for ML pipelines, smcraft for state machines
 - **jgtapy** — Both are library packages; jgtapy for indicators, smcraft for state machines
+- **jgwill/miadi-orchestration-kit** — its `mia-episode-companion` (`phone-capture`, `mia-listen`) is the conversation the designer's Talk dock records into and plays from (Spec 84); its `miadi-stateloom` plugin carries the stage skill to the sessions that present
 
 ### Conceptual Bridges
 

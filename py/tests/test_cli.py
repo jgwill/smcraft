@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from smcraft.cli import main
-from smcraft.skills import install_skill
+from stateloom.cli import main
+from stateloom.skills import install_skill
 
 EXAMPLE_DIR = Path(__file__).resolve().parents[2] / "examples"
 AGENT_LIFECYCLE_JSON = EXAMPLE_DIR / "agent_lifecycle.smdf.json"

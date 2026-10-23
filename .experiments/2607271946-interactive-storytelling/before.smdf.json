@@ -1,0 +1,190 @@
+{
+  "stateMachine": {
+    "settings": {
+      "namespace": "Film",
+      "name": "PostProduction",
+      "asynchronous": false
+    },
+    "events": [
+      {
+        "name": "Internal",
+        "events": [
+          {
+            "id": "MEDIA_VERIFIED",
+            "description": "Footage and audio checksummed, proxies generated — editorial can begin"
+          },
+          {
+            "id": "SCENES_ASSEMBLED",
+            "description": "All scenes laid in script order from selects"
+          },
+          {
+            "id": "CUT_READY",
+            "description": "Rough cut complete with temp sound — ready to screen"
+          },
+          {
+            "id": "CHANGES_REQUESTED",
+            "description": "Director/producers request editorial changes — back to the bench"
+          },
+          {
+            "id": "CUT_APPROVED",
+            "description": "Picture lock — no further editorial changes"
+          },
+          {
+            "id": "GRADE_LOCKED",
+            "description": "Color grade approved shot by shot"
+          },
+          {
+            "id": "MIX_LOCKED",
+            "description": "Dialogue, music and effects mixed to final levels"
+          },
+          {
+            "id": "QC_PASSED",
+            "description": "Delivery master passes technical quality control"
+          },
+          {
+            "id": "QC_FAILED_PICTURE",
+            "description": "QC found a picture defect — regrade required"
+          },
+          {
+            "id": "QC_FAILED_SOUND",
+            "description": "QC found an audio defect — remix required"
+          },
+          {
+            "id": "LAND_CALLS",
+            "description": "The screening room is not enough — the work needs to be carried onto the land"
+          },
+          {
+            "id": "KNOWLEDGE_RECEIVED",
+            "description": "What presence on the land taught returns as feedback into the cut"
+          }
+        ]
+      }
+    ],
+    "state": {
+      "name": "Root",
+      "states": [
+        {
+          "name": "Ingest",
+          "kind": "normal",
+          "description": "Dailies arrive — media managed, checksummed, proxies cut",
+          "transitions": [
+            {
+              "event": "MEDIA_VERIFIED",
+              "nextState": "Assembly",
+              "description": "Media safe on the shelf — editorial begins"
+            }
+          ]
+        },
+        {
+          "name": "Assembly",
+          "kind": "normal",
+          "description": "Editor lays scenes in script order from selects",
+          "transitions": [
+            {
+              "event": "SCENES_ASSEMBLED",
+              "nextState": "RoughCut",
+              "description": "Scene order holds — refine into a full cut"
+            }
+          ]
+        },
+        {
+          "name": "RoughCut",
+          "kind": "normal",
+          "description": "Full-length cut with temp sound and placeholder VFX",
+          "transitions": [
+            {
+              "event": "CUT_READY",
+              "nextState": "Review",
+              "description": "Cut screens for director and producers"
+            }
+          ]
+        },
+        {
+          "name": "Review",
+          "kind": "normal",
+          "description": "Director and producers screen the cut — verdict branches here",
+          "transitions": [
+            {
+              "event": "CHANGES_REQUESTED",
+              "nextState": "Assembly",
+              "description": "LOOP — notes go back to the editing bench"
+            },
+            {
+              "event": "CUT_APPROVED",
+              "nextState": "ColorGrade",
+              "description": "BRANCH — picture lock, finishing begins"
+            },
+            {
+              "event": "LAND_CALLS",
+              "nextState": "OnTheLand",
+              "description": "The verdict is neither approve nor revise — the work goes to the land first"
+            }
+          ]
+        },
+        {
+          "name": "ColorGrade",
+          "kind": "normal",
+          "description": "Picture-locked footage graded shot by shot",
+          "transitions": [
+            {
+              "event": "GRADE_LOCKED",
+              "nextState": "SoundMix",
+              "description": "Graded picture hands off to the mix stage"
+            }
+          ]
+        },
+        {
+          "name": "SoundMix",
+          "kind": "normal",
+          "description": "Dialogue, music and effects mixed against the graded picture",
+          "transitions": [
+            {
+              "event": "MIX_LOCKED",
+              "nextState": "Master",
+              "description": "Final mix conforms into the delivery master"
+            }
+          ]
+        },
+        {
+          "name": "Master",
+          "kind": "normal",
+          "description": "Grade and mix conformed into the delivery master — QC gate",
+          "transitions": [
+            {
+              "event": "QC_PASSED",
+              "nextState": "Released",
+              "description": "QC clean — the film ships"
+            },
+            {
+              "event": "QC_FAILED_PICTURE",
+              "nextState": "ColorGrade",
+              "description": "BRANCH — picture defect routes back to the grade"
+            },
+            {
+              "event": "QC_FAILED_SOUND",
+              "nextState": "SoundMix",
+              "description": "BRANCH — audio defect routes back to the mix"
+            }
+          ]
+        },
+        {
+          "name": "Released",
+          "kind": "final",
+          "description": "Master delivered — the film is out in the world"
+        },
+        {
+          "name": "OnTheLand",
+          "kind": "normal",
+          "description": "The circle goes on the land — knowledge received through presence, place, and relations, not through the screen",
+          "transitions": [
+            {
+              "event": "KNOWLEDGE_RECEIVED",
+              "nextState": "Assembly",
+              "description": "LOOP — land-given knowledge feeds back into editorial as lived feedback"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

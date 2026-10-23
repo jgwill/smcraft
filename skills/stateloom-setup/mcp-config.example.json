@@ -1,0 +1,23 @@
+{
+  "_comment": "stateloom MCP registration. Replace BOTH absolute paths before use. STATELOOM_PROJECT_FILE must be absolute — a relative path resolves against the MCP process's own cwd and silently diverges from the web designer's. Drop STATELOOM_BRIDGE_URL to run standalone (disk only, no live canvas). SMCRAFT_* twins are optional; the server reads STATELOOM_* first and falls back to them.",
+  "mcpServers": {
+    "stateloom": {
+      "command": "npx",
+      "args": ["-y", "@miadi/stateloom-mcp"],
+      "env": {
+        "STATELOOM_PROJECT_FILE": "/absolute/path/to/statemachine.smdf.json",
+        "STATELOOM_BRIDGE_URL": "http://127.0.0.1:4599",
+        "STATELOOM_AGENT_NAME": "mcp-agent"
+      }
+    },
+    "stateloom-from-source": {
+      "_comment": "Alternative: run a local checkout instead of the published package.",
+      "command": "node",
+      "args": ["/absolute/path/to/smcraft/mcp/dist/server.js"],
+      "env": {
+        "STATELOOM_PROJECT_FILE": "/absolute/path/to/statemachine.smdf.json",
+        "STATELOOM_BRIDGE_URL": "http://127.0.0.1:4599"
+      }
+    }
+  }
+}

@@ -1,23 +1,56 @@
 # SMCraft — State Machine Craft
 
-A framework for designing, generating, and running hierarchical state machines.  
+A framework for designing, generating, and running hierarchical state machines.
 Extracted from the Caishen StateForge platform and reimplemented in Python and TypeScript.
+
+One declarative format — SMDF — read by an engine, a code generator, an MCP server,
+a terminal CLI, a socket.io hub and a browser canvas. An agent, a person at a shell
+and a person at a canvas can all edit the same document while it is open.
+
+Beside the state machines the loom holds the data they act on (ERDF), the usage
+scenarios that walk through them (SQDF), and a system document (SYSDF) that joins all of
+them as one system — checked against each other, and kept level by the scenarios.
+
+Over all of them sits a **stage**: an agent shows its work on the canvas — a drawing, what to
+light in it, a sentence beside it — one step at a time or as a tour the canvas plays back, and
+the person answers by **marking** elements or an area of any drawing and saying what the agent
+should know.
 
 ## Packages
 
-| Package | Language | Description |
-|---------|----------|-------------|
-| `smcraft/py` | Python | Runtime library + parser + SMCG code generator + CLI |
-| `smcraft/ts` | TypeScript | Runtime library + parser + code generator |
-| `smcraft/web` | React/Next.js | Visual state machine designer |
-| `smcraft/mcp` | TypeScript | MCP server for LLM agent integration |
+| Package | Install | Directory | What it is |
+|---|---|---|---|
+| [`@miadi/stateloom-engine`](https://www.npmjs.com/package/@miadi/stateloom-engine) | `npm i @miadi/stateloom-engine` | `ts/` | The engine: SMDF parser, validator, hierarchical runtime, the `Machine` SMDF interpreter, TypeScript codegen. Renamed from `smcraft`, which is deprecated on npm |
+| [`miadi-stateloom-engine`](https://pypi.org/project/miadi-stateloom-engine/) | `pip install miadi-stateloom-engine` | `py/` | The Python twin: the full validator V001–V014, Python codegen, and the `smcg` CLI |
+| [`@miadi/stateloom-protocol`](https://www.npmjs.com/package/@miadi/stateloom-protocol) | `npm i @miadi/stateloom-protocol` | `bridge-protocol/` | Zero-dependency foundation: patch ops, diff/apply, envelopes, layout, edge routing, ASCII/Mermaid render, export naming — and the ERD, sequence and system formats: types, validators, the links between drawings, the scenario replay and reconcile, layouts |
+| [`@miadi/stateloom-client`](https://www.npmjs.com/package/@miadi/stateloom-client) | `npm i @miadi/stateloom-client` | `bridge-client/` | Framework-agnostic socket.io-client wrapper: join / patch / full / presence with auto-resync |
+| [`@miadi/stateloom`](https://www.npmjs.com/package/@miadi/stateloom) | `npm i @miadi/stateloom` | `bridge/` | The socket.io hub. Bin `smcraft-bridge` |
+| [`@miadi/stateloom-react`](https://www.npmjs.com/package/@miadi/stateloom-react) | `npm i @miadi/stateloom-react` | `bridge-react/` | React 19 binding: `useSmcraftBridge`, session core; the stage's `useStage` / `createStageSession`, `browserVoice`, `browserDictation` |
+| [`@miadi/stateloom-canvas`](https://www.npmjs.com/package/@miadi/stateloom-canvas) | `npm i @miadi/stateloom-canvas` | `bridge-canvas/` | The design surfaces: `<StateMachineCanvas>`, `<EntityRelationshipCanvas>` (crow's foot or Chen) and `<SequenceCanvas>` — pan, zoom, drag, routed edges, touch gestures — and the stage's parts: `<StageOverlay>` over any of them, `<StageCaption>`, `<MarkComposer>`, `<MarkThread>`, `<MarksPanel>`. Props in, callbacks out, CSS-variable themed |
+| [`@miadi/stateloom-cli`](https://www.npmjs.com/package/@miadi/stateloom-cli) | `npm i -g @miadi/stateloom-cli` | `cli/` | Bin `smcx` — drive the loom from a terminal |
+| [`@miadi/stateloom-mcp`](https://www.npmjs.com/package/@miadi/stateloom-mcp) | `npx -y @miadi/stateloom-mcp` | `mcp/` | The MCP server: 65 tools — 22 state-machine, 10 ERD, 14 sequence, 10 system, 9 stage. Bins `stateloom-mcp` and legacy `smcraft-mcp` |
+| [`@miadi/stateloom-skills`](https://www.npmjs.com/package/@miadi/stateloom-skills) | `npx -y @miadi/stateloom-skills` | `skills-cli/` | Bin `stateloom` — installs agent skills into `.claude/skills/` |
+| [`@miadi/stateloom-web`](https://www.npmjs.com/package/@miadi/stateloom-web) | `npx -y @miadi/stateloom-web` | `web/` → `web-dist/` | The visual designer (Next.js), prebuilt. `web/` stays private; `web-dist/` ships its standalone build |
+| [`jgwill/stateloom`](https://hub.docker.com/r/jgwill/stateloom) | `docker run -p 4598:8080 jgwill/stateloom` | `Dockerfile`, `docker/` | The whole loom as one image: hub, canvas, MCP and CLI behind a single port |
+
+Everything depends on `@miadi/stateloom-protocol`. Nothing depends back on it.
 
 ## Quick Start
 
-### Python
+### Docker — the whole loom, one port
+
 ```bash
-cd py && pip install -e .
-smcg examples/bdbo_strategy.smdf.json -o output/ -v
+npx -y @miadi/stateloom-skills docker up
+```
+
+Writes a compose project, starts hub + canvas + MCP + gateway, waits until every part is
+healthy, and prints a URL for your human and an MCP registration for your agent. Pick the
+port with `--port`, the documents directory with `--dir`; `--json` gives an agent the whole
+answer as data. Or without any Node at all:
+
+```bash
+mkdir -p looms
+docker run --rm -p 4598:8080 -v "$PWD/looms:/data" --user "$(id -u):$(id -g)" jgwill/stateloom
 ```
 
 Consumer-oriented CLI entrypoints:
@@ -27,22 +60,14 @@ smcg skills install agent-lifecycle -o ./starter
 smcg report-issue --title "Describe the issue" --machine ./starter/agent_lifecycle.smdf.json --include-env
 ```
 
-### TypeScript
-```bash
-cd ts && npm install && npm run build && npm test
-```
+Only one port is published, and the canvas is told its bridge is `/` — **the same origin as
+the page** — so the browser's live socket works over localhost, a LAN address, a tailnet
+name or a TLS proxy without anything being configured to match. `docs/DOCKER.md` has the
+whole design; `stateloom skills install stateloom-docker` hands it to an agent.
 
-### Web Designer
-```bash
-cd web && npm install && npm run dev
-# Opens at http://localhost:3000
-```
+### MCP server (for LLM agents)
 
-### MCP Server (for LLM agents)
-```bash
-cd mcp && npm install && npm run build
-node dist/server.js  # Runs on stdio
-```
+No clone, no build:
 
 The MCP `create_state_machine` tool also supports `template: "agent_lifecycle"` to bootstrap a durable work-unit lifecycle starter.
 
@@ -50,12 +75,108 @@ Add to your MCP client config:
 ```json
 {
   "mcpServers": {
-    "smcraft": {
-      "command": "node",
-      "args": ["/b/trading/smcraft/mcp/dist/server.js"]
+    "stateloom": {
+      "command": "npx",
+      "args": ["-y", "@miadi/stateloom-mcp"],
+      "env": {
+        "STATELOOM_PROJECT_FILE": "/absolute/path/to/machine.smdf.json",
+        "STATELOOM_BRIDGE_URL": "http://127.0.0.1:4599"
+      }
     }
   }
 }
+```
+
+`STATELOOM_PROJECT_FILE` must be **absolute** — the MCP server and the web app each
+resolve a relative path against their own cwd, and the divergence is silent.
+`scripts/live-loop.sh mcp-line` prints the `claude mcp add` line with paths already resolved.
+
+The server speaks **stdio** by default. Setting `STATELOOM_MCP_HTTP_PORT` switches it to
+Streamable HTTP at `POST /mcp` (plus `GET /health`) so agents on other machines can reach
+the same loom — nothing changes unless you set the port. HTTP mode **requires**
+`STATELOOM_MCP_TOKEN` and refuses to start without one, binds `127.0.0.1` unless
+`STATELOOM_MCP_HTTP_HOST` says otherwise, and is not multi-tenant: the active document is
+process state, so every client shares one board. `STATELOOM_MCP_ROOT` confines that
+document to a directory; `STATELOOM_MCP_LOCK_PROJECT=1` refuses `set_project_file` outright.
+Full table in [`mcp/README.md`](./mcp/README.md#remote-access-optional-020).
+
+### CLI
+
+```bash
+npm i -g @miadi/stateloom-cli
+export STATELOOM_PROJECT_FILE=/abs/path/machine.smdf.json
+
+smcx add-state Pending
+smcx add-event Start
+smcx add-transition Pending Start --to Active
+smcx render --as svg
+smcx watch                # stream the live doc as ASCII
+```
+
+Mutations are durable-first: persist to disk, then emit to the hub. No hub running
+is fine — the edit is still a real edit.
+
+### Agent skills
+
+```bash
+npx -y @miadi/stateloom-skills skills list
+npx -y @miadi/stateloom-skills skills install --all
+```
+
+Drops a ready-to-use `SKILL.md` into `.claude/skills/`. Thirteen skills, sources in
+[`skills/`](./skills/): `stateloom-setup`, `stateloom-docker`, `stateloom-design`,
+`stateloom-erd`, `stateloom-sequence`, `stateloom-system`, `stateloom-stage`,
+`stateloom-live-loop`, `stateloom-render`, `stateloom-codegen`, `stateloom-rispec`,
+`stateloom-service`, `stateloom-tailnet`.
+
+The last two are the deployment pair — `stateloom-service` runs the hub and canvas as
+supervised systemd user units over the published packages, and `stateloom-tailnet`
+publishes that pair on a private Tailscale tailnet.
+
+### Python engine
+
+```bash
+pip install miadi-stateloom-engine
+smcg examples/bdbo_strategy.smdf.json -o output/ -v
+```
+
+### TypeScript engine
+
+```bash
+npm i @miadi/stateloom-engine
+```
+
+```typescript
+import { Machine } from "@miadi/stateloom-engine/machine";
+const machine = new Machine(definition);   // runs the SMDF directly, no codegen
+machine.send("Start");
+```
+
+### The live loop
+
+```bash
+export STATELOOM_PROJECT_FILE=/abs/path/machine.smdf.json
+scripts/live-loop.sh hub                                       # hub on 4599
+scripts/live-loop.sh web-build && scripts/live-loop.sh web     # canvas on 4598
+# or, with nothing checked out:
+npx -y @miadi/stateloom-web --bridge http://127.0.0.1:4599
+```
+
+4598 (canvas) and 4599 (hub) are the loom's pair. `scripts/live-loop.sh env` prints
+every resolved value and writes `.env.smcraft-live`.
+
+### From source
+
+The packages link to each other with `file:` paths, so a package cannot typecheck until the
+`dist/` of everything it imports exists. **This order is topological, not alphabetical** —
+the same list the release workflow walks:
+
+```bash
+for p in ts bridge-protocol bridge-client bridge bridge-react bridge-canvas cli mcp skills-cli; do
+  (cd "$p" && npm ci && npm run build) || { echo "FAILED: $p"; break; }
+done
+cd web && npm ci && npm run dev      # the canvas; needs bridge-canvas built above
+cd py  && pip install -e .           # the Python engine and `smcg`
 ```
 
 ## Architecture
@@ -63,30 +184,104 @@ Add to your MCP client config:
 ```
 .smdf.json definition
     ↓
-  Parser (Spec 60)
+  Parser (Spec 70)
     ↓
   EnrichedModel (with lookup maps)
     ↓
-  Validator (V001-V013 rules)
+  Validator (V001–V014)
     ↓
-  Code Generator (Spec 62)
+  Code Generator (Spec 72)
     ↓
   Python / TypeScript state machine classes
     ↓
-  Runtime Engine (Spec 61) executes them
+  Runtime Engine (Spec 71) executes them
 ```
 
-The **runtime library** (`Context`, `State`, `TransitionHelper`, `Observer`) ships as a dependency — generated code imports from `smcraft`.
+The **runtime library** (`Context`, `State`, `TransitionHelper`, `Observer`) ships as a
+dependency — generated code imports from `@miadi/stateloom-engine`. `@miadi/stateloom-engine/machine` offers the other
+path: interpret the definition in memory and skip generation entirely.
+
+Alongside that, the **live pipeline**: agent, terminal and canvas each emit `PatchOp`s to
+the hub, which sequences and broadcasts them. The hub keys rooms by the absolute
+project-file path and never writes disk — durability belongs to whoever made the edit.
 
 ## RISE Specifications
 
-- **Spec 60** — State Machine Definition Format (`.smdf.json`)
-- **Spec 61** — Runtime Engine (Context, State, Observer)
-- **Spec 62** — Code Generator (SMCG pipeline)
-- **Spec 63** — Visual Designer (web-based)
-- **Spec 76** — Agent Lifecycle Starter Template
+Full specs in [`rispecs/`](./rispecs/):
 
-See `caishen/rispecs/StateMachineries/` for full specs.
+| Spec | Covers |
+|---|---|
+| [70](./rispecs/70-smdf-format.spec.md) | SMDF format — schema, state types, validation V001–V014 |
+| [71](./rispecs/71-runtime-engine.spec.md) | Runtime engine — Context, State, TransitionHelper, observers |
+| [72](./rispecs/72-code-generator.spec.md) | Code generator — SMCG pipeline, Python + TS targets |
+| [73](./rispecs/73-mcp-server.spec.md) | MCP server — 17 + 10 tools, transports, design session protocol, "Path Power" |
+| [74](./rispecs/74-web-designer.spec.md) | Web designer — the canvas package, store, document switching, the ERD workspace |
+| [75](./rispecs/75-agent-designer-bridge.spec.md) | Agent ↔ designer bridge — live sync, scaffold pipeline |
+| [76](./rispecs/76-rise-rispec-generator.spec.md) | RISE rispec generator — SMDF as exportation terminus |
+| [77](./rispecs/77-realtime-design-bridge.spec.md) | Real-time design bridge — granular bidirectional sync |
+| [78](./rispecs/78-forgewright-episode-rendering.plan.md) | Forgewright episode rendering (plan) |
+| [79](./rispecs/79-layout-persistence.plan.md) | Layout persistence for the live canvas (plan) |
+| [80](./rispecs/80-erdf-format.spec.md) | ERDF format — the entity-relationship sibling, rules E001–E005, link rules L001–L004 |
+| [81](./rispecs/81-sqdf-format.spec.md) | SQDF format — the sequence (usage scenario) sibling, rules S001–S006 |
+| [82](./rispecs/82-sysdf-system.spec.md) | SYSDF — the drawings as one system: checks Y001–Y004 and L005–L008, the scenario replay, reconcile and its `propose` / `auto` mode, the canvas view |
+| [83](./rispecs/83-stage-and-marks.spec.md) | The stage and the marks — an agent shows its work step by step or as a tour (`.tour.json`, T001–T009); a person marks elements or an area of any drawing (`<drawing>.marks.json`) and the agent answers in the thread |
+| [84](./rispecs/84-talking-on-the-canvas.spec.md) | Guided creation and conversation dock |
+| [85](./rispecs/85-agent-lifecycle-template.spec.md) | Agent lifecycle starter — work-unit states, transition contracts, runtime provenance |
+
+Specs 60-63 in the upstream `caishen` repo define the C# StateForge contracts this
+reimplements.
+
+Each spec header carries a **Revised** line. Specs 70–85 were last revised 2026-09-20 to
+match what the packages above actually ship.
+
+## MCP Document Tools & Episode Diagrams
+
+The MCP server (`mcp/`, published as `@miadi/stateloom-mcp`; the former
+`smcraft-mcp` name remains as its 0.1.0 lineage) exposes `set_project_file` /
+`get_project_file`: an agent chooses which `.smdf.json` is the active document
+mid-session — disk target and live bridge room both re-point (rooms are keyed by
+absolute path). Full contract in `rispecs/73-mcp-server.spec.md` ("Path Power").
+
+### Rendering a diagram
+
+Three surfaces draw the same board, so a machine can be looked at from wherever
+the work is happening:
+
+```bash
+smcx render --as png --scale 2 --open   # → /path/to/statemachine.png
+smcx render --as svg                    # needs no rasterizer at all
+smcx render --as mermaid --out -        # to stdout, for a README
+smcx render --as png --stamp            # → ep252--Film--260730175243.png
+```
+
+- **CLI** — `smcx render` reads the durable `.smdf.json` straight off disk (no
+  hub, no browser, no agent required) and prints the absolute path it wrote.
+  `png` goes through whichever rasterizer the host has — sharp if installed,
+  then librsvg, Inkscape, ImageMagick or headless Chrome, tried in that order;
+  `svg` needs none.
+- **MCP** — `render_diagram` writes the same file and hands the picture back
+  inside the tool result, so an agent can see what it just designed. Same
+  formats, plus `stamp: true`.
+- **Web designer** — the format picker beside 📥 exports as PNG, JPEG, SVG,
+  Mermaid (`.mmd`) or Markdown (`.md`, the same graph inside a ```` ```mermaid ````
+  fence). The picture formats take the canvas as it stands, hand-dragged boxes
+  included; the two text formats come from the definition, since mermaid
+  describes a graph and has no placement to carry.
+
+The CLI and MCP derive their layout with the same `autoLayout` behind ⤢ Arrange,
+so all three agree on where the boxes sit.
+
+**Export names.** A browser download always, and `--stamp` / `stamp: true` on
+demand, produce `[ep252--]<Machine>--<yyMMddHHmmss>.<ext>` — the chronicle
+episode when the document lives under one, the machine's own name, and a stamp
+to the second so the afternoon's second export never lands on the first. Built
+in `bridge-protocol/src/exportName.ts`, so every surface names files alike.
+
+miadi-chronicle episodes host their machines at
+`<episode>/diagrams/<name>.smdf.json` (first proven inhabitant: ep103's
+`film-preprod`; ep090 predates the convention with six machines under
+`state-machines/*.smcraft.json` — see `docs/reviews/` for the reconciliation
+recommendation). Handoff history lives in `docs/handoffs/`.
 
 ## Built-in Lifecycle Starter
 
@@ -171,3 +366,83 @@ When reporting issues or contributing edge cases, include:
   }
 }
 ```
+
+## Four documents, one system
+
+A **state machine** (`.smdf.json`) describes one behaviour. An **entity-relationship
+diagram** (`.erdf.json`, [Spec 80](./rispecs/80-erdf-format.spec.md)) describes the data
+every behaviour acts on, once, for all of them. They are siblings, linked by name only: a
+machine's object class names an entity, a guard's `strategy.fractal_count` names an
+attribute, and an attribute's `stateOf` names the machine whose state it stores.
+`check_links` reports what a machine names that the data does not have — while both are
+still drawings.
+
+The same MCP server, hub and designer serve both; the document's type is its extension. An
+ERD is drawn in crow's foot or in Chen notation — the viewer's choice, never written to the
+file. Both diagram types carry **notes** on the diagram and on each shape (`get_notes`,
+`set_notes`), saved in the document for whoever opens it next.
+
+A **sequence** (`.sqdf.json`, [Spec 81](./rispecs/81-sqdf-format.spec.md)) tells a usage
+scenario: participants, and messages in order. A message may fire an event of a machine,
+carry an entity, and say which state follows; an `alt`, `opt` or `loop` fragment says after
+which message it branches.
+
+A **system** (`.sysdf.json`, [Spec 82](./rispecs/82-sysdf-system.spec.md)) names the
+drawings of one thing being built and the actors its scenarios share. `check_system` checks
+every name that crosses between them; `replay_scenario` walks each scenario through the
+machines by the runtime's own rules and names where a walk stops — a sequence and a state
+machine are two ways to tell the same story. `reconcile_scenario` brings the machines, the
+ERD and the actors level with the scenarios, and in the system's **`auto`** mode every
+sequence edit does it at once, so the person who opens a machine finds it already updated.
+`show` points the canvases open on a system at a drawing and an element.
+
+A system is what an agent and a person talk over while they design, and what a session that
+does not finish leaves for the next one: the drawings, the scenarios told so far, the places
+the walk still stops, and notes that say why the work exists. The next instance opens the
+system before it designs anything.
+
+In the designer a system opens as a map of its drawings; every drawing opened from it
+carries a strip to switch to the others and follow the selected element across them. Worked
+example: [`examples/wave-count/`](./examples/wave-count/), the Episode 140 wave count.
+
+### The stage and the marks
+
+[Spec 83](./rispecs/83-stage-and-marks.spec.md). The agent shows; the person points back.
+
+- **A step** opens a drawing on the person's canvas, lights some of it (`focus` one element,
+  `spotlight` several while the rest dims, `region` an area) and shows a sentence beside it.
+  `show_step` sends one while the agent talks.
+- **A tour** (`<name>.tour.json`) is an ordered walk through the drawings the canvas plays back
+  with its own controls — ◀ ▶ ⏯, step dots, a voice the person may turn on, and **Answer**.
+  `write_tour`, `play_tour`, `stage_control`.
+- **A mark** is the person pointing: ✎, then a tap on an element or a drag around several, then
+  what the agent should know — typed, or spoken where the browser can listen. Marks are pinned
+  on the drawing and kept beside it (`<drawing>.marks.json`, never in it). The agent reads them
+  with what is on the person's screen (`read_marks`) before it replies, answers in the thread
+  (`answer_mark`, which can light the marked elements as it answers), and leaves questions of
+  its own (`add_mark`). **Copy for the agent** puts the same review on the clipboard for any
+  agent without the MCP.
+- **Waiting**: `await_marks` holds a tool call; `smcx marks await` exits with the person's next
+  mark — run it as a background task and the session wakes when they point.
+
+Stages are named (`STATELOOM_STAGE`, a page's `?stage=`); the hub keeps the step on screen and
+what the person is looking at for a canvas that opens late, and answers `GET /stage/<name>` in
+JSON. The skill: `stateloom skills install stateloom-stage`.
+
+### Talking with Mia on the canvas
+
+[Spec 84](./rispecs/84-talking-on-the-canvas.spec.md). With `STATELOOM_COMPANION_URL` naming a
+Mia episode companion (jgwill/miadi-orchestration-kit `phone-capture`, `http://127.0.0.1:8771`),
+every board carries a 🎙 Talk dock: Record, speak about the drawing, Stop & send. The take is
+backed up on the service while it records and carries what the canvas showed (the drawing, the
+element in focus, the marks waiting on an agent). Mia's reply comes back to the same thread as the
+phone page's; a reply written as steps plays as a tour: each step opens its drawing and lights
+what it names while that step's words play in her voice. Replies never play over a recording or
+over each other. The designer reaches the service through `/api/companion/*`, which never passes a
+reply on: replies are posted from the companion's host only.
+
+## For agents
+
+[`llms.txt`](./llms.txt) is the index; [`llms-full.txt`](./llms-full.txt) is the deep
+reference — tool signatures, the patch vocabulary, runtime semantics, the environment
+contract.

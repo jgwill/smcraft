@@ -1,0 +1,1458 @@
+/**
+ * @miadi/stateloom-canvas — the board's own stylesheet.
+ *
+ * Import once, anywhere in the host app:
+ *
+ *     import "@miadi/stateloom-canvas/styles.css";
+ *
+ * Every colour is read from a `--slc-*` variable declared on `.slc-pane`, so a
+ * host re-skins the entire surface by redeclaring those variables on any
+ * ancestor — or by handing a partial `theme` object to the component, which
+ * writes them inline. Nothing here depends on a CSS framework.
+ */
+
+.slc-pane {
+  /* Material */
+  --slc-surface: #030712;
+  --slc-node-fill: #0f172a;
+  --slc-node-stroke: #475569;
+  --slc-composite-fill: #0c1020;
+  --slc-final-fill: #1e293b;
+
+  /* Meaning */
+  --slc-accent: #3b82f6;
+  --slc-accent-fill: #1e3a5f;
+  --slc-accent-ink: #93c5fd;
+  --slc-danger: #ef4444;
+  --slc-draw-source: #f59e0b;
+  --slc-active: #22c55e;
+
+  /* Lines and chips */
+  --slc-edge: #94a3b8;
+  --slc-chip-fill: #1e293b;
+  --slc-chip-stroke: #334155;
+
+  /* Ink */
+  --slc-label: #e2e8f0;
+  --slc-muted: #94a3b8;
+  --slc-faint: #64748b;
+  --slc-entry: #22c55e;
+  --slc-exit: #f97316;
+  --slc-composite: #6366f1;
+
+  /* Floating chrome */
+  --slc-panel-bg: rgb(17 24 39 / 0.9);
+  --slc-panel-border: #374151;
+  --slc-panel-hover: #1f2937;
+
+  position: relative;
+  width: 100%;
+  height: 100%;
+  /* Nothing in this pane scrolls, and the SVG's refusal of the browser's own
+     gestures has to extend to the overlays sitting on top of it — a pinch that
+     opens with a finger on the zoom bar would otherwise be a page zoom. */
+  touch-action: none;
+}
+
+.slc-surface {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: var(--slc-surface);
+}
+
+/* ─── States ──────────────────────────────────────────────────────────────── */
+
+.slc-node {
+  fill: var(--slc-node-fill);
+  stroke: var(--slc-node-stroke);
+  stroke-width: 1.5;
+}
+
+.slc-node--final { fill: var(--slc-final-fill); }
+.slc-node--composite { fill: var(--slc-composite-fill); }
+
+.slc-node--source {
+  fill: var(--slc-accent-fill);
+  stroke: var(--slc-draw-source);
+}
+
+.slc-node--error {
+  stroke: var(--slc-danger);
+  stroke-width: 2;
+}
+
+/* Selection is the last word on the outline: it comes after error on purpose,
+   so the box the user is looking at is always the box that is outlined. */
+.slc-node--selected {
+  stroke: var(--slc-accent);
+  stroke-width: 2.5;
+}
+
+.slc-node-name {
+  fill: var(--slc-label);
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-node-kind {
+  fill: var(--slc-faint);
+  font-size: 10px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-node-entry { fill: var(--slc-entry); font-size: 9px; pointer-events: none; user-select: none; }
+.slc-node-exit  { fill: var(--slc-exit);  font-size: 9px; pointer-events: none; user-select: none; }
+.slc-node-warn  { fill: var(--slc-danger); font-size: 12px; pointer-events: none; user-select: none; }
+/* Somebody left notes on this shape — a small tab on its top edge, in both canvases. */
+.slc-note-mark { fill: var(--slc-accent-ink); opacity: 0.75; }
+
+.slc-node-warn-mark { fill: none; stroke: var(--slc-danger); stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
+
+.slc-node-drill { fill: var(--slc-composite); font-size: 9px; pointer-events: none; user-select: none; }
+
+/* What the pointer says a box will do. */
+.slc-node--drawing { cursor: crosshair; }
+.slc-node--drillable { cursor: pointer; }
+.slc-node--draggable { cursor: grab; }
+.slc-node--draggable:active { cursor: grabbing; }
+.slc-node--static { cursor: default; }
+
+/* ─── Edges ───────────────────────────────────────────────────────────────── */
+
+.slc-edge {
+  fill: none;
+  stroke: var(--slc-edge);
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+
+.slc-edge:hover { stroke: var(--slc-accent-ink); }
+
+.slc-edge--selected {
+  stroke: var(--slc-accent);
+  stroke-width: 2.5;
+}
+
+.slc-arrowhead { fill: var(--slc-edge); }
+.slc-arrowhead--selected { fill: var(--slc-accent); }
+
+/* ─── Event chips ─────────────────────────────────────────────────────────── */
+
+.slc-chip { cursor: pointer; }
+
+.slc-chip-plate {
+  fill: var(--slc-chip-fill);
+  stroke: var(--slc-chip-stroke);
+  stroke-width: 1;
+}
+
+.slc-chip-plate--selected {
+  fill: var(--slc-accent-fill);
+  stroke: var(--slc-accent);
+}
+
+.slc-chip-text {
+  fill: var(--slc-muted);
+  font-size: 11px;
+  font-weight: 500;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-chip-text--selected { fill: var(--slc-accent-ink); }
+
+.slc-chip-guard {
+  fill: var(--slc-faint);
+  font-size: 9px;
+  user-select: none;
+}
+
+.slc-chip-leader {
+  stroke: var(--slc-chip-stroke);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  pointer-events: none;
+}
+
+.slc-chip-leader--selected { stroke: var(--slc-accent); }
+
+.slc-glyph {
+  fill: none;
+  stroke: #7c93b0;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.slc-glyph--selected { stroke: var(--slc-accent-ink); }
+.slc-glyph .slc-glyph-dot { fill: #7c93b0; }
+.slc-glyph--selected .slc-glyph-dot { fill: var(--slc-accent-ink); }
+
+/* ─── Hints ───────────────────────────────────────────────────────────────── */
+
+.slc-draw-hint {
+  fill: var(--slc-draw-source);
+  font-size: 13px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-empty {
+  fill: var(--slc-faint);
+  font-size: 16px;
+}
+
+/* ─── Breadcrumb ──────────────────────────────────────────────────────────── */
+
+.slc-crumbs {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--slc-panel-border);
+  border-radius: 0.5rem;
+  background: var(--slc-panel-bg);
+  font-size: 0.8125rem;
+  line-height: 1.25;
+}
+
+.slc-crumb-item { display: flex; align-items: center; gap: 0.25rem; }
+.slc-crumb-sep { color: var(--slc-faint); }
+
+.slc-crumb {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--slc-muted);
+  font: inherit;
+}
+
+.slc-crumb:hover { color: var(--slc-accent-ink); }
+
+.slc-crumb--current {
+  color: var(--slc-accent-ink);
+  font-weight: 600;
+}
+
+/* ─── Navigation HUD ──────────────────────────────────────────────────────── */
+
+.slc-hud {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.25rem 0.375rem;
+  border: 1px solid var(--slc-panel-border);
+  border-radius: 0.5rem;
+  background: var(--slc-panel-bg);
+  font-size: 0.75rem;
+  color: var(--slc-muted);
+  user-select: none;
+}
+
+.slc-hud-btn {
+  background: none;
+  border: 0;
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.slc-hud-btn:hover:not(:disabled) {
+  background: var(--slc-panel-hover);
+  color: var(--slc-label);
+}
+
+.slc-hud-btn:disabled { opacity: 0.4; cursor: default; }
+
+.slc-hud-btn--scale {
+  font-variant-numeric: tabular-nums;
+  min-width: 3.25rem;
+}
+
+/* A thumb needs the padding a cursor does not. */
+.slc-hud--coarse .slc-hud-btn { padding: 0.5rem 0.75rem; }
+
+.slc-hud-sep { color: var(--slc-panel-border); padding: 0 0.125rem; }
+
+.slc-hud-hint {
+  padding: 0 0.25rem;
+  font-size: 0.625rem;
+  color: var(--slc-faint);
+}
+
+/* ─── Event picker ────────────────────────────────────────────────────────── */
+
+.slc-picker {
+  position: absolute;
+  z-index: 50;
+  min-width: 160px;
+  padding: 0.5rem;
+  border: 1px solid var(--slc-panel-border);
+  border-radius: 0.5rem;
+  background: var(--slc-panel-bg);
+  box-shadow: 0 10px 25px rgb(0 0 0 / 0.45);
+}
+
+.slc-picker-title { font-size: 0.75rem; color: var(--slc-muted); padding: 0 0.25rem 0.25rem; }
+.slc-picker-sub { font-size: 0.75rem; color: var(--slc-faint); padding: 0 0.25rem 0.25rem; }
+.slc-picker-empty { font-size: 0.75rem; color: var(--slc-faint); padding: 0.5rem 0.25rem; }
+
+.slc-picker-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  color: var(--slc-label);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.slc-picker-item:hover { background: var(--slc-panel-hover); }
+
+.slc-picker-cancel {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-top: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  border-top: 1px solid var(--slc-panel-border);
+  background: none;
+  color: var(--slc-faint);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.slc-picker-cancel:hover { color: var(--slc-label); }
+
+/* ─── Live animation ──────────────────────────────────────────────────────── */
+
+/* Node bloom-in: fade + scale from ~0.92 to 1 around the node's own center. */
+@keyframes slc-node-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Node fade-out: fade + scale down as the state leaves the definition. */
+@keyframes slc-node-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.9); }
+}
+
+/* Edge draw-on: reveal the stroke (pathLength=1 normalises the dash units). */
+@keyframes slc-edge-draw {
+  from { stroke-dashoffset: 1; opacity: 0; }
+  to   { stroke-dashoffset: 0; opacity: 1; }
+}
+
+/* Runtime-active pulse: a glow that layers over any stroke. */
+@keyframes slc-pulse {
+  0%, 100% { filter: drop-shadow(0 0 1px rgb(34 197 94 / 0.55)); }
+  50%      { filter: drop-shadow(0 0 6px rgb(34 197 94 / 0.95)); }
+}
+
+.slc-node-enter {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: slc-node-in 220ms ease-out both;
+}
+
+.slc-node-exit-group {
+  transform-box: fill-box;
+  transform-origin: center;
+  pointer-events: none;
+  animation: slc-node-out 200ms ease-in forwards;
+}
+
+.slc-edge-enter {
+  stroke-dasharray: 1;
+  animation: slc-edge-draw 260ms ease-out both;
+}
+
+.slc-node--active {
+  stroke: var(--slc-active);
+  animation: slc-pulse 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slc-node-enter,
+  .slc-edge-enter { animation: none; }
+  /* Keep exit near-instant so onAnimationEnd still fires and the node is
+     cleaned up from the exiting layer. */
+  .slc-node-exit-group { animation-duration: 1ms; }
+  /* Drop the infinite motion but keep a static glow so active states stay
+     distinguishable without relying on motion. */
+  .slc-node--active {
+    animation: none;
+    filter: drop-shadow(0 0 4px rgb(34 197 94 / 0.85));
+  }
+}
+
+/* ─── Entity-relationship canvas (Spec 80) ────────────────────────────────── */
+/* Drawn with the same variables as the state board, so one theme skins both. */
+
+.slc-erd-line {
+  fill: none;
+  stroke: var(--slc-edge);
+  stroke-width: 1.5;
+}
+
+.slc-erd-mark {
+  fill: none;
+  stroke: var(--slc-edge);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.slc-erd-rel-label {
+  fill: var(--slc-muted);
+  font-size: 11px;
+  font-weight: 500;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-erd-rule {
+  stroke: var(--slc-node-stroke);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.slc-erd-row {
+  fill: var(--slc-muted);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  user-select: none;
+}
+
+.slc-erd-row--pk { fill: var(--slc-label); font-weight: 600; }
+.slc-erd-row--state { fill: var(--slc-accent-ink); }
+.slc-erd-row--empty { fill: var(--slc-faint); font-style: italic; }
+
+.slc-erd-state { cursor: pointer; }
+.slc-erd-state:hover .slc-erd-row--state { text-decoration: underline; }
+
+.slc-erd-badge {
+  fill: var(--slc-faint);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Chen notation: ovals, diamonds, and the cardinality written beside the line. */
+
+.slc-erd-oval {
+  fill: var(--slc-node-fill);
+  stroke: var(--slc-node-stroke);
+  stroke-width: 1.2;
+}
+
+.slc-erd-oval-text {
+  fill: var(--slc-muted);
+  font-size: 11px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-erd-oval-text--pk {
+  fill: var(--slc-label);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.slc-erd-attr-line {
+  fill: none;
+  stroke: var(--slc-chip-stroke);
+  stroke-width: 1;
+}
+
+.slc-erd-diamond {
+  fill: var(--slc-chip-fill);
+  stroke: var(--slc-edge);
+  stroke-width: 1.5;
+}
+
+.slc-erd-weak {
+  fill: none;
+  stroke: var(--slc-node-stroke);
+  stroke-width: 1.2;
+  pointer-events: none;
+}
+
+.slc-erd-card {
+  fill: var(--slc-label);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-erd-state:hover .slc-erd-oval { stroke: var(--slc-accent); }
+
+.slc-erd-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--slc-faint);
+  font-size: 16px;
+  pointer-events: none;
+}
+
+/* ─── Sequence canvas (Spec 81) ───────────────────────────────────────────── */
+/* The same variables again: one theme skins all three boards. */
+
+.slc-sqd-name { font-size: 12px; }
+.slc-sqd-name--object { text-decoration: underline; }
+
+.slc-sqd-kind {
+  fill: var(--slc-faint);
+  font-size: 8.5px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-sqd-header--involved { stroke: var(--slc-accent-ink); stroke-width: 1.5; }
+
+.slc-sqd-participant,
+.slc-sqd-message { cursor: pointer; }
+
+.slc-sqd-lifeline {
+  fill: none;
+  stroke: var(--slc-node-stroke);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  pointer-events: none;
+}
+.slc-sqd-lifeline--selected { stroke: var(--slc-accent); stroke-width: 1.5; }
+
+/* Invisible, wide: what a finger actually hits. */
+.slc-sqd-hit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
+.slc-sqd-hitbox { fill: transparent; }
+
+.slc-sqd-line {
+  fill: none;
+  stroke: var(--slc-edge);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+.slc-sqd-line--reply { stroke-dasharray: 6 4; }
+.slc-sqd-line--optional { opacity: 0.8; }
+.slc-sqd-line--warn { stroke: var(--slc-draw-source); }
+.slc-sqd-line--error { stroke: var(--slc-danger); }
+.slc-sqd-line--selected { stroke: var(--slc-accent); stroke-width: 2; }
+
+.slc-sqd-head { fill: var(--slc-edge); stroke: var(--slc-edge); stroke-width: 1.2; stroke-linejoin: round; pointer-events: none; }
+.slc-sqd-head--open { fill: none; stroke-width: 1.5; }
+.slc-sqd-head--error { fill: var(--slc-danger); stroke: var(--slc-danger); }
+.slc-sqd-head--selected { fill: var(--slc-accent); stroke: var(--slc-accent); }
+.slc-sqd-head--open.slc-sqd-head--selected,
+.slc-sqd-head--open.slc-sqd-head--error { fill: none; }
+
+.slc-sqd-selected-plate { fill: var(--slc-accent-fill); opacity: 0.35; pointer-events: none; }
+
+.slc-sqd-ref-plate { fill: var(--slc-chip-fill); stroke: var(--slc-chip-stroke); stroke-width: 1; pointer-events: none; }
+.slc-sqd-ref-plate--selected { stroke: var(--slc-accent); }
+.slc-sqd-ref {
+  fill: var(--slc-muted);
+  font-size: 10px;
+  font-weight: 600;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-sqd-label {
+  fill: var(--slc-label);
+  font-size: 11px;
+  pointer-events: none;
+  user-select: none;
+}
+.slc-sqd-label--selected { fill: var(--slc-accent-ink); }
+.slc-sqd-label--error { fill: var(--slc-danger); }
+
+.slc-sqd-event { fill: var(--slc-accent-fill); stroke: var(--slc-accent); stroke-width: 0.8; pointer-events: none; }
+.slc-sqd-event-text {
+  fill: var(--slc-accent-ink);
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-sqd-opt { fill: none; stroke: var(--slc-faint); stroke-width: 1; stroke-dasharray: 2 2; pointer-events: none; }
+.slc-sqd-opt-text { fill: var(--slc-muted); font-size: 9.5px; font-style: italic; pointer-events: none; user-select: none; }
+
+.slc-sqd-state {
+  fill: var(--slc-entry);
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+  user-select: none;
+}
+
+.slc-sqd-frame { fill: none; stroke: var(--slc-composite); stroke-width: 1.2; pointer-events: none; }
+.slc-sqd-frame-tab { fill: var(--slc-composite-fill); stroke: var(--slc-composite); stroke-width: 1.2; pointer-events: none; }
+.slc-sqd-frame-heading { fill: var(--slc-muted); font-size: 11px; pointer-events: none; user-select: none; }
+.slc-sqd-frame-kind { fill: var(--slc-label); font-weight: 700; }
+
+.slc-sqd-branch {
+  fill: none;
+  stroke: var(--slc-composite);
+  stroke-width: 1;
+  stroke-dasharray: 1 3;
+  pointer-events: none;
+}
+
+/* ─── The stage (Spec 83) ─────────────────────────────────────────────────── */
+/* The stage's layer sits beside the canvas, not inside its pane, so the
+   variables it reads are declared again here with the same defaults. A host
+   that re-themed the board re-themes these by declaring them on an ancestor. */
+
+.slc-stage,
+.slc-stage-caption,
+.slc-stage-card,
+.slc-stage-notice {
+  --slc-accent: #3b82f6;
+  --slc-accent-fill: #1e3a5f;
+  --slc-accent-ink: #93c5fd;
+  --slc-danger: #ef4444;
+  --slc-label: #e2e8f0;
+  --slc-muted: #94a3b8;
+  --slc-faint: #64748b;
+  --slc-panel-bg: rgb(17 24 39 / 0.94);
+  --slc-panel-border: #374151;
+  --slc-panel-hover: #1f2937;
+  --slc-stage-scrim: rgb(2 6 23 / 0.62);
+  --slc-stage-light: #fbbf24;
+  --slc-mark-open: #f59e0b;
+  --slc-mark-answered: #3b82f6;
+  --slc-mark-question: #a78bfa;
+  --slc-mark-resolved: #64748b;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.slc-stage {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5;
+}
+
+.slc-stage-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.slc-stage-scrim { fill: var(--slc-stage-scrim); }
+
+.slc-stage-ring {
+  fill: none;
+  stroke: var(--slc-stage-light);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 6px var(--slc-stage-light));
+}
+
+.slc-stage-region {
+  fill: rgb(251 191 36 / 0.08);
+  stroke: var(--slc-stage-light);
+  stroke-width: 2;
+  stroke-dasharray: 8 5;
+}
+
+.slc-stage-mark-ring {
+  fill: none;
+  stroke: var(--slc-mark-open);
+  stroke-width: 2;
+}
+
+.slc-stage-mark-area {
+  fill: rgb(245 158 11 / 0.08);
+  stroke: var(--slc-mark-open);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+
+.slc-stage-drag {
+  fill: rgb(245 158 11 / 0.12);
+  stroke: var(--slc-mark-open);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+
+.slc-stage-catch {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  cursor: crosshair;
+  touch-action: none;
+  background: rgb(245 158 11 / 0.03);
+  box-shadow: inset 0 0 0 2px rgb(245 158 11 / 0.45);
+}
+
+/* Pins: numbered, coloured by who the mark waits on. */
+.slc-stage-pin {
+  position: absolute;
+  transform: translate(-40%, -60%);
+  pointer-events: auto;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px 11px 11px 3px;
+  border: 1.5px solid rgb(255 255 255 / 0.85);
+  background: var(--slc-mark-open);
+  color: #111827;
+  font: 700 11px/19px ui-sans-serif, system-ui, sans-serif;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.45);
+}
+
+.slc-stage-pin--answered { background: var(--slc-mark-answered); color: white; }
+.slc-stage-pin--question { background: var(--slc-mark-question); color: #111827; }
+.slc-stage-pin--resolved { background: var(--slc-mark-resolved); color: white; opacity: 0.8; }
+.slc-stage-pin--open { background: var(--slc-mark-open); }
+.slc-stage-pin--selected { outline: 3px solid var(--slc-label); outline-offset: 1px; z-index: 2; }
+
+/* An agent's word not yet opened: a quiet ring and a dot, over whichever colour the pin has. */
+.slc-stage-pin--new { box-shadow: 0 0 0 3px rgb(255 255 255 / 0.22), 0 2px 6px rgb(0 0 0 / 0.45); }
+.slc-stage-pin--new::after {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--slc-label);
+  border: 1.5px solid var(--slc-panel-bg, #111827);
+}
+.slc-stage-pin--inline.slc-stage-pin--new { position: relative; }
+
+.slc-stage-pin--inline {
+  position: static;
+  transform: none;
+  display: inline-block;
+  flex: none;
+  box-shadow: none;
+}
+
+.slc-stage-pin-count {
+  position: absolute;
+  right: -7px;
+  top: -7px;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: #111827;
+  color: var(--slc-label);
+  font-size: 9px;
+  line-height: 14px;
+}
+
+@media (pointer: coarse) {
+  .slc-stage-pin { min-width: 30px; height: 30px; line-height: 27px; font-size: 13px; border-radius: 15px 15px 15px 4px; }
+}
+
+/* The caption: the words of the step on stage. */
+.slc-stage-caption {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  width: min(38rem, calc(100% - 1rem));
+  max-height: 45%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--slc-panel-border);
+  background: var(--slc-panel-bg);
+  color: var(--slc-label);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(6px);
+  z-index: 30;
+  pointer-events: auto;
+}
+
+.slc-stage-caption-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--slc-muted);
+}
+
+.slc-stage-caption-origin {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--slc-accent-fill);
+  color: var(--slc-accent-ink);
+  font-weight: 600;
+}
+
+/* The step's own title, then its place and the tour's name on the line under it. */
+.slc-stage-caption-heading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 1px;
+}
+
+.slc-stage-caption-title {
+  color: var(--slc-label);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.slc-stage-caption-count {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.slc-stage-caption-origin { margin-top: 1px; }
+
+/* The step is about a drawing that is not on the board. */
+.slc-stage-caption-held {
+  margin: 0;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.05);
+  color: var(--slc-muted);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.slc-stage-caption-held strong { color: var(--slc-label); font-weight: 600; }
+
+.slc-stage-caption-speaking {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--slc-stage-light);
+  animation: slc-stage-pulse 1s ease-in-out infinite;
+}
+
+@keyframes slc-stage-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+.slc-stage-caption-say {
+  margin: 0;
+  overflow-y: auto;
+  font-size: 15px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.slc-stage-dots { display: flex; flex-wrap: wrap; gap: 0; margin: 0 -3px; }
+
+/* The button is the hit area; the dot is drawn inside it. */
+.slc-stage-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.slc-stage-dot::before {
+  content: "";
+  box-sizing: border-box;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid var(--slc-faint);
+}
+
+.slc-stage-dot--seen::before { background: var(--slc-faint); }
+.slc-stage-dot--current::before { background: var(--slc-stage-light); border-color: var(--slc-stage-light); }
+
+/* Under a finger each dot is a 44 px target; past seven steps the count and the arrows say where the tour stands. */
+@media (pointer: coarse) {
+  .slc-stage-dots { margin: -6px -14px; }
+  .slc-stage-dot { width: 44px; height: 44px; }
+  .slc-stage-dot::before { width: 10px; height: 10px; }
+  .slc-stage-dots--many { display: none; }
+}
+
+.slc-stage-caption-controls,
+.slc-stage-card-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.slc-stage-spacer { flex: 1; }
+
+.slc-stage-btn {
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0 9px;
+  border-radius: 7px;
+  border: 1px solid var(--slc-panel-border);
+  background: transparent;
+  color: var(--slc-label);
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Drawn icons (icons.tsx) take the button's colour and never shrink in a tight row. */
+.slc-icon { display: block; flex: none; }
+
+.slc-stage-btn:hover:not(:disabled) { background: var(--slc-panel-hover); }
+.slc-stage-btn:disabled { opacity: 0.35; cursor: default; }
+.slc-stage-btn--main { background: var(--slc-accent); border-color: var(--slc-accent); color: white; }
+.slc-stage-btn--main:hover:not(:disabled) { background: var(--slc-accent); filter: brightness(1.1); }
+.slc-stage-btn--quiet { border-color: transparent; color: var(--slc-muted); }
+.slc-stage-btn--on { color: var(--slc-stage-light); border-color: var(--slc-stage-light); }
+.slc-stage-btn--live { background: var(--slc-danger); border-color: var(--slc-danger); color: white; animation: slc-stage-pulse 1.2s ease-in-out infinite; }
+.slc-stage-btn--danger { color: var(--slc-danger); border-color: transparent; }
+.slc-stage-btn--answer { border-color: var(--slc-mark-open); color: var(--slc-mark-open); }
+
+@media (pointer: coarse) {
+  .slc-stage-btn { min-height: 44px; min-width: 44px; font-size: 15px; }
+}
+
+/* Cards: the composer, a thread, the list of marks. */
+.slc-stage-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: min(22rem, calc(100vw - 1rem));
+  max-height: min(70vh, 34rem);
+  overflow-y: auto;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--slc-panel-border);
+  background: var(--slc-panel-bg);
+  color: var(--slc-label);
+  font-size: 13px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+
+.slc-stage-card-label { color: var(--slc-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.slc-stage-card-anchor { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.slc-stage-card-error { color: var(--slc-danger); font-size: 12px; }
+/* Who will answer the marks: the host's one line, quiet. */
+.slc-stage-card-note { color: var(--slc-muted); font-size: 12px; line-height: 1.35; }
+
+/* "new" beside a listed mark whose agent's word is not yet read. */
+.slc-stage-new {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--slc-mark-answered);
+  color: var(--slc-label);
+  font-size: 10px;
+  line-height: 15px;
+  text-transform: lowercase;
+}
+
+/* One line when an agent answers: near the board's controls, never over the board. */
+.slc-stage-notice {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 0;
+  border-radius: 999px;
+  border: 1px solid var(--slc-mark-answered);
+  background: var(--slc-panel-bg);
+  color: var(--slc-label);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.45);
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+.slc-stage-notice-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 4px 0 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: 500 13px/1.2 ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+}
+.slc-stage-notice-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slc-stage-notice-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--slc-mark-answered);
+}
+.slc-stage-notice-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-right: 2px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--slc-muted);
+  cursor: pointer;
+}
+.slc-stage-notice-close:hover { color: var(--slc-label); }
+
+.slc-stage-chip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--slc-mark-open);
+  color: var(--slc-mark-open);
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.slc-stage-chip--quiet { border-color: var(--slc-panel-border); color: var(--slc-muted); font-family: inherit; }
+
+.slc-stage-input {
+  border-radius: 7px;
+  border: 1px solid var(--slc-panel-border);
+  background: rgb(3 7 18 / 0.7);
+  color: var(--slc-label);
+  padding: 6px 8px;
+  font: inherit;
+  /* 16px on a phone, or iOS zooms the page when the field takes focus. */
+  font-size: max(13px, min(16px, 1rem));
+}
+
+.slc-stage-textarea { resize: vertical; min-height: 4.5em; }
+.slc-stage-select { padding: 4px 6px; }
+.slc-stage-grow { flex: 1; min-width: 0; }
+
+.slc-stage-thread-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+
+/* A thread scrolls its words and keeps the reply row in reach at the card's bottom. */
+.slc-stage-thread { overflow: hidden; }
+.slc-stage-thread > * { flex: none; }
+.slc-stage-thread > .slc-stage-thread-list { flex: 1 1 auto; min-height: 3.5em; overflow-y: auto; overscroll-behavior: contain; }
+
+.slc-stage-said {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.04);
+  border-left: 3px solid var(--slc-mark-open);
+}
+
+.slc-stage-said--agent { border-left-color: var(--slc-mark-question); background: rgb(167 139 250 / 0.07); }
+.slc-stage-said-who { font-size: 11px; color: var(--slc-muted); font-weight: 600; }
+.slc-stage-said-text { white-space: pre-wrap; line-height: 1.4; }
+
+.slc-stage-panel-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.slc-stage-panel-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.slc-stage-panel-item:hover,
+.slc-stage-panel-item--selected { background: var(--slc-panel-hover); }
+.slc-stage-panel-text { display: flex; flex-direction: column; min-width: 0; }
+.slc-stage-panel-said { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slc-stage-panel-meta { font-size: 11px; color: var(--slc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slc-stage-empty { color: var(--slc-muted); font-size: 12px; line-height: 1.4; }
+
+/* Two choices side by side: which marks the list shows. */
+.slc-stage-segment {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid var(--slc-panel-border);
+}
+.slc-stage-segment-btn {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--slc-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.slc-stage-segment-btn--on { background: var(--slc-panel-hover); color: var(--slc-label); }
+@media (pointer: coarse) {
+  .slc-stage-segment-btn { min-height: 34px; padding: 0 12px; font-size: 14px; }
+}
+
+/* ─── Talking with a companion (Spec 84) ──────────────────────────────────── */
+
+.slc-talk {
+  --slc-accent: #3b82f6;
+  --slc-accent-fill: #1e3a5f;
+  --slc-accent-ink: #93c5fd;
+  --slc-danger: #ef4444;
+  --slc-label: #e2e8f0;
+  --slc-muted: #94a3b8;
+  --slc-faint: #64748b;
+  --slc-panel-bg: rgb(17 24 39 / 0.96);
+  --slc-panel-border: #374151;
+  --slc-panel-hover: #1f2937;
+  --slc-stage-light: #fbbf24;
+  --slc-mark-open: #f59e0b;
+  --slc-mark-question: #a78bfa;
+  --slc-talk-live: #ef4444;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  pointer-events: auto;
+}
+
+.slc-talk-fab {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid var(--slc-panel-border);
+  background: var(--slc-panel-bg);
+  color: var(--slc-label);
+  font-size: 22px;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slc-talk-fab--live {
+  background: var(--slc-talk-live);
+  border-color: var(--slc-talk-live);
+  animation: slc-talk-ring 1.4s ease-in-out infinite;
+}
+
+.slc-talk-fab--speaking { border-color: var(--slc-stage-light); box-shadow: 0 0 0 3px rgb(251 191 36 / 0.25); }
+
+/* Closed, on a phone: the handle of the sheet at the bottom of the board, in words. */
+.slc-talk--bar { width: 100%; }
+.slc-talk-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--slc-panel-border);
+  background: var(--slc-panel-bg);
+  color: var(--slc-label);
+  font: 600 14px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+  backdrop-filter: blur(6px);
+}
+.slc-talk-bar-title { flex: none; white-space: nowrap; }
+.slc-talk-bar--live { background: var(--slc-talk-live); border-color: var(--slc-talk-live); color: white; animation: slc-talk-ring 1.4s ease-in-out infinite; }
+.slc-talk-bar--speaking { border-color: var(--slc-stage-light); }
+
+.slc-talk-fab-clock { font: 700 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: white; }
+
+.slc-talk-fab-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--slc-mark-question);
+  color: #111827;
+  font: 700 11px/20px ui-sans-serif, system-ui, sans-serif;
+}
+
+.slc-talk-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(23rem, calc(100vw - 1rem));
+  max-height: min(78vh, 40rem);
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid var(--slc-panel-border);
+  background: var(--slc-panel-bg);
+  color: var(--slc-label);
+  font-size: 13px;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(8px);
+}
+
+.slc-talk-head { display: flex; align-items: center; gap: 8px; }
+.slc-talk-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+
+/* Who is in the room, in words: "listening", "answering take 12", "away". */
+.slc-talk-state {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid rgb(34 197 94 / 0.5);
+  color: #86efac;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.slc-talk-state--away { border-color: var(--slc-panel-border); color: var(--slc-muted); }
+
+.slc-talk-episode { width: 100%; }
+.slc-talk-meta { color: var(--slc-muted); font-size: 12px; line-height: 1.4; }
+/* Amber is kept for what waits on the companion; "nobody is listening" is said quietly. */
+.slc-talk-meta--away { color: var(--slc-muted); }
+.slc-talk-meta--error { color: var(--slc-danger); }
+
+.slc-talk-notice {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgb(167 139 250 / 0.12);
+  color: var(--slc-label);
+  font-size: 12px;
+}
+
+.slc-talk-record {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 46px;
+  border-radius: 12px;
+  border: 0;
+  background: var(--slc-accent);
+  color: white;
+  font: 700 15px ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.slc-talk-record:disabled { opacity: 0.45; cursor: default; }
+/* The button stays where the finger is while it records: only a ring breathes around it. */
+.slc-talk-record--live { background: var(--slc-talk-live); animation: slc-talk-ring 1.4s ease-in-out infinite; }
+
+@keyframes slc-talk-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(239 68 68 / 0.55); }
+  50% { box-shadow: 0 0 0 6px rgb(239 68 68 / 0); }
+}
+.slc-talk-record--retry { background: var(--slc-mark-open); color: #111827; }
+.slc-talk-clock { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+
+.slc-talk-toggle { display: flex; align-items: center; gap: 6px; color: var(--slc-muted); font-size: 12px; }
+
+.slc-talk-thread {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.slc-talk-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.04);
+  border-left: 3px solid var(--slc-mark-open);
+}
+
+.slc-talk-entry--reply { border-left-color: var(--slc-mark-question); background: rgb(167 139 250 / 0.07); }
+
+/* A mark on one of the episode's drawings: the whole entry opens that drawing at that mark. */
+.slc-talk-entry--mark { padding: 0; border-left-color: var(--slc-panel-border); }
+.slc-talk-entry--waits { border-left-color: var(--slc-mark-open); }
+.slc-talk-mark {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--slc-label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.slc-talk-mark:hover:not(:disabled) { background: rgb(255 255 255 / 0.04); }
+.slc-talk-mark:disabled { cursor: default; }
+.slc-talk-mark > span { display: flex; }
+.slc-talk-mark > .slc-talk-text { display: block; }
+.slc-talk-mark-head { flex: 1; min-width: 0; color: var(--slc-muted); overflow-wrap: anywhere; }
+.slc-talk-mark-head strong { color: var(--slc-label); }
+.slc-talk-mark-replies { flex-direction: column; gap: 6px; margin-top: 3px; padding-left: 9px; border-left: 2px solid var(--slc-panel-border); }
+.slc-talk-mark-reply { display: flex; flex-direction: column; gap: 1px; }
+.slc-talk-mark-by { font-size: 11px; font-weight: 600; color: var(--slc-muted); }
+.slc-talk-mark-reply--agent .slc-talk-mark-by { color: var(--slc-mark-question); }
+.slc-talk-mark-state { margin-top: 2px; font-size: 11.5px; color: var(--slc-muted); }
+.slc-talk-mark-state--waits { color: var(--slc-mark-open); }
+
+/* A reply that answers a mark says which, and opens it. */
+.slc-talk-answers {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--slc-accent-ink);
+  font: 11.5px ui-sans-serif, system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+.slc-talk-answers:disabled { cursor: default; color: var(--slc-muted); }
+.slc-talk-entry--new { box-shadow: inset 0 0 0 1px var(--slc-mark-question); }
+
+.slc-talk-who { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--slc-muted); }
+.slc-talk-who strong { color: var(--slc-label); font-size: 12px; }
+.slc-talk-canvas { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--slc-accent-ink); }
+.slc-talk-text { white-space: pre-wrap; line-height: 1.42; overflow-wrap: anywhere; }
+.slc-talk-play { min-height: 26px; min-width: 30px; padding: 0 8px; gap: 5px; font-size: 12px; margin-left: auto; }
+.slc-talk-play--on { color: var(--slc-stage-light); border-color: var(--slc-stage-light); }
+.slc-talk-new {
+  padding: 0 5px;
+  border-radius: 6px;
+  background: var(--slc-mark-question);
+  color: #111827;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+}
+.slc-talk-thumbs { display: inline-flex; gap: 2px; }
+
+.slc-talk-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  min-height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--slc-faint);
+  cursor: pointer;
+}
+
+.slc-talk-thumb:hover { color: var(--slc-label); }
+.slc-talk-thumb--on { color: var(--slc-mark-question); }
+
+/* A reply that walks the diagram: its steps, each a row that starts the walk there. */
+.slc-talk-steps {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slc-talk-step {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--slc-label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.slc-talk-step:hover:not(:disabled) { background: rgb(255 255 255 / 0.05); }
+.slc-talk-step:disabled { cursor: default; }
+.slc-talk-step--here { background: rgb(251 191 36 / 0.1); box-shadow: inset 2px 0 0 var(--slc-stage-light); }
+
+.slc-talk-step-n {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 1px solid var(--slc-panel-border);
+  color: var(--slc-muted);
+  font: 600 10px/16px ui-sans-serif, system-ui, sans-serif;
+  text-align: center;
+}
+
+.slc-talk-step--here .slc-talk-step-n { border-color: var(--slc-stage-light); background: var(--slc-stage-light); color: #111827; }
+
+.slc-talk-step-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.slc-talk-step-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; font-size: 12px; }
+.slc-talk-step-where { font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--slc-accent-ink); overflow-wrap: anywhere; }
+.slc-talk-step-say { line-height: 1.4; overflow-wrap: anywhere; }
+
+@media (pointer: coarse) {
+  .slc-talk-answers { min-height: 32px; }
+  .slc-talk-play { min-height: 34px; min-width: 40px; }
+  .slc-talk-thumb { min-width: 36px; min-height: 36px; }
+  .slc-talk-step { padding: 8px 6px; }
+}

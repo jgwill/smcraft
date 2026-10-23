@@ -1,0 +1,110 @@
+{
+  "settings": {
+    "namespace": "Trading.Strategies",
+    "name": "TradingStrategyData",
+    "description": "The data the FDB and BOSf breakout machines act on. Drawn 2026-09-19 from jgt-strategy-api src/models.py, trimmed to the attributes the machines read or write. Attributes marked 'planned' come from the BOSf plan (Episode 140, step A3) and are not in models.py yet."
+  },
+  "entities": [
+    {
+      "name": "Campaign",
+      "description": "A directional intention on one instrument and timeframe; groups strategies",
+      "attributes": [
+        { "name": "campaign_id", "type": "int", "key": "pk" },
+        { "name": "campaign_name", "type": "string" },
+        { "name": "instrument", "type": "string" },
+        { "name": "timeframe", "type": "string" },
+        { "name": "direction", "type": "string" },
+        { "name": "max_strategies", "type": "int" }
+      ]
+    },
+    {
+      "name": "TradingStrategy",
+      "description": "One strategy row; strategy_type selects which machine reads strategy_state",
+      "attributes": [
+        { "name": "strategy_id", "type": "int", "key": "pk" },
+        { "name": "campaign_id", "type": "int", "references": "Campaign.campaign_id", "nullable": true },
+        { "name": "strategy_type", "type": "string", "description": "fdb_breakout | bosf_breakout" },
+        { "name": "strategy_state", "type": "int", "stateOf": ["FDBBreakoutStrategy", "BOSFBreakoutStrategy"] },
+        { "name": "instrument", "type": "string" },
+        { "name": "timeframe", "type": "string" },
+        { "name": "direction", "type": "string" },
+        { "name": "breakout_price", "type": "float" },
+        { "name": "min_pip_risk", "type": "float" },
+        { "name": "max_pip_risk", "type": "float" },
+        { "name": "max_periods", "type": "int" },
+        { "name": "periods_elapsed", "type": "int" },
+        { "name": "max_cancel", "type": "int" },
+        { "name": "cancel_count", "type": "int" },
+        { "name": "last_evaluated_bar", "type": "string" },
+        { "name": "min_fractal_count", "type": "int", "description": "planned" },
+        { "name": "min_fractal_dimension", "type": "int", "description": "planned; 2 | 3 | 5" },
+        { "name": "fractal_side", "type": "string", "description": "planned; both | highs | lows" },
+        { "name": "include_breakout_bar", "type": "bool", "description": "planned" },
+        { "name": "breakout_bar", "type": "string", "description": "planned; set when breakout_detected fires" },
+        { "name": "fractal_count", "type": "int", "description": "planned" },
+        { "name": "fractal_count_by_dimension", "type": "json", "description": "planned" }
+      ]
+    },
+    {
+      "name": "StrategyParameter",
+      "attributes": [
+        { "name": "parameter_id", "type": "int", "key": "pk" },
+        { "name": "strategy_id", "type": "int", "references": "TradingStrategy.strategy_id" },
+        { "name": "parameter_name", "type": "string" },
+        { "name": "parameter_value", "type": "text" }
+      ]
+    },
+    {
+      "name": "BreakoutLevel",
+      "attributes": [
+        { "name": "level_id", "type": "int", "key": "pk" },
+        { "name": "strategy_id", "type": "int", "references": "TradingStrategy.strategy_id" },
+        { "name": "level_type", "type": "string" },
+        { "name": "price_level", "type": "float" }
+      ]
+    },
+    {
+      "name": "OrderRequest",
+      "description": "What the strategy asked jgt-transact to place",
+      "attributes": [
+        { "name": "request_id", "type": "int", "key": "pk" },
+        { "name": "strategy_id", "type": "int", "references": "TradingStrategy.strategy_id" },
+        { "name": "rate", "type": "float" },
+        { "name": "stop_loss", "type": "float" },
+        { "name": "lots", "type": "int" },
+        { "name": "broker_order_id", "type": "string", "nullable": true },
+        { "name": "status", "type": "string" }
+      ]
+    },
+    {
+      "name": "StrategyExecution",
+      "attributes": [
+        { "name": "execution_id", "type": "int", "key": "pk" },
+        { "name": "strategy_id", "type": "int", "references": "TradingStrategy.strategy_id" },
+        { "name": "entry_price", "type": "float" },
+        { "name": "exit_price", "type": "float", "nullable": true },
+        { "name": "pnl", "type": "float", "nullable": true }
+      ]
+    },
+    {
+      "name": "StrategyTransition",
+      "description": "The ledger of every state change, with the market context it fired in",
+      "attributes": [
+        { "name": "transition_id", "type": "int", "key": "pk" },
+        { "name": "strategy_id", "type": "int", "references": "TradingStrategy.strategy_id" },
+        { "name": "from_state", "type": "int" },
+        { "name": "to_state", "type": "int" },
+        { "name": "event", "type": "string" },
+        { "name": "timestamp", "type": "datetime" }
+      ]
+    }
+  ],
+  "relationships": [
+    { "from": "Campaign", "to": "TradingStrategy", "cardinality": "1:N", "label": "groups" },
+    { "from": "TradingStrategy", "to": "StrategyParameter", "cardinality": "1:N", "label": "is tuned by" },
+    { "from": "TradingStrategy", "to": "BreakoutLevel", "cardinality": "1:N", "label": "watches" },
+    { "from": "TradingStrategy", "to": "OrderRequest", "cardinality": "1:N", "label": "places" },
+    { "from": "TradingStrategy", "to": "StrategyExecution", "cardinality": "1:N", "label": "results in" },
+    { "from": "TradingStrategy", "to": "StrategyTransition", "cardinality": "1:N", "label": "records" }
+  ]
+}

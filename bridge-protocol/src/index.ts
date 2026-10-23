@@ -1,0 +1,208 @@
+/**
+ * @miadi/stateloom-protocol
+ *
+ * Pure, zero-runtime-dependency foundation of the smcraft real-time design
+ * bridge: SMDF types, the PatchOp vocabulary, a pure diff/apply pair, wire
+ * envelopes/event names, and small seq/hash helpers.
+ */
+export * from "./definition.js";
+export * from "./ops.js";
+export * from "./apply.js";
+export * from "./diff.js";
+export * from "./seq.js";
+export * from "./events.js";
+export * from "./env.js";
+export {
+  collectAllStates,
+  collectStateNames,
+  collectEventIds,
+  buildParentMap,
+} from "./tree.js";
+export { autoLayout, siblingOf, AUTO_LAYOUT_DEFAULTS } from "./autoLayout.js";
+export type { AutoLayoutOptions, LayoutBox } from "./autoLayout.js";
+export {
+  placeLabels,
+  chipSize,
+  glyphAt,
+  overlaps,
+  textWidth,
+  guardText,
+  PLACE_LABELS_DEFAULTS,
+  LABEL_FONT_SIZE,
+  GUARD_FONT_SIZE,
+  GUARD_MAX_CHARS,
+  GLYPH_SIZE,
+  GLYPH_INSET,
+  GLYPH_COLUMN,
+} from "./edgeLabels.js";
+export type { PendingLabel, PlacedLabel, PlaceLabelsOptions } from "./edgeLabels.js";
+export { eventGlyph, ALL_GLYPHS, SIGNAL_GLYPH } from "./glyphs.js";
+export type { Glyph, GlyphCircle } from "./glyphs.js";
+export {
+  routeEdges,
+  edgeCurve,
+  selfLoopCurve,
+  facingSides,
+  portAt,
+  bezier,
+  PORT_PITCH,
+  PORT_SPREAD,
+  SELF_LOOP_BULGE,
+} from "./edgeRoutes.js";
+export type { EdgeCurve, EdgeEnds, EdgePoint, EdgeSide } from "./edgeRoutes.js";
+export {
+  IDENTITY_VIEWPORT,
+  VIEWPORT_LIMITS,
+  clampScale,
+  fitToBoxes,
+  normalizeViewport,
+  panBy,
+  sameViewport,
+  screenDeltaToWorld,
+  screenToWorld,
+  viewportTransform,
+  worldToScreen,
+  zoomAt,
+  zoomTo,
+} from "./viewport.js";
+export type { Box, FitOptions, Point, ScaleLimits, Viewport } from "./viewport.js";
+export { renderMermaid } from "./render/mermaid.js";
+export { renderAscii } from "./render/ascii.js";
+export * from "./erd/definition.js";
+export { validateErd } from "./erd/validate.js";
+export type { ErdValidationError } from "./erd/validate.js";
+export { checkLinks, checkStateOf, guardFields } from "./erd/links.js";
+export {
+  addEntity,
+  removeEntity,
+  addAttribute,
+  removeAttribute,
+  addRelationship,
+  removeRelationship,
+  updateEntity,
+  updateErdSettings,
+  summarizeErd,
+} from "./erd/edit.js";
+export {
+  CHEN,
+  erdChenFootprint,
+  erdChenGeometry,
+  chenDiamondHalfWidth,
+  chenCardinalityText,
+} from "./erd/chen.js";
+export type { ChenGeometry, ChenOval } from "./erd/chen.js";
+export { renderMermaidEr } from "./render/mermaidEr.js";
+export { collectNotes, noteText, normalizeNotes } from "./notes.js";
+export type { NoteEntry } from "./notes.js";
+export { erdAutoLayout, erdEntitySize, erdRowText, ERD_BOX, ERD_LAYOUT_DEFAULTS } from "./erd/layout.js";
+export type { ErdLayoutOptions } from "./erd/layout.js";
+export { diagramFileName, timeStamp, episodeOf } from "./exportName.js";
+export type { DiagramNameInput } from "./exportName.js";
+export * from "./sequence/definition.js";
+export { validateSequence } from "./sequence/validate.js";
+export type { SqdValidationError } from "./sequence/validate.js";
+export {
+  updateSqdSettings,
+  addParticipant,
+  updateParticipant,
+  removeParticipant,
+  renameParticipant,
+  moveParticipant,
+  addMessage,
+  updateMessage,
+  removeMessage,
+  moveMessage,
+  addFragment,
+  updateFragment,
+  removeFragment,
+  addFragmentMessage,
+  summarizeSequence,
+} from "./sequence/edit.js";
+export { sequenceLayout, SEQUENCE_LAYOUT_DEFAULTS } from "./sequence/layout.js";
+export type {
+  SequenceLayout,
+  SequenceLayoutOptions,
+  SequenceParticipantBox,
+  SequenceRow,
+  SequenceFragmentBox,
+} from "./sequence/layout.js";
+export { renderMermaidSequence } from "./render/mermaidSequence.js";
+export * from "./system/definition.js";
+export {
+  updateSystemSettings,
+  addMember,
+  updateMember,
+  removeMember,
+  addActor,
+  removeActor,
+  setReconcileMode,
+  summarizeSystem,
+} from "./system/edit.js";
+export { reconcileSystem, summarizeReconcile } from "./system/reconcileSystem.js";
+export type { SystemReconcile } from "./system/reconcileSystem.js";
+export { replayScenario, formatReplay, machineName } from "./system/replay.js";
+export type { ReplayReport, ReplayPath, ReplayStep, ReplayResult, ReplayPathKind } from "./system/replay.js";
+export { reconcileScenario } from "./system/reconcile.js";
+export type { ReconcileProposal, ReconcileResult } from "./system/reconcile.js";
+export {
+  checkSystem,
+  systemLinks,
+  linksOf,
+  membersByKind,
+  elementFocus,
+  parseFocus,
+} from "./system/check.js";
+export type {
+  LoadedMember,
+  SystemIssue,
+  SystemCheck,
+  SystemMembers,
+  ElementKind,
+  ElementRef,
+  SystemLink,
+} from "./system/check.js";
+export * from "./stage/definition.js";
+export {
+  readMark,
+  readMarksFile,
+  newMarkId,
+  markInputProblem,
+  addMark,
+  replyToMark,
+  resolveMark,
+  reopenMark,
+  removeMark,
+  marksWaitingOn,
+  markAnchorText,
+  lastWordOf,
+  isMarkUnread,
+  unreadMarks,
+  withMarkRead,
+  markCounts,
+  agentWordIn,
+  agentWordText,
+} from "./stage/marks.js";
+export type { MarksRead, AgentWord } from "./stage/marks.js";
+export {
+  validateStep,
+  validateTour,
+  resolveStepPaths,
+  resolveTourPaths,
+  stepDocs,
+  stepHoldMs,
+  summarizeTour,
+} from "./stage/tour.js";
+export type { TourValidationError } from "./stage/tour.js";
+export {
+  unionBox,
+  padBox,
+  boxesOf,
+  elementsInRegion,
+  elementAt,
+  machineElementBoxes,
+  erdElementBoxes,
+  sequenceElementBoxes,
+} from "./stage/boxes.js";
+export type { ElementBox } from "./stage/boxes.js";
+export { formatMarks, formatContext, formatReview } from "./stage/review.js";
+export type { DocMarks } from "./stage/review.js";

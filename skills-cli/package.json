@@ -1,0 +1,69 @@
+{
+  "name": "@miadi/stateloom-skills",
+  "version": "0.5.0",
+  "description": "stateloom — the front door for the stateloom/smcraft state-machine design system: `stateloom docker up` runs the whole loom in containers on one port, `stateloom skills install` drops ready-to-use SKILL.md files into .claude/skills",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "stateloom": "dist/bin.js",
+    "stateloom-skills": "dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./catalog": {
+      "types": "./dist/catalog.d.ts",
+      "import": "./dist/catalog.js",
+      "default": "./dist/catalog.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc && node scripts/sync-skills.mjs && node scripts/sync-docker.mjs",
+    "prepack": "node scripts/sync-skills.mjs && node scripts/sync-docker.mjs",
+    "test": "node --test dist/tests/*.test.js",
+    "clean": "rm -rf dist skills docker"
+  },
+  "keywords": [
+    "state-machine",
+    "smdf",
+    "stateloom",
+    "smcraft",
+    "skills",
+    "agent",
+    "claude",
+    "mcp",
+    "cli",
+    "docker",
+    "compose",
+    "container"
+  ],
+  "license": "MIT",
+  "author": "Guillaume Isabelle <jgi@jgwill.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jgwill/smcraft.git",
+    "directory": "skills-cli"
+  },
+  "homepage": "https://github.com/jgwill/smcraft#readme",
+  "bugs": {
+    "url": "https://github.com/jgwill/smcraft/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "^5.7",
+    "@types/node": "^22"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "!dist/tests/",
+    "skills/**/*",
+    "docker/**/*"
+  ]
+}

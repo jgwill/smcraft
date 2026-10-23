@@ -38,6 +38,17 @@ export default function SettingsPanel() {
         />
       </label>
 
+      {/* Notes about the whole diagram, kept in the document for whoever opens it next. */}
+      <label className="block">
+        <span className="text-xs text-gray-500">Notes on this diagram</span>
+        <textarea
+          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 h-24"
+          placeholder="What was discussed, what is still open, what to tell the agent…"
+          value={settings.notes ?? ""}
+          onChange={(e) => updateSettings({ notes: e.target.value || undefined })}
+        />
+      </label>
+
       <label className="flex items-center gap-2 text-sm text-gray-300">
         <input
           type="checkbox"
@@ -55,11 +66,13 @@ export default function SettingsPanel() {
         <span className="text-xs text-gray-500">Context Class</span>
         <input
           className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200"
-          value={context?.className ?? ""}
+          value={context?.class ?? ""}
           placeholder="e.g. MyStateMachineContext"
           onChange={(e) =>
             updateSettings({
-              context: { ...context, className: e.target.value || undefined },
+              // `class`, not `className`: the generator names the context from
+              // `settings.context?.class`, and nothing has ever read the other.
+              context: { ...context, class: e.target.value || undefined },
             })
           }
         />
@@ -97,15 +110,18 @@ export default function SettingsPanel() {
       <h4 className="text-xs font-semibold text-gray-500">Object References</h4>
       <textarea
         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 h-12 font-mono"
-        value={(settings.objects ?? []).map((o) => `${o.name}: ${o.type}`).join("\n")}
-        placeholder="name: type (one per line)"
+        value={(settings.objects ?? []).map((o) => `${o.instance}: ${o.class}`).join("\n")}
+        placeholder="instance: Class (one per line)"
         onChange={(e) => {
+          // `instance: Class` — the pair the generator constructs the context
+          // with. Written as `{ name, type }` until now, which is a shape
+          // `codegen.ts` has never read.
           const objects = e.target.value
             .split("\n")
             .filter((l) => l.includes(":"))
             .map((l) => {
-              const [name, type] = l.split(":").map((s) => s.trim());
-              return { name, type };
+              const [instance, cls] = l.split(":").map((s) => s.trim());
+              return { instance, class: cls };
             });
           updateSettings({ objects });
         }}

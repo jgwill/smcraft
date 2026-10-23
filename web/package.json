@@ -1,14 +1,32 @@
 {
-  "name": "web",
-  "version": "0.1.0",
+  "name": "@miadi/stateloom-web-source",
+  "version": "0.3.4",
   "private": true,
+  "//": [
+    "This is the designer's SOURCE and is never published — hence private: true.",
+    "What ships is its BUILD: `next build` (output: standalone) produces",
+    ".next/standalone, which web-dist/scripts/sync-web.mjs assembles into",
+    "web-dist/server/ and publishes as @miadi/stateloom-web. So `npx -y",
+    "@miadi/stateloom-web` runs this app without a Next.js toolchain anywhere.",
+    "",
+    "Until 2026-08-16 this package was also called `stateloom-web`, and two",
+    "different things answering to one name is why it kept looking as though the",
+    "designer was the one package nobody had published.",
+    "",
+    "The version here is the DESIGNER's version, reported by `stateloom-web",
+    "--version` as `designer`. Bump it with web-dist's when the canvas changes."
+  ],
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p ${PORT:-4598}",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p ${PORT:-4598}",
     "lint": "eslint"
   },
   "dependencies": {
+    "@miadi/stateloom-canvas": "file:../bridge-canvas",
+    "@miadi/stateloom-client": "file:../bridge-client",
+    "@miadi/stateloom-protocol": "file:../bridge-protocol",
+    "@miadi/stateloom-react": "file:../bridge-react",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useDesignerStore, collectAllStates, collectEventIds } from "@/store/useDesignerStore";
+import ChromeIcon from "@/components/ChromeIcon";
 import type { StateDef, ActionDef } from "@/types/definition";
 
 function ActionEditor({ label, actions, onChange }: { label: string; actions: ActionDef[]; onChange: (actions: ActionDef[]) => void }) {
@@ -83,7 +84,10 @@ export default function PropertiesPanel() {
     const exitActions = state.onExit?.actions ?? [];
 
     return (
-      <div className="p-3 space-y-3 text-sm overflow-y-auto max-h-[calc(100vh-160px)]">
+      // The inner scroller is desktop-only now. Inside the phone sheet its
+      // `100vh - 160px` cap is a lie about the available height, and nesting a
+      // second scroll region inside the sheet's own made the panel feel stuck.
+      <div className="p-3 space-y-3 text-sm md:overflow-y-auto md:max-h-[calc(100vh-160px)]">
         <h3 className="text-xs font-semibold text-gray-400">State: {state.name}</h3>
         <label className="block">
           <span className="text-xs text-gray-500">Name</span>
@@ -111,6 +115,26 @@ export default function PropertiesPanel() {
             className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 h-12"
             value={state.description ?? ""}
             onChange={(e) => updateState(selection.id!, { description: e.target.value || undefined })}
+          />
+        </label>
+        {/* Prompt: what an agent is asked to resolve while the machine is in this state. */}
+        <label className="block">
+          <span className="text-xs text-gray-500">Prompt for the agent in this state</span>
+          <textarea
+            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 h-20"
+            placeholder="What the agent resolves here, and how it opens…"
+            value={state.prompt ?? ""}
+            onChange={(e) => updateState(selection.id!, { prompt: e.target.value || undefined })}
+          />
+        </label>
+        {/* Notes: what was said about this state, kept in the document for whoever opens it next. */}
+        <label className="block">
+          <span className="text-xs text-gray-500">Notes</span>
+          <textarea
+            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 h-20"
+            placeholder="An open question, a decision, something to tell the agent…"
+            value={state.notes ?? ""}
+            onChange={(e) => updateState(selection.id!, { notes: e.target.value || undefined })}
           />
         </label>
 
@@ -152,7 +176,7 @@ export default function PropertiesPanel() {
           onClick={() => removeState(selection.id!)}
           className="text-red-500 hover:text-red-400 text-xs mt-2"
         >
-          🗑 Delete State
+          <ChromeIcon name="trash" /> Delete State
         </button>
       </div>
     );
@@ -198,8 +222,12 @@ export default function PropertiesPanel() {
         </label>
         <label className="block">
           <span className="text-xs text-gray-500">Condition (guard)</span>
-          <input
-            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200"
+          {/* A guard is prose, not an identifier — three rows so a sentence is
+              readable without scrolling it sideways, and a resize grip for the
+              ones that are longer than that. */}
+          <textarea
+            rows={3}
+            className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 resize-y leading-snug"
             value={trans.condition ?? ""}
             onChange={(e) => updateTransition(stateName, idx, { condition: e.target.value || undefined })}
           />
@@ -208,7 +236,7 @@ export default function PropertiesPanel() {
           onClick={() => removeTransition(stateName, idx)}
           className="text-red-500 hover:text-red-400 text-xs"
         >
-          🗑 Delete Transition
+          <ChromeIcon name="trash" /> Delete Transition
         </button>
       </div>
     );

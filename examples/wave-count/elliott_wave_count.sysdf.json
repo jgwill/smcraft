@@ -1,0 +1,17 @@
+{
+  "settings": {
+    "namespace": "jgt.trading",
+    "name": "ElliottWaveCount",
+    "description": "A hand-labelled wave count, from the chart to a BOS strategy: its data, its lifecycle, and the scenario that walks through both.",
+    "notes": "The worked example of Spec 82. The live design is in /b/trading/diagrams; these copies are frozen for the tests and the docs."
+  },
+  "members": [
+    { "path": "elliott_wave_count.erdf.json" },
+    { "path": "elliott_wave_count.smdf.json" },
+    { "path": "wave_count_to_entry.sqdf.json" }
+  ],
+  "actors": [
+    { "name": "Guillaume", "kind": "person", "description": "labels the waves and authorizes" },
+    { "name": "Agent", "kind": "agent", "description": "reads the count and drafts the setup" }
+  ]
+}

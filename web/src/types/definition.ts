@@ -10,17 +10,29 @@ export interface ObjectRef {
 }
 
 export interface ContextConfig {
+  /** The generated context's class name — what `ts/src/codegen.ts` reads. */
   class?: string;
   instance?: string;
+  /** The designer's own extra: a base the generated context extends. */
+  baseClass?: string;
 }
 
 export interface SettingsModel {
   namespace: string;
   name?: string;
   description?: string;
+  /** Working notes about the whole diagram — saved in the document, ignored by engines and codegen. */
+  notes?: string;
   asynchronous: boolean;
-  objects?: { name: string; type: string }[];
-  context?: { className?: string; baseClass?: string };
+  /**
+   * Objects the generated context is constructed with. `ObjectRef` is what
+   * `ts/src/codegen.ts` actually reads (`obj.instance`, `obj.class`); the
+   * `{ name, type }` pair this field used to carry was a shape no generator
+   * could consume, so an "Object References" line typed into the designer was
+   * silently dropped on the way to code.
+   */
+  objects?: ObjectRef[];
+  context?: ContextConfig;
   imports?: string[];
   using?: string[];
   targetLanguage?: string;
@@ -88,6 +100,10 @@ export interface StateDef {
   name: string;
   kind?: StateKindType;
   description?: string;
+  /** Working notes about this state: the conversation about it, where `description` says what it is. */
+  notes?: string;
+  /** What an agent is asked to resolve while the machine is in this state. Ignored by engines and codegen. */
+  prompt?: string;
   onEntry?: { actions: ActionDef[] };
   onExit?: { actions: ActionDef[] };
   transitions?: TransitionDef[];

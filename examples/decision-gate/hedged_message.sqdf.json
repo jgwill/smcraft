@@ -1,0 +1,119 @@
+{
+  "settings": {
+    "namespace": "Miadi.Factory",
+    "name": "hedged_message",
+    "description": "2026-09-28, trading wave-labeler lane (session c9ee574b). William sends a hedged spoken message about the live wave notation. What happened: the lane took it as a decision, deployed (#173), then stopped and asked. What the gate does: the decision is William's, so it goes to him first."
+  },
+  "participants": [
+    {
+      "name": "William",
+      "actor": "William"
+    },
+    {
+      "name": "Lane",
+      "actor": "Lane"
+    },
+    {
+      "name": "Decider",
+      "actor": "Decider"
+    },
+    {
+      "name": "Witness",
+      "actor": "Witness"
+    },
+    {
+      "name": "Chronicle",
+      "actor": "Chronicle"
+    }
+  ],
+  "messages": [
+    {
+      "from": "William",
+      "to": "Lane",
+      "label": "\"we should talk about it a little bit, except if it obviously makes sense\"",
+      "description": "Spoken, 2026-09-28 16:52, about changing the live wave notation. Hedged on purpose."
+    },
+    {
+      "from": "Lane",
+      "to": "Decider",
+      "label": "Noul: this message authorises changing the live notation",
+      "event": "EvidenceAttached",
+      "carries": "Question",
+      "state": "Scoring"
+    },
+    {
+      "from": "Decider",
+      "to": "Lane",
+      "label": "p = 0.4, and the word is William's",
+      "event": "Scored",
+      "carries": "Decision",
+      "state": "AwaitingOwner",
+      "reply": true,
+      "description": "0.4 is illustrative. It does not matter here: changing a live service is William's word, so the relational gate sends it to him before any threshold applies. In the real lane this step did not exist; the agent deployed #173 and asked afterwards."
+    },
+    {
+      "from": "Lane",
+      "to": "Witness",
+      "label": "Choice: deploy / build on a branch / talk first, with evidence",
+      "carries": "Question"
+    },
+    {
+      "from": "Witness",
+      "to": "William",
+      "label": "three options, and what the lane does meanwhile"
+    },
+    {
+      "from": "William",
+      "to": "Witness",
+      "label": "build it on a branch",
+      "carries": "Ruling"
+    },
+    {
+      "from": "Witness",
+      "to": "Lane",
+      "label": "ruling: branch, by William, with its time",
+      "event": "OwnerRuled",
+      "carries": "Ruling",
+      "state": "Acting"
+    },
+    {
+      "from": "Lane",
+      "to": "Chronicle",
+      "label": "decision record: question, p, band, ruling, evidence",
+      "event": "ActionCompleted",
+      "carries": "Decision",
+      "state": "Recorded"
+    }
+  ],
+  "fragments": [
+    {
+      "kind": "alt",
+      "label": "William says talk first",
+      "after": 5,
+      "messages": [
+        {
+          "from": "William",
+          "to": "Witness",
+          "label": "let's talk about it first",
+          "carries": "Ruling"
+        },
+        {
+          "from": "Witness",
+          "to": "Lane",
+          "label": "ruling: talk first, by William, with its time",
+          "event": "OwnerRuled",
+          "carries": "Ruling",
+          "state": "Blocked"
+        },
+        {
+          "from": "Lane",
+          "to": "Chronicle",
+          "label": "reason recorded, live notation unchanged",
+          "event": "ReasonFedBack",
+          "carries": "Decision",
+          "state": "Recorded"
+        }
+      ]
+    }
+  ]
+}

@@ -4,9 +4,10 @@
 > References: CAISHEN Spec 60 (State Machine Definition Format)
 
 **Spec ID**: 70
-**Version**: 1.0
-**Source**: Extracted from `smcraft/py/smcraft/model.py`, `smcraft/py/smcraft/parser.py`
-**Implementation**: Python (`py/smcraft/`), TypeScript (`ts/src/`), MCP (`mcp/src/server.ts`)
+**Version**: 1.1
+**Source**: Extracted from `py/stateloom/model.py`, `py/stateloom/parser.py`
+**Implementation**: Python (`py/stateloom/`, PyPI `miadi-stateloom-engine`), TypeScript (`ts/src/`, npm `@miadi/stateloom-engine`), MCP (`mcp/src/server.ts`)
+**Revised**: 2026-09-20 — package directories renamed (`py/smcraft/` → `py/stateloom/`); ERDF (Spec 80) named as the sibling document type
 
 ## Creative Intent
 
@@ -44,6 +45,8 @@ A node in the state hierarchy tree. Properties:
 | `onExit` | ActionDef[] | Actions executed on state exit |
 | `parallel` | ParallelDef | Orthogonal regions (parallel state) |
 | `description` | string | Human-readable purpose |
+| `notes` | string | Working notes about this state — what a person or an agent wrote down while discussing it, for whoever opens the document next. `settings.notes` carries the same for the whole diagram. Not part of the machine: parsers, engines and the code generator ignore it. MCP: `get_notes`, `set_notes` |
+| `prompt` | string | What an agent is asked to resolve while the machine is in this state — the instruction it receives when the state is entered. `description` says what the state is, `notes` are the conversation about it, `prompt` is what to do in it. Engines and code generation ignore it; `set_prompt` writes it and `generate_rispec` shows it |
 
 **State Classification (derived):**
 - **Leaf**: `states == [] AND parallel == None`
@@ -84,7 +87,16 @@ Groups events by their external interface (feeder). Each source generates a type
 
 ## Validation Rules
 
-| Rule | Description | Status |
+**Which validator you are holding matters.** The format specifies fourteen rules; the two
+engines do not carry the same subset. `✅ Implemented` below means the **Python** engine,
+which implements all fourteen. The TypeScript engine implements V001, V002, V003, V005,
+V006, V007 and V013 — so V004, V008, V009, V010, V011, V012 and V014 are found by `smcg`
+and not by `validate()` in JavaScript. The MCP server's `validate_definition` runs its own
+reference and uniqueness set whose **rule ids are not these**: its V001 is "no events
+defined", its V004 an unknown transition target, its V005 "root has no child state". Read
+the message, not the number.
+
+| Rule | Description | Status (Python) |
 |------|-------------|--------|
 | V001 | Exactly one root state | ✅ Implemented |
 | V002 | Unique state names across entire tree | ✅ Implemented |
@@ -118,7 +130,7 @@ The parser auto-detects format by file extension and content inspection.
 
 ### Scenario: Human Designs Composite Workflow
 **Desired Outcome**: User creates nested state machine with parallel regions in the web designer
-**Current Reality**: Web designer shows flat state view; data model supports hierarchy
+**Current Reality**: ~~Web designer shows flat state view~~ — drill-down landed (Spec 74). Double-click a composite state and the canvas shows only its children; a breadcrumb walks back up
 **Natural Progression**: User creates parent state, drills into it, adds child states with transitions, navigates back; SMDF captures full hierarchy
 **Resolution**: Hierarchical `.smdf.json` with composite and parallel states
 
@@ -126,5 +138,7 @@ The parser auto-detects format by file extension and content inspection.
 
 - **Spec 71 (Runtime)**: Consumes SMDF definitions for execution
 - **Spec 72 (Code Generator)**: Transforms SMDF into executable code
-- **Spec 73 (MCP Server)**: Manipulates SMDF in-memory via tools
+- **Spec 73 (MCP Server)**: Manipulates SMDF on disk via tools
 - **Spec 74 (Web Designer)**: Visual editing of SMDF structure
+- **Spec 77 (Real-Time Design Bridge)**: Carries SMDF as the document type in every patch envelope
+- **Spec 80 (ERDF Format)**: The sibling document type. A `.smdf.json` describes one behaviour; a `.erdf.json` describes the data every behaviour acts on. The link is by name — `settings.objects[].class` names an entity, a guard's `<instance>.<field>` names an attribute

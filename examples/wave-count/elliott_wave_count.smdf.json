@@ -1,0 +1,234 @@
+{
+  "settings": {
+    "namespace": "Trading.Analysis",
+    "name": "ElliottWaveCountLifecycle",
+    "asynchronous": true,
+    "objects": [
+      { "instance": "count", "class": "WaveCount" },
+      { "instance": "setup", "class": "TradeSetup" },
+      { "instance": "mandate", "class": "CampaignMandate" },
+      { "instance": "market", "class": "MarketDataProvider" }
+    ],
+    "context": { "class": "WaveCountContext" },
+    "notes": [
+      "Revision 1, 2026-09-25, from Guillaume's 17 comments on the proposal page (G1-G17). Draft 0 was 2026-09-24. Episode 140 strategic entry, session c9ee574b-0165-44e9-8974-4e83a977ae55.",
+      "One point of view: one instrument x timeframe. The degree follows the timeframe (G13: M1 Cycle, W1 Primary, D1 Intermediate, H4 Minor, H1 Minute, m15 Minuette, m5 Subminuette, after Frost and Prechter). A higher degree runs its own instance; the two meet through WaveCount.parent_artifact_id.",
+      "The Reading composite is caishen spec 87's reading machine. What a person places on the chart is a wave label at the end point of the wave it names (spec 80 WavePoint + ElliottWaveLabel), stored with tool wave_label. The word pivot is not used (G1, G8; the BOSf drift review removed it on 2026-09-03 for the same reason).",
+      "The count's invalidation level is computed from Elliott's rules over the labels, never typed (G14): wave 2 never goes beyond the start of wave 1, wave 3 is never the shortest of 1, 3 and 5, wave 4 never enters wave 1's price territory. The mandate's own invalidation is chosen when Guillaume authorizes, and defaults to the count's level.",
+      "Publishing a count and asking for a blueprint are two acts. The second is optional (G6).",
+      "The strategy is created when the mandate sees a breakout point, not when a signal fires (G12). The entry signal belongs to the strategy's own machine. strategy_type fdb_breakout is BOS in the UI; bosf_breakout is BOSf, BOS with a fractal count, not implemented yet. Both use the FDB principle (G5, G11).",
+      "Owners: Reading = jgt-charting; Published and BlueprintRequested = jgt-analysis-intelligence :8085; Mandate = jgt-blueprint-api :8086, a PROTOTYPE that never delivered anything working (Guillaume, 2026-09-24; 0 mandates that day); StrategicEntry = jgt-strategy-api :8083, whose trading campaigns record wins and losses.",
+      "TRADABLE_LABELS = W1 W2 W3 W5 A C E, judged at the degree being traded (caishen spec 85 rule 2). A wave A or E inside a higher-degree W4 is tradable at its own degree; the parent W4 is shown as context (G2, decision D7)."
+    ]
+  },
+  "events": [
+    {
+      "name": "ChartGestures",
+      "feeder": "WaveLabelTool",
+      "events": [
+        { "id": "LabelWave", "parameters": [ { "name": "label", "type": "string" }, { "name": "direction", "type": "string" }, { "name": "endTime", "type": "string" }, { "name": "endPrice", "type": "float" } ] },
+        { "id": "LabelAlternate", "parameters": [ { "name": "label", "type": "string" }, { "name": "direction", "type": "string" } ] },
+        { "id": "MarkUnknown" },
+        { "id": "AssertCompleted" },
+        { "id": "ResetReading" },
+        { "id": "PublishCount", "parameters": [ { "name": "instrument", "type": "string" }, { "name": "timeframe", "type": "string" } ] },
+        { "id": "RequestBlueprint" }
+      ]
+    },
+    {
+      "name": "AnalysisEvents",
+      "feeder": "AnalysisIntelligence",
+      "events": [
+        { "id": "CountEvaluated", "parameters": [ { "name": "artifactId", "type": "string" }, { "name": "roomLeft", "type": "float" } ] },
+        { "id": "SetupRefused", "parameters": [ { "name": "reason", "type": "string" } ] }
+      ]
+    },
+    {
+      "name": "BlueprintEvents",
+      "feeder": "BlueprintApi",
+      "events": [
+        { "id": "Authorize", "parameters": [ { "name": "authorizedBy", "type": "string" }, { "name": "invalidationLevel", "type": "float" } ] },
+        { "id": "BreakoutPointIdentified", "parameters": [ { "name": "breakoutPrice", "type": "float" }, { "name": "fractalBar", "type": "string" } ] },
+        { "id": "StrategyCreated", "parameters": [ { "name": "strategyId", "type": "int" }, { "name": "strategyType", "type": "string" } ] },
+        { "id": "MandateExpired" }
+      ]
+    },
+    {
+      "name": "MarketEvents",
+      "feeder": "MarketDataProvider",
+      "events": [
+        { "id": "InvalidationReached", "parameters": [ { "name": "price", "type": "float" } ] },
+        { "id": "SwapCompleted" }
+      ]
+    },
+    {
+      "name": "StrategyEvents",
+      "feeder": "StrategyApi",
+      "events": [
+        { "id": "EntryClosed", "parameters": [ { "name": "pnl", "type": "float" } ] },
+        { "id": "EntryDeactivated", "parameters": [ { "name": "reason", "type": "string" } ] }
+      ]
+    }
+  ],
+  "state": {
+    "name": "Root",
+    "states": [
+      {
+        "name": "Reading",
+        "description": "Owner: jgt-charting, tool wave_label. Guillaume labels waves on the chart; each label is a chart_drawings row at the end point of the wave it names. Nothing here is evidence yet.",
+        "states": [
+          {
+            "name": "Reading_Unset",
+            "description": "No act of analysis on this point of view (spec 80: Unset = -100).",
+            "transitions": [
+              { "event": "LabelWave", "nextState": "Reading_Identified" },
+              { "event": "MarkUnknown", "nextState": "Reading_Unclear" }
+            ]
+          },
+          {
+            "name": "Reading_Identified",
+            "description": "A primary count is held. The invalidation level is recomputed from Elliott's rules on every label.",
+            "onEntry": { "actions": [ { "code": "store.save_drawing(tool='wave_label', props={label, role: 'primary'})" }, { "code": "count.key_invalidation_level = rules.invalidation_level(count.labels)" } ] },
+            "transitions": [
+              { "event": "LabelWave", "nextState": "Reading_Identified" },
+              { "event": "LabelAlternate", "nextState": "Reading_Contested", "action": { "code": "store.save_drawing(tool='wave_label', props={label, role: 'alternate'})" } },
+              { "event": "AssertCompleted", "nextState": "Reading_Completed" },
+              { "event": "MarkUnknown", "nextState": "Reading_Unclear" },
+              { "event": "ResetReading", "nextState": "Reading_Unset" },
+              { "event": "PublishCount", "nextState": "Published" }
+            ]
+          },
+          {
+            "name": "Reading_Contested",
+            "description": "Primary and alternate are both held. The computed level is the price that decides between them (spec 87).",
+            "transitions": [
+              { "event": "InvalidationReached", "nextState": "Invalidated" },
+              { "event": "LabelWave", "nextState": "Reading_Identified" },
+              { "event": "AssertCompleted", "nextState": "Reading_Completed" },
+              { "event": "ResetReading", "nextState": "Reading_Unset" },
+              { "event": "PublishCount", "nextState": "Published" }
+            ]
+          },
+          {
+            "name": "Reading_Unclear",
+            "description": "Guillaume looked and could not name it (X records Unknown = -1). Different from Unset.",
+            "transitions": [
+              { "event": "LabelWave", "nextState": "Reading_Identified" },
+              { "event": "ResetReading", "nextState": "Reading_Unset" },
+              { "event": "PublishCount", "nextState": "Published" }
+            ]
+          },
+          {
+            "name": "Reading_Completed",
+            "description": "Guillaume asserts the wave is finished. Asserted, never inferred.",
+            "transitions": [
+              { "event": "LabelWave", "nextState": "Reading_Identified" },
+              { "event": "ResetReading", "nextState": "Reading_Unset" },
+              { "event": "PublishCount", "nextState": "Published" }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Published",
+        "description": "Owner: jgt-analysis-intelligence :8085. PublishCount wrote one AnalysisArtifact (artifact_type wave_count). Agents read it through jgt-analysis-mcp. Publishing does not ask for a blueprint.",
+        "notes": "A drawing is a mark and never enters decision-context. Publishing is the human act that makes the count evidence. AO marks (ao_divergence, ao_divergence_watch, ao_no_divergence) are read here as momentum corroboration: W3 should carry the highest AO peak of the impulse and W5 a lower one (caishen spec 86; rispecs/consensus-trade-decision.spec.md; jgt-data-server/rispecs/wave-analysis.spec.md). Corroboration changes confidence, never the verdict (spec 85).",
+        "states": [
+          {
+            "name": "Published_Evaluating",
+            "description": "The engine runs spec 85's pipeline at the degree of this timeframe, then reads AO corroboration.",
+            "onEntry": { "actions": [ { "code": "analysis.upsert_wave_count(instrument, timeframe, labels, parent_artifact_id)" }, { "code": "analysis.read_ao_corroboration(count)" }, { "code": "analysis.evaluate(count)" } ] },
+            "transitions": [
+              { "event": "CountEvaluated", "nextState": "Published_Tradable", "condition": "count.wave_label in TRADABLE_LABELS" },
+              { "event": "CountEvaluated", "nextState": "Published_StandAside", "condition": "count.wave_label not in TRADABLE_LABELS" }
+            ]
+          },
+          {
+            "name": "Published_Tradable",
+            "description": "The next wave at this degree is tradable. Direction gives the side, never the permission (spec 85 rule 3).",
+            "transitions": [
+              { "event": "RequestBlueprint", "nextState": "BlueprintRequested" },
+              { "event": "LabelWave", "nextState": "Reading_Identified", "action": { "code": "analysis.supersede(count)" } },
+              { "event": "InvalidationReached", "nextState": "Invalidated" }
+            ]
+          },
+          {
+            "name": "Published_StandAside",
+            "description": "W4, B, D, Unknown or Unset at this degree. Standing aside is an active posture: prepare the next entry.",
+            "onEntry": { "actions": [ { "code": "guidance.offer_on_ending(count.wave_label)" } ] },
+            "transitions": [
+              { "event": "LabelWave", "nextState": "Reading_Identified", "action": { "code": "analysis.supersede(count)" } },
+              { "event": "InvalidationReached", "nextState": "Invalidated" }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "BlueprintRequested",
+        "description": "Owner: jgt-analysis-intelligence :8085. Guillaume asked for a blueprint from this count; the agent drafts a TradeSetup that cites it (for W1-W2 labelled: look for the W3 entry).",
+        "onEntry": { "actions": [ { "code": "agent.draft_trade_setup(count)" }, { "code": "setup.invalidation = {'kind': 'wave_count', 'level': count.key_invalidation_level, 'source_artifact_id': count.id}" } ] },
+        "transitions": [
+          { "event": "Authorize", "nextState": "Mandate", "condition": "setup.status == 'ready_for_authorization'" },
+          { "event": "SetupRefused", "nextState": "Published_Tradable" },
+          { "event": "InvalidationReached", "nextState": "Invalidated" }
+        ]
+      },
+      {
+        "name": "Mandate",
+        "description": "Owner: jgt-blueprint-api :8086. Guillaume authorizes once and chooses the mandate's invalidation, defaulting to the count's level. The mandate then watches for a breakout point.",
+        "notes": "PROTOTYPE. Guillaume 2026-09-24: never delivered anything working; changes that complete it are welcome. 0 campaign_mandates, 0 mandate_delegations that day. Watching maps to the prototype's ARMED, Delegating to TRIGGERED. The prototype's own campaigns table carries a target amount and a desire statement: those belong to a project, not to a trading campaign, and are left out of this chain (G7, G9, G10; action A10).",
+        "states": [
+          {
+            "name": "Mandate_Watching",
+            "description": "Authorized. The mandate holds a copy of the count as it was, and its invalidation level. It looks for the fractal whose break would start the next wave.",
+            "onEntry": { "actions": [ { "code": "mandate.source_artifact_ids = setup.source_artifact_ids" }, { "code": "mandate.invalidation = {'level': invalidationLevel, 'source_artifact_id': count.id}" } ] },
+            "transitions": [
+              { "event": "BreakoutPointIdentified", "nextState": "Mandate_Delegating" },
+              { "event": "MandateExpired", "nextState": "Expired" },
+              { "event": "InvalidationReached", "nextState": "Invalidated" }
+            ]
+          },
+          {
+            "name": "Mandate_Delegating",
+            "description": "A breakout point is known. The blueprint creates one BOS strategy at that price in jgt-strategy-api, exactly once (MandateDelegation).",
+            "onEntry": { "actions": [ { "code": "strategy_api.create(strategy_type='fdb_breakout', breakout_price=breakoutPrice, analysis_link=count.id)" } ] },
+            "transitions": [
+              { "event": "StrategyCreated", "nextState": "StrategicEntry" },
+              { "event": "InvalidationReached", "nextState": "Invalidated" }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "StrategicEntry",
+        "description": "Owner: jgt-strategy-api :8083. The BOS strategy (fdb_breakout) runs its own machine: waits for the breakout, then for the FDB signal, then enters. BOSf (bosf_breakout) adds a fractal count before the signal once implemented. The strategy keeps the count as its reason through AnalysisStrategyLink.",
+        "notes": "The entry machine's own states are not modelled here: fdb_breakout_strategy.smdf.json in jgt-strategy-api/smdf, and bosf_breakout_strategy.smdf.json in session 99a7ca1d.",
+        "transitions": [
+          { "event": "EntryClosed", "nextState": "Closed" },
+          { "event": "EntryDeactivated", "nextState": "Closed" }
+        ]
+      },
+      {
+        "name": "Invalidated",
+        "description": "Price reached the invalidation level. Transient: swap primary and alternate, cancel the setup, the mandate and any strategy not yet filled, each by name, then return to Reading with the former alternate as primary.",
+        "onEntry": { "actions": [ { "code": "analysis.invalidate_wave_count(count)" }, { "code": "blueprint.invalidate_by_source_artifact(count.id)" } ] },
+        "transitions": [
+          { "event": "SwapCompleted", "nextState": "Reading_Identified" }
+        ]
+      },
+      {
+        "name": "Expired",
+        "description": "The mandate's valid_until passed with no breakout point. The count itself stays live.",
+        "transitions": [
+          { "event": "LabelWave", "nextState": "Reading_Identified" },
+          { "event": "InvalidationReached", "nextState": "Invalidated" }
+        ]
+      },
+      {
+        "name": "Closed",
+        "kind": "final",
+        "description": "The strategic entry ended. Its result is recorded on its trading campaign in jgt-strategy-api (total_wins, total_losses), which a trade review reads."
+      }
+    ]
+  }
+}

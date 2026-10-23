@@ -1,0 +1,138 @@
+{
+  "settings": {
+    "namespace": "Miadi.Factory",
+    "name": "lane_done",
+    "description": "Several agents at work: the coordinator asks whether one lane is finished, waiting, working or stopped short, from its asks, commits, pushes, files, last messages and screen. Run by lane-check/lane-check.mjs."
+  },
+  "participants": [
+    {
+      "name": "Coordinator",
+      "actor": "Coordinator"
+    },
+    {
+      "name": "Lane",
+      "actor": "Lane"
+    },
+    {
+      "name": "Decider",
+      "actor": "Decider"
+    },
+    {
+      "name": "William",
+      "actor": "William"
+    },
+    {
+      "name": "Chronicle",
+      "actor": "Chronicle"
+    }
+  ],
+  "messages": [
+    {
+      "from": "Lane",
+      "to": "Coordinator",
+      "label": "stops: \"BOSf is in production\"",
+      "description": "A stop is a fact; done is a judgement (Miadi worker-stopped route). The lane's own claim is evidence, not the answer."
+    },
+    {
+      "from": "Coordinator",
+      "to": "Decider",
+      "label": "Choice lane_status, with asks, commits, pushes, files, last messages, screen",
+      "event": "EvidenceAttached",
+      "carries": "Question",
+      "state": "Scoring"
+    },
+    {
+      "from": "Decider",
+      "to": "Coordinator",
+      "label": "finished, confidence 0.86",
+      "event": "Scored",
+      "carries": "Decision",
+      "state": "Acting",
+      "reply": true,
+      "description": "Above act_at for lane_status, a class the coordinator owns: it may act."
+    },
+    {
+      "from": "Coordinator",
+      "to": "Chronicle",
+      "label": "marks collected, next lane dispatched, record written",
+      "event": "ActionCompleted",
+      "carries": "Decision",
+      "state": "Recorded"
+    }
+  ],
+  "fragments": [
+    {
+      "kind": "alt",
+      "label": "stopped_short, confidence between the thresholds",
+      "after": 2,
+      "messages": [
+        {
+          "from": "Decider",
+          "to": "Coordinator",
+          "label": "stopped_short, confidence 0.55; claims finished 0.93",
+          "event": "Scored",
+          "carries": "Decision",
+          "state": "AwaitingOwner",
+          "reply": true
+        },
+        {
+          "from": "Coordinator",
+          "to": "William",
+          "label": "lane says done; request_met 0.30, Q4 has no ruling",
+          "carries": "Evidence"
+        },
+        {
+          "from": "William",
+          "to": "Coordinator",
+          "label": "reopen it, Q4 is strict",
+          "carries": "Ruling"
+        },
+        {
+          "from": "Coordinator",
+          "to": "Coordinator",
+          "label": "ruling recorded: act, by William",
+          "event": "OwnerRuled",
+          "carries": "Ruling",
+          "state": "Acting"
+        },
+        {
+          "from": "Coordinator",
+          "to": "Lane",
+          "label": "reopen: Q4 strict, by William"
+        },
+        {
+          "from": "Coordinator",
+          "to": "Chronicle",
+          "label": "decision and ruling written; calibration gains one point",
+          "event": "ActionCompleted",
+          "carries": "Decision",
+          "state": "Recorded"
+        }
+      ]
+    },
+    {
+      "kind": "alt",
+      "label": "confidence under block_at",
+      "after": 2,
+      "messages": [
+        {
+          "from": "Decider",
+          "to": "Coordinator",
+          "label": "working, confidence 0.12",
+          "event": "Scored",
+          "carries": "Decision",
+          "state": "Blocked",
+          "reply": true
+        },
+        {
+          "from": "Coordinator",
+          "to": "Chronicle",
+          "label": "no move on a guess; check again later",
+          "event": "ReasonFedBack",
+          "carries": "Decision",
+          "state": "Recorded"
+        }
+      ]
+    }
+  ]
+}

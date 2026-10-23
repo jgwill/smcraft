@@ -1,0 +1,10 @@
+# The image installs the PUBLISHED packages from npm; the only thing it needs
+# from this repository is docker/. Everything else is excluded so nothing local
+# can leak into a layer and so the build context stays a few kilobytes instead
+# of the several hundred megabytes this tree weighs.
+*
+
+!docker/gateway.mjs
+!docker/supervise.mjs
+!docker/entrypoint.sh
+!docker/healthcheck.sh
