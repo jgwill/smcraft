@@ -35,6 +35,16 @@ export interface ContextMenuState {
 interface HistoryEntry {
   definition: StateMachineDefinition;
   layout: DesignerLayout;
+  fileName: string | null;
+  dirty: boolean;
+  errors: ValidationError[];
+  selection: Selection;
+  drawMode: DrawMode;
+  drawSource: string | null;
+  showCodePreview: boolean;
+  generatedCode: string | null;
+  navigationPath: string[];
+  currentParent: string;
 }
 
 interface DesignerState {
@@ -96,6 +106,12 @@ interface DesignerState {
   // Navigation (composite drill-down)
   navigationPath: string[];  // breadcrumb path, e.g. ["Root", "Composite1"]
   currentParent: string;     // which state's children to display
+
+  // Viewport requests are consumed by the canvas host.
+  zoomRequest: { token: number; factor: number } | null;
+  /** Increments trigger Canvas to recompute fit-to-frame from current children bounds. */
+  fitRequestToken: number;
+  resetRequestToken: number;
 
   // Internal: push history before mutation
   _pushHistory: () => void;
@@ -197,6 +213,11 @@ interface DesignerState {
   navigateInto: (stateName: string) => void;
   navigateUp: (toLevel?: number) => void;
   getCurrentChildren: () => StateDef[];
+
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetViewport: () => void;
+  requestFitToFrame: () => void;
 }
 
 function createEmptyDefinition(): StateMachineDefinition {
@@ -348,7 +369,36 @@ function autoLayout(def: StateMachineDefinition, existing: DesignerLayout): Desi
   return { positions: { ...deriveLayout(def), ...existing.positions } };
 }
 
+function filterLayoutForDefinition(
+  def: StateMachineDefinition,
+  existing: DesignerLayout,
+): DesignerLayout {
+  const validNames = new Set(collectStateNames(def.state));
+  const rootName = def.state.name;
+  const positions = Object.fromEntries(
+    Object.entries(existing.positions).filter(([name]) => name !== rootName && validNames.has(name)),
+  );
+  return { positions };
+}
+
 const MAX_UNDO = 50;
+
+function createHistoryEntry(state: DesignerState): HistoryEntry {
+  return {
+    definition: JSON.parse(JSON.stringify(state.definition)),
+    layout: JSON.parse(JSON.stringify(state.layout)),
+    fileName: state.fileName,
+    dirty: state.dirty,
+    errors: JSON.parse(JSON.stringify(state.errors)),
+    selection: { ...state.selection },
+    drawMode: state.drawMode,
+    drawSource: state.drawSource,
+    showCodePreview: state.showCodePreview,
+    generatedCode: state.generatedCode,
+    navigationPath: [...state.navigationPath],
+    currentParent: state.currentParent,
+  };
+}
 
 /**
  * Whether the document on disk was written bare (no `stateMachine` wrapper).
@@ -382,23 +432,41 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   generatedCode: null,
   navigationPath: ["Root"],
   currentParent: "Root",
+  zoomRequest: null,
+  fitRequestToken: 0,
+  resetRequestToken: 0,
 
   _pushHistory: () => {
-    const { definition, layout, undoStack } = get();
-    const entry: HistoryEntry = {
-      definition: JSON.parse(JSON.stringify(definition)),
-      layout: JSON.parse(JSON.stringify(layout)),
-    };
+    const state = get();
+    const entry = createHistoryEntry(state);
     set({
-      undoStack: [...undoStack.slice(-MAX_UNDO), entry],
+      undoStack: [...state.undoStack.slice(-(MAX_UNDO - 1)), entry],
       redoStack: [],
     });
   },
 
   setDefinition: (def) => {
     get()._pushHistory();
-    const layout = autoLayout(def, get().layout);
-    set({ definition: def, layout, dirty: true, errors: validateDefinition(def) });
+    const layout = autoLayout(def, filterLayoutForDefinition(def, get().layout));
+    const rootName = def.state?.name ?? "Root";
+    set({
+      definition: def,
+      layout,
+      dirty: true,
+      errors: validateDefinition(def),
+      fileName: null,
+      selection: { kind: null, id: null },
+      drawMode: "select",
+      drawSource: null,
+      showCodePreview: false,
+      navigationPath: [rootName],
+      currentParent: rootName,
+      generatedCode: null,
+      viewport: { ...IDENTITY_VIEWPORT },
+      zoomRequest: null,
+      fitRequestToken: get().fitRequestToken + 1,
+      resetRequestToken: 0,
+    });
   },
 
   updateSettings: (patch) => {
@@ -631,38 +699,50 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   hideContextMenu: () => set({ contextMenu: { visible: false, x: 0, y: 0, target: null } }),
 
   undo: () => {
-    const { undoStack, definition, layout } = get();
+    const state = get();
+    const { undoStack } = state;
     if (undoStack.length === 0) return;
     const prev = undoStack[undoStack.length - 1];
-    const current: HistoryEntry = {
-      definition: JSON.parse(JSON.stringify(definition)),
-      layout: JSON.parse(JSON.stringify(layout)),
-    };
+    const current = createHistoryEntry(state);
     set({
       definition: prev.definition,
       layout: prev.layout,
+      fileName: prev.fileName,
       undoStack: undoStack.slice(0, -1),
-      redoStack: [...get().redoStack, current],
-      dirty: true,
-      errors: validateDefinition(prev.definition),
+      redoStack: [...state.redoStack, current],
+      dirty: prev.dirty,
+      errors: prev.errors,
+      selection: prev.selection,
+      drawMode: prev.drawMode,
+      drawSource: prev.drawSource,
+      showCodePreview: prev.showCodePreview,
+      generatedCode: prev.generatedCode,
+      navigationPath: prev.navigationPath,
+      currentParent: prev.currentParent,
     });
   },
 
   redo: () => {
-    const { redoStack, definition, layout } = get();
+    const state = get();
+    const { redoStack } = state;
     if (redoStack.length === 0) return;
     const next = redoStack[redoStack.length - 1];
-    const current: HistoryEntry = {
-      definition: JSON.parse(JSON.stringify(definition)),
-      layout: JSON.parse(JSON.stringify(layout)),
-    };
+    const current = createHistoryEntry(state);
     set({
       definition: next.definition,
       layout: next.layout,
-      undoStack: [...get().undoStack, current],
+      fileName: next.fileName,
+      undoStack: [...state.undoStack, current],
       redoStack: redoStack.slice(0, -1),
-      dirty: true,
-      errors: validateDefinition(next.definition),
+      dirty: next.dirty,
+      errors: next.errors,
+      selection: next.selection,
+      drawMode: next.drawMode,
+      drawSource: next.drawSource,
+      showCodePreview: next.showCodePreview,
+      generatedCode: next.generatedCode,
+      navigationPath: next.navigationPath,
+      currentParent: next.currentParent,
     });
   },
 
@@ -685,10 +765,18 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
         dirty: false,
         errors: validateDefinition(def),
         selection: { kind: null, id: null },
+        drawMode: "select",
+        drawSource: null,
+        showCodePreview: false,
+        generatedCode: null,
         undoStack: [],
         redoStack: [],
         navigationPath: [rootName],
         currentParent: rootName,
+        viewport: { ...IDENTITY_VIEWPORT },
+        zoomRequest: null,
+        fitRequestToken: get().fitRequestToken + 1,
+        resetRequestToken: 0,
       });
     } catch (e) {
       console.error("Failed to parse definition:", e);
@@ -846,6 +934,7 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
         navigationPath: [...navigationPath, stateName],
         currentParent: stateName,
         selection: { kind: null, id: null },
+        fitRequestToken: get().fitRequestToken + 1,
       });
     }
   },
@@ -859,6 +948,7 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
       navigationPath: newPath,
       currentParent: newPath[newPath.length - 1],
       selection: { kind: null, id: null },
+      fitRequestToken: get().fitRequestToken + 1,
     });
   },
 
@@ -867,4 +957,22 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
     const parent = findState(definition.state, currentParent);
     return parent?.states ?? [];
   },
+
+  zoomIn: () => set({
+    zoomRequest: {
+      token: (get().zoomRequest?.token ?? 0) + 1,
+      factor: 1.1,
+    },
+  }),
+
+  zoomOut: () => set({
+    zoomRequest: {
+      token: (get().zoomRequest?.token ?? 0) + 1,
+      factor: 1 / 1.1,
+    },
+  }),
+
+  resetViewport: () => set({ resetRequestToken: get().resetRequestToken + 1 }),
+
+  requestFitToFrame: () => set({ fitRequestToken: get().fitRequestToken + 1 }),
 }));

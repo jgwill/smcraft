@@ -53,6 +53,13 @@ mkdir -p looms
 docker run --rm -p 4598:8080 -v "$PWD/looms:/data" --user "$(id -u):$(id -g)" jgwill/stateloom
 ```
 
+Consumer-oriented CLI entrypoints:
+```bash
+smcg skills list
+smcg skills install agent-lifecycle -o ./starter
+smcg report-issue --title "Describe the issue" --machine ./starter/agent_lifecycle.smdf.json --include-env
+```
+
 Only one port is published, and the canvas is told its bridge is `/` — **the same origin as
 the page** — so the browser's live socket works over localhost, a LAN address, a tailnet
 name or a TLS proxy without anything being configured to match. `docs/DOCKER.md` has the
@@ -62,6 +69,9 @@ whole design; `stateloom skills install stateloom-docker` hands it to an agent.
 
 No clone, no build:
 
+The MCP `create_state_machine` tool also supports `template: "agent_lifecycle"` to bootstrap a durable work-unit lifecycle starter.
+
+Add to your MCP client config:
 ```json
 {
   "mcpServers": {
@@ -215,11 +225,13 @@ Full specs in [`rispecs/`](./rispecs/):
 | [81](./rispecs/81-sqdf-format.spec.md) | SQDF format — the sequence (usage scenario) sibling, rules S001–S006 |
 | [82](./rispecs/82-sysdf-system.spec.md) | SYSDF — the drawings as one system: checks Y001–Y004 and L005–L008, the scenario replay, reconcile and its `propose` / `auto` mode, the canvas view |
 | [83](./rispecs/83-stage-and-marks.spec.md) | The stage and the marks — an agent shows its work step by step or as a tour (`.tour.json`, T001–T009); a person marks elements or an area of any drawing (`<drawing>.marks.json`) and the agent answers in the thread |
+| [84](./rispecs/84-talking-on-the-canvas.spec.md) | Guided creation and conversation dock |
+| [85](./rispecs/85-agent-lifecycle-template.spec.md) | Agent lifecycle starter — work-unit states, transition contracts, runtime provenance |
 
 Specs 60-63 in the upstream `caishen` repo define the C# StateForge contracts this
 reimplements.
 
-Each spec header carries a **Revised** line. Specs 70–77 were last revised 2026-09-20 to
+Each spec header carries a **Revised** line. Specs 70–85 were last revised 2026-09-20 to
 match what the packages above actually ship.
 
 ## MCP Document Tools & Episode Diagrams
@@ -270,6 +282,59 @@ miadi-chronicle episodes host their machines at
 `film-preprod`; ep090 predates the convention with six machines under
 `state-machines/*.smcraft.json` — see `docs/reviews/` for the reconciliation
 recommendation). Handoff history lives in `docs/handoffs/`.
+
+## Built-in Lifecycle Starter
+
+The repository now includes `examples/agent_lifecycle.smdf.json`, a reusable backbone for durable agent work units:
+
+`Created → Planned → Running → WaitingForHITL → Approved/Rejected → Completed/Failed → Archived`
+
+Use it from:
+- the `examples/` folder for CLI/codegen flows
+- the web designer via the **🧭 Lifecycle** toolbar action
+- the MCP server via `create_state_machine(..., template: "agent_lifecycle")`
+
+The lifecycle starter now makes transition semantics more explicit by including:
+- state purposes and transition intent descriptions
+- event payload contracts for lifecycle events
+- optional event pre/post hooks for specification generation
+- stable `ObserverTrace` snapshots for provenance consumers
+
+The web designer can now preview:
+- generated TypeScript / Python runtime code
+- generated SMDF JSON
+- generated lifecycle specification markdown
+- generated transition / event contract notes
+
+Both runtimes also export `ObserverTrace`, which records structured transition/timer provenance for audit and replay use cases.
+
+## Consumer Install / Contribution Workflow
+
+If you are consuming `smcraft` as a runtime package or as a semantic/design reference:
+
+- use the Python package for CLI/codegen/runtime flows:
+  - `cd py && pip install -e .`
+- use the TypeScript package for parser/runtime/codegen flows:
+  - `cd ts && npm install && npm run build`
+- use the web designer when you want to author/edit/export machines visually:
+  - `cd web && npm install && npm run dev`
+
+The Python CLI now includes contribution-oriented terminal workflows:
+
+- `smcg skills list`
+  - discover built-in starter skills intended to help consumers bootstrap usage
+- `smcg skills install agent-lifecycle -o ./starter`
+  - installs the reusable lifecycle starter as a local `.smdf.json`
+- `smcg skills install observer-trace -o ./starter`
+  - installs a runnable provenance example for runtime consumers
+- `smcg report-issue --machine ./starter/agent_lifecycle.smdf.json --include-env`
+  - prints a terminal-friendly issue template that captures current reality, desired outcome, reproduction artifacts, and environment details
+
+When reporting issues or contributing edge cases, include:
+- the machine definition or generated SMDF JSON
+- the generated specification / contract artifact when relevant
+- runtime provenance from `ObserverTrace` or terminal logs
+- the specific state / event / transition contract that behaved unexpectedly
 
 ## Definition Format (`.smdf.json`)
 

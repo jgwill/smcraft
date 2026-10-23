@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     } finally {
       try { rmSync(tmpDir, { recursive: true, force: true }); } catch {}
     }
-  } catch (error) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Code generation failed";
     return NextResponse.json(
       { error: message },

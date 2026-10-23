@@ -18,7 +18,7 @@ export default function CodePreview() {
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-2 md:p-0">
       <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-xl w-full max-h-[85dvh] md:w-[80%] md:max-w-3xl md:max-h-[80dvh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
-          <h3 className="text-sm font-semibold text-gray-300">Generated Definition (JSON)</h3>
+          <h3 className="text-sm font-semibold text-gray-300">Generated Artifact</h3>
           <button
             onClick={() => setShowCodePreview(false)}
             className="text-gray-500 hover:text-gray-300 text-lg min-h-11 min-w-11 md:min-h-0 md:min-w-0"
