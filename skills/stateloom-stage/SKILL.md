@@ -109,7 +109,7 @@ the thread; `await_marks` waits for it.
   reads the whole session again while nothing has happened.
 - To wait longer, wake the session without holding a call — the companion pattern: run the CLI as
   a **background task**. It exits 0 with the mark, the context, and the exact commands to answer
-  and to listen again. It has no deadline (smcx 0.1.6 and later; 0.1.5 and earlier stop after
+  and to listen again. It has no deadline (smcx 0.1.7 and later; 0.1.5 and earlier stop after
   1800 s), so it costs nothing until the person marks:
 
   ```bash
