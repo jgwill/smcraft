@@ -210,8 +210,8 @@ const marks = program
 
 marks
   .command("await")
-  .description("wait for the person's next mark or reply; exit 0 with it, 4 on timeout (run it as a background task)")
-  .option("--timeout <s>", "seconds to wait (default 1800)", toInt)
+  .description("wait for the person's next mark or reply; exit 0 with it, 4 only after a --timeout (run it as a background task)")
+  .option("--timeout <s>", "seconds to wait (default: no deadline)", toInt)
   .option("--stage <name>", "stage name")
   .action(async (opts: { timeout?: number; stage?: string }) => {
     process.exitCode = await marksAwait(stageCtx(opts.stage), opts);

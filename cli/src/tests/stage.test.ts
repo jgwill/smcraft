@@ -80,6 +80,22 @@ test("smcx marks and stage: scope, await, reply, show", async () => {
     }
     assert.equal(timedOut, 4, "an answered mark is not news; the wait times out");
 
+    // 2026-10-27: a default deadline woke listening seats with nothing new, and each wake read the
+    // whole session again only to re-arm. Without --timeout the wait ends only on a mark.
+    const cap5 = capture();
+    let waited: number | "still waiting";
+    try {
+      const pending = marksAwait(ctx, { interval: 100 });
+      waited = await Promise.race([pending, new Promise<"still waiting">((r) => setTimeout(() => r("still waiting"), 1500))]);
+      assert.equal(waited, "still waiting", "no timeout given, no wake without a mark");
+      const file = JSON.parse(readFileSync(sidecar, "utf8")) as MarksFile;
+      writeFileSync(sidecar, JSON.stringify(addMark(file, { elements: ["state:A"], text: "and B?", author: { id: "g", name: "Guillaume", role: "person" } }, "t", "m-2")));
+      waited = await pending;
+    } finally {
+      cap5.restore();
+    }
+    assert.equal(waited, 0, "the next mark ends the wait");
+
     const step = new Promise<StageStepEnvelope>((resolve) => canvas.client!.on("stage-step", resolve));
     const cap4 = capture();
     try {

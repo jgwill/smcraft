@@ -7,7 +7,7 @@
  *   smcx stage play <tour.json> [--from N] [--paused]
  *   smcx stage control <play|pause|next|prev|goto|stop> [N]
  *   smcx marks                       what is on screen, and the marks waiting
- *   smcx marks await [--timeout S]   exit 0 with the person's next mark; 4 on timeout
+ *   smcx marks await [--timeout S]   exit 0 with the person's next mark; 4 only after a --timeout
  *   smcx marks reply <id> "<text>" [--resolve]
  *
  * `marks await` is the background-task half of a conversation, as
@@ -154,8 +154,9 @@ export async function marksList(c: StageCtx, opts: { all?: boolean; json?: boole
 }
 
 /**
- * Wait for the person's next mark or reply in scope. Exit 0 with the wake text;
- * 4 when the time runs out (the caller re-arms).
+ * Wait for the person's next mark or reply in scope. Exit 0 with the wake text. There is no
+ * deadline unless `timeout` names seconds: a wake with nothing new makes the session read its
+ * whole context again only to re-arm. Exit 4 when a given timeout runs out.
  */
 export async function marksAwait(c: StageCtx, opts: { timeout?: number; interval?: number }): Promise<number> {
   const docs = scopeOf(c.doc);
@@ -163,7 +164,7 @@ export async function marksAwait(c: StageCtx, opts: { timeout?: number; interval
   const seen = new Set<string>();
   for (const { doc, marks } of waiting(docs)) for (const m of marks) seen.add(`${doc}#${keyOf(m)}`);
   const times = new Map(docs.map((d) => [d, mtime(d)]));
-  const deadline = Date.now() + (opts.timeout ?? 1800) * 1000;
+  const deadline = opts.timeout && opts.timeout > 0 ? Date.now() + opts.timeout * 1000 : Infinity;
   const every = opts.interval ?? 1000;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, every));
@@ -191,7 +192,7 @@ export async function marksAwait(c: StageCtx, opts: { timeout?: number; interval
     );
     return 0;
   }
-  out(`no new mark in ${opts.timeout ?? 1800}s — listen again: smcx --doc ${JSON.stringify(c.doc)} marks await`);
+  out(`no new mark in ${opts.timeout}s — listen again: smcx --doc ${JSON.stringify(c.doc)} marks await`);
   return 4;
 }
 
