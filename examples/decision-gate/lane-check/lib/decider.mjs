@@ -35,7 +35,126 @@ export function buildRequest(state, questions, model = DEFAULT_MODEL) {
   return { state, model, questions };
 }
 
+// ---------- the contract, checked both ways ----------
+//
+// Jev's published limits (docs.typesafe.ai and jev-ai.pro/docs, as the Episode 564 study
+// records them in part 1.2) and the answer contract of part 1.3. A request is checked before
+// it is sent; an answer is checked before anyone reads a number from it. The checks follow
+// the validators of disler/ten-levels-of-jev (apps/ten-levels/src/core/types.ts and client.ts),
+// revision R9 of jev-study-261026.md.
+export const LIMITS = {
+  MAX_QUESTIONS: 64,
+  MAX_ID_CHARS: 64,
+  MIN_CHOICE_OPTIONS: 2,
+  MAX_CHOICE_OPTIONS: 255,
+  MIN_SCORE_LEVELS: 2,
+  MAX_SCORE_LEVELS: 10,
+  MAX_BODY_BYTES: 256_000,
+  SUM_TOLERANCE: 0.025,
+};
+
+// A typed failure: `kind` is invalid_request or invalid_answer, `failures` lists each problem
+// as { code, question, detail }.
+export class JevContractError extends Error {
+  constructor(kind, failures) {
+    super(`${kind}: ${failures.map((f) => `${f.question ?? "request"}: ${f.detail}`).join("; ")}`);
+    this.name = "JevContractError";
+    this.kind = kind;
+    this.failures = failures;
+  }
+}
+
+const isObject = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
+const isUnit = (x) => typeof x === "number" && Number.isFinite(x) && x >= 0 && x <= 1;
+
+// The request's shape, before anything is sent. Returns the failures; an empty list is a pass.
+export function validateRequest(request) {
+  const out = [];
+  const fail = (code, detail, question = null) => out.push({ code, question, detail });
+  if (!isObject(request)) { fail("request_not_object", "the request must be an object"); return out; }
+  if (typeof request.state !== "string" && !isObject(request.state) && !Array.isArray(request.state)) fail("state_type", "state must be a string, an object or an array");
+  if (request.model !== undefined && (typeof request.model !== "string" || !request.model.trim())) fail("model_type", "model must be a nonblank string");
+  const questions = request.questions;
+  if (!isObject(questions)) { fail("questions_type", "questions must be an object of id to question"); return out; }
+  const ids = Object.keys(questions);
+  if (ids.length < 1 || ids.length > LIMITS.MAX_QUESTIONS) fail("questions_count", `1 to ${LIMITS.MAX_QUESTIONS} questions, got ${ids.length}`);
+  for (const id of ids) {
+    const q = questions[id];
+    if (id.length > LIMITS.MAX_ID_CHARS) fail("question_id", `id longer than ${LIMITS.MAX_ID_CHARS} characters`, id);
+    if (!isObject(q)) { fail("question_type", "the question must be an object", id); continue; }
+    if (!["noul", "choice", "score"].includes(q.type)) fail("question_type", `type must be noul, choice or score, got ${q.type}`, id);
+    if (typeof q.instructions === "string" ? !q.instructions.trim() : !isObject(q.instructions)) fail("instructions", "instructions must be a nonblank string or an object", id);
+    if (q.type === "noul" && q.criteria !== undefined) {
+      if (!isObject(q.criteria) || Object.entries(q.criteria).some(([k, v]) => !["true", "false"].includes(k) || (v !== undefined && typeof v !== "string"))) fail("noul_criteria", "noul criteria map true and false to descriptions", id);
+    }
+    if (q.type === "choice") {
+      if (!isObject(q.criteria)) fail("choice_options", "choice criteria must be an object of option to description", id);
+      else {
+        const n = Object.keys(q.criteria).length;
+        if (n < LIMITS.MIN_CHOICE_OPTIONS || n > LIMITS.MAX_CHOICE_OPTIONS) fail("choice_options", `${LIMITS.MIN_CHOICE_OPTIONS} to ${LIMITS.MAX_CHOICE_OPTIONS} options, got ${n}`, id);
+        if (Object.values(q.criteria).some((v) => v !== null && typeof v !== "string")) fail("choice_options", "option descriptions must be strings or null", id);
+      }
+    }
+    if (q.type === "score") {
+      if (!Array.isArray(q.criteria)) fail("score_levels", "score criteria must be an array of levels", id);
+      else {
+        if (q.criteria.length < LIMITS.MIN_SCORE_LEVELS || q.criteria.length > LIMITS.MAX_SCORE_LEVELS) fail("score_levels", `${LIMITS.MIN_SCORE_LEVELS} to ${LIMITS.MAX_SCORE_LEVELS} levels, got ${q.criteria.length}`, id);
+        if (q.criteria.some((level) => typeof level !== "string" || !level.trim())) fail("score_levels", "levels must be nonblank strings", id);
+      }
+    }
+  }
+  const bytes = Buffer.byteLength(JSON.stringify(request), "utf8");
+  if (bytes > LIMITS.MAX_BODY_BYTES) fail("body_size", `${bytes} bytes of JSON, the limit is ${LIMITS.MAX_BODY_BYTES}`);
+  return out;
+}
+
+// One answer against the question it answers: its type, its range, and for a choice or a
+// score, probabilities that cover exactly the declared options and sum to about one.
+export function validateAnswer(question, answer, id = null) {
+  const out = [];
+  const fail = (code, detail) => out.push({ code, question: id, detail });
+  if (!isObject(answer)) { fail("answer_missing", "no answer"); return out; }
+  if (answer.type !== question.type) { fail("answer_type", `asked a ${question.type}, answered a ${answer.type}`); return out; }
+  if (question.type === "noul") {
+    if (!isUnit(answer.noul)) fail("noul_range", `noul must be within 0 and 1, got ${answer.noul}`);
+    return out;
+  }
+  if (!isUnit(answer.confidence)) fail("confidence_range", `confidence must be within 0 and 1, got ${answer.confidence}`);
+  const keys = question.type === "choice" ? Object.keys(question.criteria ?? {}) : (question.criteria ?? []).map((_, i) => String(i));
+  const probs = answer.probabilities;
+  if (!isObject(probs)) { fail("probabilities_missing", "no probabilities"); return out; }
+  const missing = keys.filter((k) => !Object.hasOwn(probs, k));
+  const extra = Object.keys(probs).filter((k) => !keys.includes(k));
+  if (missing.length || extra.length) fail("probabilities_keys", `probabilities must cover the declared options${missing.length ? `; missing ${missing.join(", ")}` : ""}${extra.length ? `; undeclared ${extra.join(", ")}` : ""}`);
+  const bad = keys.filter((k) => Object.hasOwn(probs, k) && !isUnit(probs[k]));
+  if (bad.length) fail("probabilities_range", `probabilities must be within 0 and 1: ${bad.join(", ")}`);
+  const sum = keys.reduce((acc, k) => acc + (isUnit(probs[k]) ? probs[k] : 0), 0);
+  if (!missing.length && Math.abs(sum - 1) > LIMITS.SUM_TOLERANCE) fail("probabilities_sum", `probabilities sum to ${Number(sum.toFixed(4))}, not 1 within ${LIMITS.SUM_TOLERANCE}`);
+  if (question.type === "choice" && !keys.includes(answer.choice)) fail("choice_undeclared", `chose ${answer.choice}, which is not a declared option`);
+  if (question.type === "score") {
+    if (typeof answer.score !== "number" || answer.score < 0 || answer.score > keys.length - 1) fail("score_range", `score must be within 0 and ${keys.length - 1}, got ${answer.score}`);
+    const legend = answer.legend;
+    if (legend !== undefined && (!isObject(legend) || keys.some((k, i) => legend[k] !== question.criteria[i]))) fail("legend_mismatch", "the legend does not match the declared levels");
+  }
+  return out;
+}
+
+// Every answer of a response against the request's questions.
+export function validateAnswers(request, body) {
+  if (!isObject(body?.answers)) return [{ code: "answers_missing", question: null, detail: "the response carries no answers object" }];
+  return Object.entries(request.questions ?? {}).flatMap(([id, q]) => validateAnswer(q, body.answers[id], id));
+}
+
+// The answers with each failing one marked, so readAnswer reads it as invalid instead of a number.
+function markAnswers(answers, failures) {
+  if (!isObject(answers)) return answers;
+  const byQuestion = new Map();
+  for (const f of failures) if (f.question && isObject(answers[f.question])) byQuestion.set(f.question, [...(byQuestion.get(f.question) ?? []), f]);
+  return Object.fromEntries(Object.entries(answers).map(([id, a]) => [id, byQuestion.has(id) ? { ...a, failures: byQuestion.get(id) } : a]));
+}
+
 export async function decideDry(request) {
+  const failures = validateRequest(request);
   return {
     model: "dry",
     answers: {},
@@ -43,6 +162,7 @@ export async function decideDry(request) {
     sent: false,
     estimated_input_tokens: estimateTokens(request),
     within_budget: estimateTokens(request.state) < STATE_TOKEN_BUDGET,
+    validation: { ok: failures.length === 0, kind: failures.length ? "invalid_request" : null, failures },
   };
 }
 
@@ -120,7 +240,15 @@ export const RESENDABLE = [429, 502, 503, 529];
 // One decision call. It is resent only after a confirmed failure, honouring Retry-After. A
 // timeout, a 504 or a lost connection leaves the outcome uncertain and the call may already
 // have been charged, so it is reported and never replayed.
-export async function decideJev(request, { provider = resolveProvider(), fetchImpl = globalThis.fetch, attempts = 3 } = {}) {
+//
+// A request that breaks the contract is refused before it is sent, with a JevContractError
+// (kind invalid_request), because Jev would answer 422 and it must not be resent unchanged.
+// An answer that breaks it was already paid for, so it is returned, never thrown away: the
+// result carries `validation` { ok, kind, failures }, each failing answer is marked so
+// readAnswer reads it as invalid, and one line goes to stderr.
+export async function decideJev(request, { provider = resolveProvider(), fetchImpl = globalThis.fetch, attempts = 3, report = (line) => console.error(line) } = {}) {
+  const requestFailures = validateRequest(request);
+  if (requestFailures.length) throw new JevContractError("invalid_request", requestFailures);
   if (!provider) throw noKey();
   let last;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -136,7 +264,15 @@ export async function decideJev(request, { provider = resolveProvider(), fetchIm
     }
     if (response.ok) {
       const body = await response.json();
-      return { ...body, sent: true, destination: provider.url, service: provider.name, billing: { ...(body.billing ?? {}), ...billingOf(response.headers) } };
+      const failures = validateAnswers(request, body);
+      const billing = { ...(body.billing ?? {}), ...billingOf(response.headers) };
+      if (failures.length) report(`decider: ${new JevContractError("invalid_answer", failures).message}${billing.run_id ? ` [run ${billing.run_id}]` : ""}`);
+      return {
+        ...body,
+        answers: markAnswers(body.answers, failures),
+        sent: true, destination: provider.url, service: provider.name, billing,
+        validation: { ok: failures.length === 0, kind: failures.length ? "invalid_answer" : null, failures },
+      };
     }
     const runId = response.headers?.get?.("x-jev-run-id");
     last = `${response.status} from ${provider.url}: ${await errorText(response)}${FAILURES[response.status] ? ` (${FAILURES[response.status]})` : ""}${runId ? ` [run ${runId}]` : ""}`;
@@ -159,6 +295,7 @@ export async function listModels({ provider = resolveProvider(), fetchImpl = glo
 // yes; for a choice or a score it is the model's confidence in the answer it gives.
 export function readAnswer(answer) {
   if (!answer) return { value: null, p: null, p_measures: "nothing: the question was not answered", read_status: "unknown" };
+  if (Array.isArray(answer.failures) && answer.failures.length) return { value: null, p: null, p_measures: "nothing: the answer failed validation", read_status: "invalid", failures: answer.failures };
   if (answer.type === "noul") return { value: answer.noul >= 0.5, p: answer.noul, p_measures: "probability that the statement is true", read_status: "satisfied" };
   if (answer.type === "choice") return { value: answer.choice, p: answer.confidence, p_measures: "confidence in the chosen option", probabilities: answer.probabilities, read_status: "satisfied" };
   if (answer.type === "score") return { value: answer.score, p: answer.confidence, p_measures: "confidence in the score", probabilities: answer.probabilities, read_status: "satisfied" };

@@ -7,7 +7,7 @@ import { test } from "node:test";
 
 import { collectEvidence, readTranscript, resolveLane, RUNNING } from "./lib/evidence.mjs";
 import { buildQuestions, wireQuestions } from "./lib/questions.mjs";
-import { buildRequest, decideDry, decideJev, listModels, readAnswer, resolveProvider, typesafeKey } from "./lib/decider.mjs";
+import { buildRequest, decideDry, decideJev, JevContractError, listModels, readAnswer, resolveProvider, typesafeKey, validateAnswers, validateRequest } from "./lib/decider.mjs";
 import { loadGate, runGate } from "./lib/gate.mjs";
 import { calibrate, decisionsFor, findQuestion, laneNames, loadPolicy, makeRuling, pending, summarize, upstreamQuestion } from "./lane-check.mjs";
 
@@ -125,7 +125,8 @@ test("the decision call has the documented URL, headers and body, and keeps the 
 });
 
 test("a confirmed failure is resent after Retry-After; an uncertain one never is", async () => {
-  const ok = { model: "jev-1.13.0", answers: {}, usage: {} };
+  const valid = buildRequest("s", { x: { type: "noul", instructions: "q" } });
+  const ok = { model: "jev-1.13.0", answers: { x: { type: "noul", noul: 0.9 } }, usage: {} };
   const scripted = (statuses) => {
     const calls = [];
     const fetchImpl = async () => {
@@ -136,18 +137,73 @@ test("a confirmed failure is resent after Retry-After; an uncertain one never is
     return { calls, fetchImpl };
   };
   const a = scripted([429, 503, 200]);
-  await decideJev({}, { provider: jevAi, fetchImpl: a.fetchImpl });
+  await decideJev(valid, { provider: jevAi, fetchImpl: a.fetchImpl });
   assert.deepEqual(a.calls, [429, 503, 200]);
   const b = scripted([504, 200]);
-  await assert.rejects(decideJev({}, { provider: jevAi, fetchImpl: b.fetchImpl }), /504 .*uncertain/);
+  await assert.rejects(decideJev(valid, { provider: jevAi, fetchImpl: b.fetchImpl }), /504 .*uncertain/);
   assert.deepEqual(b.calls, [504]);
   const c = scripted([402]);
-  await assert.rejects(decideJev({}, { provider: jevAi, fetchImpl: c.fetchImpl }), /402 .*balance/);
+  await assert.rejects(decideJev(valid, { provider: jevAi, fetchImpl: c.fetchImpl }), /402 .*balance/);
   const lost = async () => {
     throw new Error("socket hang up");
   };
-  await assert.rejects(decideJev({}, { provider: jevAi, fetchImpl: lost }), /uncertain, so the call was not resent/);
-  await assert.rejects(decideJev({}, { provider: null }), /JEV_AI_API_KEY or TYPESAFE_API_KEY/);
+  await assert.rejects(decideJev(valid, { provider: jevAi, fetchImpl: lost }), /uncertain, so the call was not resent/);
+  await assert.rejects(decideJev(valid, { provider: null }), /JEV_AI_API_KEY or TYPESAFE_API_KEY/);
+});
+
+test("R9: a request that breaks the contract is refused before it is sent, as a typed failure", async () => {
+  const good = buildRequest({ task: "t" }, { pick: { type: "choice", instructions: "q", criteria: { a: "A", b: null } }, yes: { type: "noul", instructions: "q" } }, "jev-1.13.0");
+  assert.deepEqual(validateRequest(good), []);
+  const codes = (r) => validateRequest(r).map((f) => f.code);
+  assert.deepEqual(codes({ state: 3, questions: {} }), ["state_type", "questions_count"]);
+  assert.deepEqual(codes(buildRequest("s", { pick: { type: "choice", instructions: "q", criteria: { only: "A" } } })), ["choice_options"]);
+  assert.deepEqual(codes(buildRequest("s", { lvl: { type: "score", instructions: "q", criteria: ["one"] } })), ["score_levels"]);
+  assert.deepEqual(codes(buildRequest("s", { x: { type: "boolean", instructions: "" } })), ["question_type", "instructions"]);
+  assert.deepEqual(codes(buildRequest("s", { ["q".repeat(65)]: { type: "noul", instructions: "q" } })), ["question_id"]);
+  assert.deepEqual(codes(buildRequest("x".repeat(256_001), { y: { type: "noul", instructions: "q" } })), ["body_size"]);
+  let called = false;
+  const fetchImpl = async () => { called = true; };
+  await assert.rejects(decideJev(buildRequest("s", {}), { provider: { url: "u", apiKey: "k" }, fetchImpl }), (e) => e instanceof JevContractError && e.kind === "invalid_request" && e.failures[0].code === "questions_count");
+  assert.equal(called, false);
+  const dry = await decideDry(buildRequest("s", {}));
+  assert.equal(dry.validation.ok, false);
+});
+
+test("R9: an answer whose probabilities do not cover the options or sum to one is returned marked, never thrown away", async () => {
+  const request = buildRequest("s", {
+    pick: { type: "choice", instructions: "q", criteria: { a: "A", b: "B", c: "C" } },
+    yes: { type: "noul", instructions: "q" },
+    lvl: { type: "score", instructions: "q", criteria: ["low", "high"] },
+  });
+  const sound = { answers: {
+    pick: { type: "choice", choice: "a", probabilities: { a: 0.7, b: 0.2, c: 0.1 }, confidence: 0.55 },
+    yes: { type: "noul", noul: 0.3 },
+    lvl: { type: "score", score: 0.8, legend: { 0: "low", 1: "high" }, probabilities: { 0: 0.2, 1: 0.8 }, confidence: 0.6 },
+  } };
+  assert.deepEqual(validateAnswers(request, sound), []);
+  const codes = (answers) => validateAnswers(request, { answers: { ...sound.answers, ...answers } }).map((f) => `${f.question}:${f.code}`);
+  assert.deepEqual(codes({ pick: { type: "choice", choice: "a", probabilities: { a: 0.7, b: 0.3 }, confidence: 0.5 } }), ["pick:probabilities_keys"]);
+  assert.deepEqual(codes({ pick: { type: "choice", choice: "a", probabilities: { a: 0.7, b: 0.2, c: 0.3 }, confidence: 0.5 } }), ["pick:probabilities_sum"]);
+  assert.deepEqual(codes({ pick: { type: "choice", choice: "z", probabilities: { a: 0.7, b: 0.2, c: 0.1 }, confidence: 0.5 } }), ["pick:choice_undeclared"]);
+  assert.deepEqual(codes({ pick: { type: "choice", choice: "a", probabilities: { a: 0.7, b: 0.2, c: 0.05, d: 0.05 }, confidence: 0.5 } }), ["pick:probabilities_keys", "pick:probabilities_sum"]);
+  assert.deepEqual(codes({ yes: { type: "noul", noul: 1.2 } }), ["yes:noul_range"]);
+  assert.deepEqual(codes({ yes: { type: "choice" } }), ["yes:answer_type"]);
+  assert.deepEqual(codes({ lvl: { type: "score", score: 3, legend: { 0: "low", 1: "mid" }, probabilities: { 0: 0.5, 1: 0.5 }, confidence: 0.1 } }), ["lvl:score_range", "lvl:legend_mismatch"]);
+  assert.deepEqual(validateAnswers(request, { answers: { pick: sound.answers.pick, yes: sound.answers.yes } }).map((f) => f.code), ["answer_missing"]);
+
+  const reported = [];
+  const body = { model: "jev-1.13.0", answers: { ...sound.answers, pick: { type: "choice", choice: "a", probabilities: { a: 0.7, b: 0.3 }, confidence: 0.5 } }, usage: { input_tokens: 9, output_tokens: 1 } };
+  const fetchImpl = async () => ({ ok: true, status: 200, json: async () => body, headers: headersOf({ "x-jev-run-id": "run-9", "x-jev-paid-input-tokens-used": "15" }) });
+  const result = await decideJev(request, { provider: { url: "u", apiKey: "k" }, fetchImpl, report: (line) => reported.push(line) });
+  assert.equal(result.validation.ok, false);
+  assert.equal(result.validation.kind, "invalid_answer");
+  assert.equal(result.billing.paid_input_tokens_used, "15");
+  assert.match(reported[0], /invalid_answer: pick: probabilities must cover the declared options; missing c .*\[run run-9\]/);
+  const read = readAnswer(result.answers.pick);
+  assert.equal(read.read_status, "invalid");
+  assert.equal(read.p, null);
+  assert.equal(readAnswer(result.answers.yes).p, 0.3);
+  assert.equal(body.answers.pick.failures, undefined, "the provider's answer is not edited");
 });
 
 test("the models lookup reads the key's own service and runs no decision", async () => {
