@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 /**
  * The designer's board — now a binding rather than an implementation.
  *
@@ -15,7 +17,7 @@
  * anything that improves in the package now reaches both applications at once.
  */
 
-import { StateMachineCanvas } from "@miadi/stateloom-canvas";
+import { StateMachineCanvas, type StateMachineCanvasHandle } from "@miadi/stateloom-canvas";
 import { useDesignerStore } from "@/store/useDesignerStore";
 import { CANVAS_PINCH_OWNER } from "@/lib/gestureOwner";
 import { CANVAS_SVG_ID } from "@/lib/exportImage";
@@ -44,6 +46,24 @@ export default function Canvas() {
   const activeStates = useDesignerStore((s) => s.activeStates);
   const viewport = useDesignerStore((s) => s.viewport);
   const setViewport = useDesignerStore((s) => s.setViewport);
+  const zoomRequest = useDesignerStore((s) => s.zoomRequest);
+  const fitRequestToken = useDesignerStore((s) => s.fitRequestToken);
+  const resetRequestToken = useDesignerStore((s) => s.resetRequestToken);
+  const canvasRef = useRef<StateMachineCanvasHandle>(null);
+
+  useEffect(() => {
+    if (!zoomRequest) return;
+    if (zoomRequest.factor > 1) canvasRef.current?.zoomIn();
+    else canvasRef.current?.zoomOut();
+  }, [zoomRequest]);
+
+  useEffect(() => {
+    if (fitRequestToken > 0) canvasRef.current?.fit();
+  }, [fitRequestToken]);
+
+  useEffect(() => {
+    if (resetRequestToken > 0) canvasRef.current?.resetZoom();
+  }, [resetRequestToken]);
 
   // Remembered board: restore this browser's drags, then keep writing them back.
   useLayoutMemory();
@@ -55,12 +75,14 @@ export default function Canvas() {
 
   return (
     <StateMachineCanvas
+      ref={canvasRef}
       definition={definition}
       positions={layout.positions}
       path={path}
       rootLabel={navigationPath[0]}
       viewport={viewport}
       onViewportChange={setViewport}
+      showHud={false}
       // The store also knows about a selected *event*, which is a sidebar
       // concern with nothing on the board to outline.
       selection={{

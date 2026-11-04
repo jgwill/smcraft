@@ -25,6 +25,7 @@ class ParameterDef:
     """Event parameter definition."""
     name: str
     type: str  # Language-neutral type: string, int, float, bool, object, or custom
+    description: Optional[str] = None
 
 
 @dataclass
@@ -206,24 +207,40 @@ class StateMachineDefinition:
             d["file"] = es.file
         if es.feeder:
             d["feeder"] = es.feeder
+        if es.description:
+            d["description"] = es.description
         if es.events:
             d["events"] = [self._event_to_dict(e) for e in es.events]
         if es.timers:
-            d["timers"] = [{"id": t.id, "name": t.name} for t in es.timers]
+            d["timers"] = [
+                {"id": t.id, "name": t.name, **({"description": t.description} if t.description else {})}
+                for t in es.timers
+            ]
         return d
 
     def _event_to_dict(self, e: EventDef) -> dict[str, Any]:
         d: dict[str, Any] = {"id": e.id}
         if e.name:
             d["name"] = e.name
+        if e.description:
+            d["description"] = e.description
         if e.parameters:
-            d["parameters"] = [{"name": p.name, "type": p.type} for p in e.parameters]
+            d["parameters"] = [
+                {"name": p.name, "type": p.type, **({"description": p.description} if p.description else {})}
+                for p in e.parameters
+            ]
+        if e.pre_action:
+            d["preAction"] = e.pre_action
+        if e.post_action:
+            d["postAction"] = e.post_action
         return d
 
     def _state_to_dict(self, s: StateDef) -> dict[str, Any]:
         d: dict[str, Any] = {"name": s.name}
         if s.kind != StateKindType.NORMAL:
             d["kind"] = s.kind.value
+        if s.description:
+            d["description"] = s.description
         if s.on_entry:
             d["onEntry"] = {"actions": [self._action_to_dict(a) for a in s.on_entry]}
         if s.on_exit:
@@ -245,6 +262,8 @@ class StateMachineDefinition:
             d["nextState"] = t.next_state
         if t.condition:
             d["condition"] = t.condition
+        if t.description:
+            d["description"] = t.description
         if t.actions:
             d["actions"] = [self._action_to_dict(a) for a in t.actions]
         return d

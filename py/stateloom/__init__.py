@@ -42,6 +42,13 @@ from stateloom.runtime import (
     IObserver,
     ObserverNull,
     ObserverConsole,
+    ObserverTrace,
+    TraceEvent,
+)
+from stateloom.skills import (
+    get_agent_lifecycle_template,
+    install_skill,
+    list_skills,
 )
 
 __all__ = [
@@ -68,4 +75,9 @@ __all__ = [
     "IObserver",
     "ObserverNull",
     "ObserverConsole",
+    "ObserverTrace",
+    "TraceEvent",
+    "get_agent_lifecycle_template",
+    "install_skill",
+    "list_skills",
 ]

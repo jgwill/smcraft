@@ -32,6 +32,7 @@ export interface SettingsModel {
 export interface ParameterDef {
   name: string;
   type: string;
+  description?: string;
 }
 
 export interface EventDef {

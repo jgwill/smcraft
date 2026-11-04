@@ -42,6 +42,27 @@ export interface IObserver {
   onTimerStop(contextName: string, timerName: string): void;
 }
 
+export type TraceEventType =
+  | "entry"
+  | "exit"
+  | "transition_begin"
+  | "transition_end"
+  | "timer_start"
+  | "timer_stop";
+
+export interface TraceEvent {
+  sequence: number;
+  timestamp: string;
+  type: TraceEventType;
+  contextName: string;
+  stateName?: string;
+  statePrev?: string;
+  stateNext?: string;
+  transitionName?: string;
+  timerName?: string;
+  duration?: number;
+}
+
 export class ObserverNull implements IObserver {
   private static _instance: ObserverNull;
 
@@ -83,6 +104,61 @@ export class ObserverConsole implements IObserver {
   }
   onTimerStop(contextName: string, timerName: string): void {
     console.log(`${contextName}: timer stop ${timerName}`);
+  }
+}
+
+export class ObserverTrace implements IObserver {
+  private readonly _events: TraceEvent[] = [];
+  private sequence = 0;
+  private readonly clock: () => string;
+
+  constructor(clock: () => string = () => new Date().toISOString()) {
+    this.clock = clock;
+  }
+
+  private record(event: Omit<TraceEvent, "sequence" | "timestamp">): void {
+    this._events.push({
+      ...event,
+      sequence: ++this.sequence,
+      timestamp: this.clock(),
+    });
+  }
+
+  get events(): ReadonlyArray<TraceEvent> {
+    return this.snapshot();
+  }
+
+  onEntry(contextName: string, stateName: string): void {
+    this.record({ type: "entry", contextName, stateName });
+  }
+
+  onExit(contextName: string, stateName: string): void {
+    this.record({ type: "exit", contextName, stateName });
+  }
+
+  onTransitionBegin(contextName: string, statePrev: string, stateNext: string, transitionName: string): void {
+    this.record({ type: "transition_begin", contextName, statePrev, stateNext, transitionName });
+  }
+
+  onTransitionEnd(contextName: string, statePrev: string, stateNext: string, transitionName: string): void {
+    this.record({ type: "transition_end", contextName, statePrev, stateNext, transitionName });
+  }
+
+  onTimerStart(contextName: string, timerName: string, duration: number): void {
+    this.record({ type: "timer_start", contextName, timerName, duration });
+  }
+
+  onTimerStop(contextName: string, timerName: string): void {
+    this.record({ type: "timer_stop", contextName, timerName });
+  }
+
+  snapshot(): TraceEvent[] {
+    return this._events.map((event) => ({ ...event }));
+  }
+
+  clear(): void {
+    this._events.length = 0;
+    this.sequence = 0;
   }
 }
 
