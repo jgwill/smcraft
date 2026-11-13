@@ -10,9 +10,9 @@
 **React:** `@miadi/stateloom-react` 0.1.9 — `useStage`, `createTakeRecorder`, `createCompanionThread`, `replyTour`
 **Canvas:** `@miadi/stateloom-canvas` 0.1.8 — `<StateMachineCanvas>`, `<EntityRelationshipCanvas>` and `<SequenceCanvas>`, the design surfaces as mountable components; `<StageOverlay>`, `<StageCaption>`, the mark cards, `<CompanionDock>`, drawn icons
 **CLI:** `@miadi/stateloom-cli` 0.1.5 — bin `smcx`; `smcx stage`, `smcx marks`
-**MCP:** `@miadi/stateloom-mcp` 0.4.0 — bins `stateloom-mcp`, `smcraft-mcp`; 65 tools: 22 state-machine, 10 ERD, 14 sequence, 10 system, 9 stage
+**MCP:** `@miadi/stateloom-mcp` 0.4.1 — bins `stateloom-mcp`, `smcraft-mcp`; 65 tools: 22 state-machine, 10 ERD, 14 sequence, 10 system, 9 stage
 **Skills:** `@miadi/stateloom-skills` 0.5.0 — bin `stateloom`
-**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.3.3, bin `stateloom-web`
+**Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.3.5, bin `stateloom-web`
 **Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
 **RISE Specs:** 70–84
 **Repository:** https://github.com/jgwill/smcraft
