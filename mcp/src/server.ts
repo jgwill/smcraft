@@ -138,10 +138,13 @@ const BRIDGE_TOKEN = envAlias("BRIDGE_TOKEN");
 // The canvas address for a document (chart_1785683055671): when the agent
 // re-points the loom, the human gets a link to LOOK at the same document —
 // the `?doc=` parameter is resolved and allowlist-guarded by the web side.
+// With the system that lists it, the link opens the drawing as its member, so
+// the system strip leads back to the map. The canvas looks the system up when
+// the link has none, but only near the drawing; the link names one it would miss.
 const CANVAS_URL =
   envAlias("CANVAS_URL") ?? `http://127.0.0.1:${envAlias("WEB_PORT") ?? "4598"}`;
-const canvasLink = (path: string): string =>
-  `${CANVAS_URL}/?doc=${encodeURIComponent(path)}`;
+const canvasLink = (path: string, system?: string): string =>
+  `${CANVAS_URL}/?doc=${encodeURIComponent(path)}${system ? `&system=${encodeURIComponent(system)}` : ""}`;
 
 // ─── In-memory state machine definition ──────────────────────────────
 
@@ -1531,7 +1534,7 @@ const stageHost: StageHost = {
     return { id: name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-"), name, role: "agent" };
   },
   lastSystem: () => LAST_SYSTEM,
-  canvasUrl: (doc) => canvasLink(doc),
+  canvasUrl: (doc, system) => canvasLink(doc, system),
 };
 registerStageTools(server, stageHost);
 

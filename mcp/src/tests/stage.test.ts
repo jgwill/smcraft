@@ -50,7 +50,7 @@ async function rig(opts: { context?: StageContext; root?: boolean } = {}) {
     stageName: () => "default",
     agent: () => ({ id: "mia", name: "Mia", role: "agent" }),
     lastSystem: () => join(dir, SYSTEM),
-    canvasUrl: (doc) => `http://canvas/?doc=${encodeURIComponent(doc)}`,
+    canvasUrl: (doc, system) => `http://canvas/?doc=${encodeURIComponent(doc)}${system ? `&system=${encodeURIComponent(system)}` : ""}`,
   };
   const server = new McpServer({ name: "stage-test", version: "0.0.0" });
   registerStageTools(server, host);
@@ -87,6 +87,7 @@ test("show_step sends a step with absolute paths and the system the drawing belo
     assert.equal(step.doc, join(r.dir, MACHINE));
     assert.equal(step.system, join(r.dir, SYSTEM), "the system that lists the drawing");
     assert.match(out.text, /http:\/\/canvas\//);
+    assert.ok(out.text.includes(`&system=${encodeURIComponent(join(r.dir, SYSTEM))}`), "the link opens the drawing inside its system");
 
     const bad = await r.call("show_step", { focus: "Reading", say: "x" });
     assert.equal(bad.isError, true);

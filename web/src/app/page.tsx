@@ -25,7 +25,7 @@ import { useRequestedDoc } from "@/lib/docParam";
 import { useMachineFocus } from "@/lib/machineFocus";
 import { loadRuntimeConfig } from "@/lib/runtimeConfig";
 import { useSheetDrag } from "@/lib/useSheetDrag";
-import { useUrlParam } from "@/lib/systemParam";
+import { useSystemOfDoc, useUrlParam } from "@/lib/systemParam";
 
 type Tab = "properties" | "events" | "settings" | "validation";
 
@@ -65,12 +65,14 @@ function contextMenuPlacement(x: number, y: number): CSSProperties {
  * process names its default document.
  *
  * With `?system=<.sysdf.json>` the document is read as a member of that system,
- * and the system strip sits above whichever workspace is open.
+ * and the system strip sits above whichever workspace is open. Without it, the
+ * system that lists the document is looked up and written there.
  */
 export default function Home() {
   // `null` until its first effect has read the URL, and whenever there is no `?doc=`.
   const requested = useRequestedDoc();
   const systemParam = useUrlParam("system");
+  useSystemOfDoc(requested, systemParam);
   const [defaultKind, setDefaultKind] = useState<DocKind | null>(null);
 
   useEffect(() => {
