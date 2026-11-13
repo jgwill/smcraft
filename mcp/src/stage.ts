@@ -76,8 +76,8 @@ export interface StageHost {
   agent(): MarkAuthor;
   /** The system this server last created, set or checked. */
   lastSystem(): string | undefined;
-  /** A canvas link for a drawing, for the person. */
-  canvasUrl(doc: string): string;
+  /** A canvas link for a drawing, for the person; inside `system` when given. */
+  canvasUrl(doc: string, system?: string): string;
 }
 
 type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean };
@@ -231,7 +231,7 @@ export function registerStageTools(server: McpServer, host: StageHost): void {
         .filter(Boolean)
         .join(" · ");
       return sent.ok
-        ? ok(`On stage '${st}': ${what}${missing}. ${sent.text}. The person sees it at ${host.canvasUrl(doc)}.`)
+        ? ok(`On stage '${st}': ${what}${missing}. ${sent.text}. The person sees it at ${host.canvasUrl(doc, step.system)}.`)
         : fail(`Could not show ${what} on stage '${st}': ${sent.text}.`);
     },
   );
