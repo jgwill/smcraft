@@ -139,6 +139,21 @@ state-machine tools refuse to write a machine over it.
 
 Format and rules: [Spec 80 — ERDF](https://github.com/jgwill/smcraft/blob/main/rispecs/80-erdf-format.spec.md).
 
+### Decision models
+
+The same server reads a **decision model** in a sibling `.dmdf.json`
+([Spec 85 — DMDF](https://github.com/jgwill/smcraft/blob/main/rispecs/85-dmdf-decision-model.spec.md), proposed):
+what a decision engine is asked, the table that decides from its answers, and the person who
+rules. While one is active, `get_definition`, `load_definition`, `render_diagram` (mermaid, to
+`<name>.dmd.mmd`), `get_notes` and `set_notes` answer for it. None of these tools calls an engine.
+
+| Tool | What it does |
+|---|---|
+| `validate_decision_model` | Rules D001–D007 and D009–D022; D008 (the events and entities it names) is `check_system`'s |
+| `decision_request` | The request the model makes of its engine, built from the document. Nothing is sent |
+| `simulate_decision` | One run from recorded answers: each table's outcome, the rule that decided it and what each rule read. A person's decision is `awaiting_owner` unless a ruling is given |
+| `replay_decision_ledger` | Every recorded run of a ledger replayed through the model, each compared with the outcome it recorded, and the rulings counted against `rulings.bar_after`. `bars` tries other bar values on the same answers and changes nothing |
+
 ### The stage and the marks
 
 The agent shows its work on the person's canvas and hears what they point at

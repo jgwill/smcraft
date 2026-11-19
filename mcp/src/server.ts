@@ -78,9 +78,11 @@ import {
   collectNotes,
   docKindOfPath,
   envAlias,
+  isDmdfPath,
   isErdfPath,
   isSqdfPath,
   isSysdfPath,
+  type DecisionModelDefinition,
   type EntityRelationshipDefinition,
   type PatchOp,
   type SequenceDefinition,
@@ -124,6 +126,16 @@ import {
   systemRispec,
   type SystemHost,
 } from "./system.js";
+import {
+  registerDecisionTools,
+  decisionSummary,
+  decisionGetDefinition,
+  decisionLoadDefinition,
+  decisionRender,
+  decisionGetNotes,
+  decisionSetNotes,
+  type DecisionHost,
+} from "./decision.js";
 import { registerStageTools, type StageHost } from "./stage.js";
 import { liveBridge } from "./live.js";
 import { writeFileAtomic } from "./atomicWrite.js";
@@ -203,7 +215,13 @@ let PROJECT_FILE = resolve(
   envAlias("PROJECT_FILE") ?? "./statemachine.smdf.json"
 );
 
-const KIND_WORDS = { machine: "a state machine", erd: "an ERD", sequence: "a sequence", system: "a system" } as const;
+const KIND_WORDS = {
+  machine: "a state machine",
+  erd: "an ERD",
+  sequence: "a sequence",
+  system: "a system",
+  decision: "a decision model",
+} as const;
 
 /** What the state-machine tools say when there is no machine to act on. */
 function noMachine(then = ""): string {
@@ -213,7 +231,7 @@ function noMachine(then = ""): string {
 }
 
 function readDef(): Definition | null {
-  // An ERD, a sequence or a system is not a machine; the state-machine tools see no definition there.
+  // An ERD, a sequence, a system or a decision model is not a machine; the state-machine tools see no definition there.
   if (docKindOfPath(PROJECT_FILE) !== "machine") return null;
   if (!existsSync(PROJECT_FILE)) return null;
   try {
@@ -227,7 +245,7 @@ function readDef(): Definition | null {
 }
 
 function writeDef(def: Definition): void {
-  // Never write a machine over an ERD, a sequence or a system: create_state_machine
+  // Never write a machine over an ERD, a sequence, a system or a decision model: create_state_machine
   // and load_definition write without reading first, so this is the one place that can refuse.
   if (docKindOfPath(PROJECT_FILE) !== "machine") throw new Error(noMachine());
   // Keep the file's own shape: a machine written bare stays bare, so one edit is
@@ -402,6 +420,12 @@ const systemHost: SystemHost = {
   rememberSystem: (path) => {
     LAST_SYSTEM = path;
   },
+};
+
+const decisionHost: DecisionHost = {
+  projectFile: () => PROJECT_FILE,
+  emitFull: (def: DecisionModelDefinition) => bridgeEmitFull(def as unknown as Definition),
+  outsideRoot: (path) => outsideRoot(path),
 };
 
 const sequenceHost: SequenceHost = {
@@ -1218,12 +1242,13 @@ server.tool(
 
 server.tool(
   "get_definition",
-  "Get the active document as JSON — a state machine, or the ERD, sequence or system when the active document is a .erdf.json, .sqdf.json or .sysdf.json",
+  "Get the active document as JSON — a state machine, or the ERD, sequence, system or decision model when the active document is a .erdf.json, .sqdf.json, .sysdf.json or .dmdf.json",
   {},
   async () => {
     if (isErdfPath(PROJECT_FILE)) return erdGetDefinition(erdHost);
     if (isSqdfPath(PROJECT_FILE)) return sequenceGetDefinition(sequenceHost);
     if (isSysdfPath(PROJECT_FILE)) return systemGetDefinition(systemHost);
+    if (isDmdfPath(PROJECT_FILE)) return decisionGetDefinition(decisionHost);
     const def = readDef();
     if (!def)
       return { content: [{ type: "text", text: noMachine() }], isError: true };
@@ -1235,12 +1260,13 @@ server.tool(
 
 server.tool(
   "load_definition",
-  "Load a definition from JSON into the active document — a state machine, or an ERD, a sequence or a system when the active document is a .erdf.json, .sqdf.json or .sysdf.json",
+  "Load a definition from JSON into the active document — a state machine, or an ERD, a sequence, a system or a decision model when the active document is a .erdf.json, .sqdf.json, .sysdf.json or .dmdf.json",
   { json: z.string() },
   async ({ json }) => {
     if (isErdfPath(PROJECT_FILE)) return erdLoadDefinition(erdHost, json);
     if (isSqdfPath(PROJECT_FILE)) return sequenceLoadDefinition(sequenceHost, json);
     if (isSysdfPath(PROJECT_FILE)) return systemLoadDefinition(systemHost, json);
+    if (isDmdfPath(PROJECT_FILE)) return decisionLoadDefinition(decisionHost, json);
     try {
       const parsed = JSON.parse(json);
       const def: Definition = parsed.stateMachine ?? parsed.StateMachine ?? parsed;
@@ -1305,7 +1331,7 @@ server.tool(
 
 server.tool(
   "set_project_file",
-  "Choose the active document the loom weaves — two modalities. STANDALONE: a path whose extension says what it is: .smdf.json (a state machine), .erdf.json (an ERD — the ERD tools act on it), .sqdf.json (a sequence — the sequence tools act on it) or .sysdf.json (a system — the system tools, check_system and show act on it). RELATIONAL: a chronicle address `miadi-chronicle://<episode>/<diagram>` resolving over $MIADI_CHRONICLE_ROOT to <episode-dir>/diagrams/<diagram>.smdf.json; name another type by its extension (`miadi-chronicle://103/flow.sqdf.json`) — an ambiguous episode number is a hard error naming the candidates. Disk persistence AND the live bridge room both re-point. A missing file is legitimate — naming it is how an episode's first diagram is created.",
+  "Choose the active document the loom weaves — two modalities. STANDALONE: a path whose extension says what it is: .smdf.json (a state machine), .erdf.json (an ERD — the ERD tools act on it), .sqdf.json (a sequence — the sequence tools act on it), .sysdf.json (a system — the system tools, check_system and show act on it) or .dmdf.json (a decision model — validate_decision_model, decision_request, simulate_decision and replay_decision_ledger act on it). RELATIONAL: a chronicle address `miadi-chronicle://<episode>/<diagram>` resolving over $MIADI_CHRONICLE_ROOT to <episode-dir>/diagrams/<diagram>.smdf.json; name another type by its extension (`miadi-chronicle://103/flow.sqdf.json`) — an ambiguous episode number is a hard error naming the candidates. Disk persistence AND the live bridge room both re-point. A missing file is legitimate — naming it is how an episode's first diagram is created.",
   { path: z.string() },
   async ({ path }) => {
     try {
@@ -1326,6 +1352,8 @@ server.tool(
             ? sequenceSummary(PROJECT_FILE)
             : isSysdfPath(PROJECT_FILE)
               ? systemSummary(PROJECT_FILE)
+              : isDmdfPath(PROJECT_FILE)
+                ? decisionSummary(PROJECT_FILE)
               : def
                 ? `existing machine '${def.settings.name}' (${collectStateNames(def.state).length} states, ${collectEventIds(def).length} events)`
                 : r.exists
@@ -1359,7 +1387,7 @@ server.tool(
 
 server.tool(
   "get_project_file",
-  "Report the active document's path and what it is (a .smdf.json state machine, .erdf.json ERD, .sqdf.json sequence or .sysdf.json system), whether it exists on disk, the reconcile mode for a sequence or a system, and live-bridge status",
+  "Report the active document's path and what it is (a .smdf.json state machine, .erdf.json ERD, .sqdf.json sequence, .sysdf.json system or .dmdf.json decision model), whether it exists on disk, the reconcile mode for a sequence or a system, and live-bridge status",
   {},
   async () => {
     const def = readDef();
@@ -1370,6 +1398,8 @@ server.tool(
           ? sequenceSummary(PROJECT_FILE)
           : isSysdfPath(PROJECT_FILE)
             ? systemSummary(PROJECT_FILE)
+            : isDmdfPath(PROJECT_FILE)
+              ? decisionSummary(PROJECT_FILE)
             : def
               ? `machine '${def.settings.name}' (${collectStateNames(def.state).length} states, ${collectEventIds(def).length} events)`
               : existsSync(PROJECT_FILE)
@@ -1435,7 +1465,7 @@ function openOnDesktop(path: string): string {
 
 server.tool(
   "render_diagram",
-  "Draw the current state machine as a picture. Writes the file next to the project document (or at `path`) and returns its absolute path — plus the image itself for png, so it can be looked at without leaving the conversation. Formats: png (raster, needs librsvg/Inkscape/ImageMagick/Chrome on the host), svg (needs nothing), mermaid, ascii. Pass stamp:true to keep every render instead of overwriting one file. An ERD renders as mermaid (<name>.erd.mmd), a sequence as mermaid (<name>.seq.mmd), and a system as one markdown file of its members' mermaid (<name>.sys.md).",
+  "Draw the current state machine as a picture. Writes the file next to the project document (or at `path`) and returns its absolute path — plus the image itself for png, so it can be looked at without leaving the conversation. Formats: png (raster, needs librsvg/Inkscape/ImageMagick/Chrome on the host), svg (needs nothing), mermaid, ascii. Pass stamp:true to keep every render instead of overwriting one file. An ERD renders as mermaid (<name>.erd.mmd), a sequence as mermaid (<name>.seq.mmd), a decision model as mermaid (<name>.dmd.mmd), and a system as one markdown file of its members' mermaid (<name>.sys.md).",
   {
     format: z.enum(["png", "svg", "mermaid", "ascii"]).optional(),
     path: z.string().optional(),
@@ -1448,6 +1478,7 @@ server.tool(
     if (isErdfPath(PROJECT_FILE)) return erdRender(erdHost, { format, path, stamp });
     if (isSqdfPath(PROJECT_FILE)) return sequenceRender(sequenceHost, { format, path, stamp });
     if (isSysdfPath(PROJECT_FILE)) return systemRender(systemHost, { format, path, stamp });
+    if (isDmdfPath(PROJECT_FILE)) return decisionRender(decisionHost, { format, path, stamp });
     const def = readDef();
     if (!def)
       return {
@@ -1521,6 +1552,7 @@ server.tool(
 registerErdTools(server, erdHost);
 registerSequenceTools(server, sequenceHost);
 registerSystemTools(server, systemHost);
+registerDecisionTools(server, decisionHost);
 
 // The stage and the marks (Spec 83): the agent shows, the person points back.
 const stageHost: StageHost = {
@@ -1542,12 +1574,13 @@ registerStageTools(server, stageHost);
 
 server.tool(
   "set_notes",
-  "Save working notes on the active diagram or on one of its shapes — what was said about it, an open question, a decision — so whoever opens the document next (a person or an agent) finds them. Omit `target` for the whole diagram; otherwise `target` is a state name (state machine), an entity name (ERD), a participant name, a message ('9', 'f1.2') or 'fragment N' (sequence), or a member's path (system). The text replaces what was there; an empty string clears it. Notes are kept in the document and are not part of the model: engines and code generation ignore them.",
+  "Save working notes on the active diagram or on one of its shapes — what was said about it, an open question, a decision — so whoever opens the document next (a person or an agent) finds them. Omit `target` for the whole diagram; otherwise `target` is a state name (state machine), an entity name (ERD), a participant name, a message ('9', 'f1.2') or 'fragment N' (sequence), a member's path (system), or the name of an input, a knowledge or a decision (decision model). The text replaces what was there; an empty string clears it. Notes are kept in the document and are not part of the model: engines and code generation ignore them.",
   { target: z.string().optional(), notes: z.string() },
   async ({ target, notes }) => {
     if (isErdfPath(PROJECT_FILE)) return erdSetNotes(erdHost, target, notes);
     if (isSqdfPath(PROJECT_FILE)) return sequenceSetNotes(sequenceHost, target, notes);
     if (isSysdfPath(PROJECT_FILE)) return systemSetNotes(systemHost, target, notes);
+    if (isDmdfPath(PROJECT_FILE)) return decisionSetNotes(decisionHost, target, notes);
     const def = readDef();
     if (!def)
       return { content: [{ type: "text", text: noMachine() }], isError: true };
@@ -1579,6 +1612,7 @@ server.tool(
     if (isErdfPath(PROJECT_FILE)) return erdGetNotes(erdHost);
     if (isSqdfPath(PROJECT_FILE)) return sequenceGetNotes(sequenceHost);
     if (isSysdfPath(PROJECT_FILE)) return systemGetNotes(systemHost);
+    if (isDmdfPath(PROJECT_FILE)) return decisionGetNotes(decisionHost);
     const def = readDef();
     if (!def)
       return { content: [{ type: "text", text: noMachine() }], isError: true };
