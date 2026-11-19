@@ -68,12 +68,13 @@ Measured on 2026-10-01 against that session's prompt (a new "discussion" state r
 - **A system is a file, not a folder (D4).** A folder cannot carry a name, notes or actors, and cannot include a member stored elsewhere.
 - **Only the system holds paths (D5).** Members keep linking by name (Spec 80). A member path is relative to the system file (`resolveMemberPath`, `relativeMemberPath`), so a system moves as one folder.
 - **Three member kinds (D9).** `.erdf.json`, `.smdf.json`, `.sqdf.json`. A system is never a member of another. The list is open to later kinds (a structural tension chart, a PDE, a rispec).
+- **A fourth member kind, proposed with Spec 85**: `.dmdf.json`, a decision model. It stands alone as well. It is admitted by one entry in `MEMBER_KINDS`, and whether it stays there in its first version is Q3 of rispec 85.
 - **Actors** are written once and shared by every scenario, as an entity is shared by every machine: `person`, `agent`, `service`, `external`, with an optional `wheelNode` (the medicine-wheel node the actor is).
 - **What is shown is a view (D7).** Which member is open, which element is focused, where shapes sit: kept by the canvas, never in any document.
 
 ### Document kinds
 
-`docKindOfPath(path)` → `machine` | `erd` | `sequence` | `system`, by extension; any other `.json` is a machine, as it always was. `docKindOfContent(doc)` answers from content.
+`docKindOfPath(path)` → `machine` | `erd` | `sequence` | `system` | `decision`, by extension; any other `.json` is a machine, as it always was. `docKindOfContent(doc)` answers from content.
 
 ## Checks — `checkSystem(system, members)`
 
@@ -84,13 +85,14 @@ Measured on 2026-10-01 against that session's prompt (a new "discussion" state r
 | Y003 | A member can be read, and holds what its extension says | error |
 | Y004 | Actor names are unique and their kinds known | error |
 | Y005 | No two member machines share a `settings.name` (a message names a machine by it) | error |
-| E, S | Each ERD's and each sequence's own rules | error |
+| E, S, D | Each ERD's, each sequence's and each decision model's own rules (Spec 85) | error; a decision model's D017 (version 0.1's `settings.engine`) and D019 to D021 are warnings |
 | L001–L004 | Spec 80's links, for every machine against the entities of every ERD | error |
 | L005 | A message's `event` is an event of a member machine (of `machine`, when named) | error |
 | L006 | A participant's `actor` is an actor of the system, its `object` a machine object, its `holds` entities | error |
 | L007 | A message's `carries` is an entity | error |
 | L008 | Each path of each scenario is a walk the machines accept; a `state` names a state some machine has | warning |
 | L009 | A state that is not final has a way out (a transition on it or on a state around it) | warning |
+| D008 | A decision model's `machine` is a member machine, each event an outcome fires is an event of it (of any member machine, when none is named), and an input's `entity` is an entity. With no ERD in the system, inputs that name entities are one warning | error |
 
 A machine's own V rules live with the engine; the MCP adds them to `check_system`. L008 is a warning because a scenario ahead of its machines is how new behaviour is designed. Only the first stop of each machine on each path is reported; the stops after it are counted, since they are usually its consequence.
 
