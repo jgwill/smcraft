@@ -6,9 +6,11 @@
  *
  * - Y001–Y005: the system document itself (settings, members, actors), and
  *   machines sharing a name.
- * - E, S: each ERD's and each sequence's own rules (`validateErd`,
- *   `validateSequence`). A machine's V rules live with the engine, so the
- *   caller adds them (the MCP does).
+ * - E, S, D: each ERD's, each sequence's and each decision model's own rules
+ *   (`validateErd`, `validateSequence`, `validateDecisionModel`). A machine's
+ *   V rules live with the engine, so the caller adds them (the MCP does).
+ * - D008: a decision model's `machine` is a member machine, each event an
+ *   outcome fires is an event of it, and an input's `entity` is an entity.
  * - L001–L004: the ERD ↔ machine links of Spec 80, run for every machine
  *   against the entities of every ERD in the system.
  * - L005: a message's event is an event of a member machine.
@@ -25,12 +27,15 @@
  * Pure — no I/O.
  */
 import type { StateMachineDefinition } from "../definition.js";
+import { outcomesOf, type DecisionModelDefinition } from "../decision/definition.js";
+import { validateDecisionModel } from "../decision/validate.js";
 import { stateOfList, type EntityRelationshipDefinition } from "../erd/definition.js";
 import { checkLinks, checkStateOf, guardFields } from "../erd/links.js";
 import { validateErd } from "../erd/validate.js";
 import { allMessages, type SequenceDefinition } from "../sequence/definition.js";
 import { validateSequence } from "../sequence/validate.js";
 import {
+  MEMBER_EXTENSIONS,
   MEMBER_KINDS,
   SYSTEM_ACTOR_KINDS,
   docKindOfContent,
@@ -69,16 +74,18 @@ export interface SystemMembers {
   machines: { member: string; def: StateMachineDefinition }[];
   erds: { member: string; def: EntityRelationshipDefinition }[];
   sequences: { member: string; def: SequenceDefinition }[];
+  decisions: { member: string; def: DecisionModelDefinition }[];
 }
 
 /** Sort loaded members by kind, keeping only the ones whose content matches their extension. */
 export function membersByKind(members: readonly LoadedMember[]): SystemMembers {
-  const out: SystemMembers = { machines: [], erds: [], sequences: [] };
+  const out: SystemMembers = { machines: [], erds: [], sequences: [], decisions: [] };
   for (const m of members) {
     if (!m.def || m.error || docKindOfContent(m.def) !== m.kind) continue;
     if (m.kind === "machine") out.machines.push({ member: m.path, def: m.def as StateMachineDefinition });
     if (m.kind === "erd") out.erds.push({ member: m.path, def: m.def as EntityRelationshipDefinition });
     if (m.kind === "sequence") out.sequences.push({ member: m.path, def: m.def as SequenceDefinition });
+    if (m.kind === "decision") out.decisions.push({ member: m.path, def: m.def as DecisionModelDefinition });
   }
   return out;
 }
@@ -117,7 +124,7 @@ export function checkSystem(system: SystemDefinition | null, members: readonly L
       if (paths.has(m.path)) err("Y002", `"${m.path}" is listed twice`, m.path);
       paths.add(m.path);
       if (!MEMBER_KINDS.includes(docKindOfPath(m.path)) || !m.path.endsWith(".json")) {
-        err("Y002", `"${m.path}" is not a document a system holds (.erdf.json, .smdf.json, .sqdf.json)`, m.path);
+        err("Y002", `"${m.path}" is not a document a system holds (${MEMBER_EXTENSIONS})`, m.path);
       }
     }
     const actors = new Set<string>();
@@ -141,7 +148,7 @@ export function checkSystem(system: SystemDefinition | null, members: readonly L
     }
   }
 
-  const { machines, erds, sequences } = membersByKind(members);
+  const { machines, erds, sequences, decisions } = membersByKind(members);
 
   // Y005: a message names a machine by settings.name, so two machines sharing one are ambiguous.
   const seenMachine = new Map<string, string>();
@@ -155,6 +162,9 @@ export function checkSystem(system: SystemDefinition | null, members: readonly L
   // ── Each member's own rules ───────────────────────────────────────────────
   for (const { member, def } of erds) for (const e of validateErd(def)) err(e.ruleId, e.message, member, e.element);
   for (const { member, def } of sequences) for (const e of validateSequence(def)) err(e.ruleId, e.message, member, e.element);
+  for (const { member, def } of decisions) {
+    for (const e of validateDecisionModel(def)) (e.severity === "warning" ? warn : err)(e.ruleId, e.message, member, e.element);
+  }
 
   // ── L001–L004: machines against the data ──────────────────────────────────
   const erd = mergedErd(erds);
@@ -268,6 +278,40 @@ export function checkSystem(system: SystemDefinition | null, members: readonly L
         const more = mine.length > 1 ? ` (${mine.length - 1} later message${mine.length > 2 ? "s stop" : " stops"} too)` : "";
         const why = path.kind === "without-optional" ? " — a message the rest depends on may not be optional" : "";
         warn("L008", `${path.name}, message ${first.ref}: ${first.note ?? first.result}${more}${why}`, member, `message:${first.ref}`);
+      }
+    }
+  }
+
+  // ── D008: a decision model against the machines and the data ──────────────
+  for (const { member, def } of decisions) {
+    let saidNoErd = false;
+    for (const input of def.inputs ?? []) {
+      if (!input?.name || !input.entity) continue;
+      if (!erd) {
+        if (!saidNoErd) warn("D008", "Inputs name entities, but the system has no ERD to hold them", member);
+        saidNoErd = true;
+      } else if (!entityNames.has(input.entity)) {
+        err("D008", `Input "${input.name}" is the entity "${input.entity}", which no member ERD defines`, member, `input:${input.name}`);
+      }
+    }
+    for (const d of def.decisions ?? []) {
+      if (!d?.name) continue;
+      const element = `decision:${d.name}`;
+      if (d.machine && !machineNames.has(d.machine)) {
+        err("D008", `"${d.name}" drives the machine "${d.machine}", which is not a member`, member, element);
+        continue;
+      }
+      const fired = new Map<string, string[]>();
+      for (const outcome of outcomesOf(d)) {
+        const event = d.events?.[outcome] ?? d.event;
+        if (event) fired.set(event, [...(fired.get(event) ?? []), outcome]);
+      }
+      if (d.event && !fired.has(d.event)) fired.set(d.event, []);
+      for (const [event, from] of fired) {
+        const defined = d.machine ? events.get(d.machine)?.has(event) : [...events.values()].some((ids) => ids.has(event));
+        if (defined) continue;
+        const what = from.length ? ` (outcome${from.length > 1 ? "s" : ""} ${from.join(", ")})` : "";
+        err("D008", `"${d.name}" fires "${event}"${what}, which ${d.machine ? `"${d.machine}" does not define` : "no member machine defines"}`, member, element);
       }
     }
   }

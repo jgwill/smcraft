@@ -127,6 +127,44 @@ export type {
   SequenceFragmentBox,
 } from "./sequence/layout.js";
 export { renderMermaidSequence } from "./render/mermaidSequence.js";
+export * from "./decision/definition.js";
+export { parseRule, checkRule, evalRule, ruleRefs, refText, RuleStop, RULE_FUNCTIONS, RULE_LIMITS } from "./decision/expression.js";
+export type {
+  RuleNode,
+  RuleParse,
+  RuleValue,
+  RuleRef,
+  RuleType,
+  RuleEnv,
+  RuleScope,
+  RuleOperator,
+  RuleFunction,
+} from "./decision/expression.js";
+export { readAnswer, answerFieldsHint, ANSWER_FIELDS } from "./decision/answers.js";
+export type { TypedAnswer, NoulAnswer, ChoiceAnswer, ScoreAnswer, AnswerReading } from "./decision/answers.js";
+export { validateDecisionModel, backtickedNames, ruleEnvOf } from "./decision/validate.js";
+export type { DmdValidationError } from "./decision/validate.js";
+export { evaluateDecisions, formatDecisionRun } from "./decision/evaluate.js";
+export type {
+  DecisionRun,
+  DecisionRunInput,
+  DmdDecisionResult,
+  DmdResultStatus,
+  DmdRuleTrace,
+  DmdRuling,
+} from "./decision/evaluate.js";
+export { toEngineRequest } from "./decision/engine.js";
+export type { EngineRequest, EngineQuestion, EngineRequestOptions } from "./decision/engine.js";
+export { readLedger, replayLedger, formatLedgerReplay } from "./decision/ledger.js";
+export type {
+  LedgerRun,
+  LedgerRuling,
+  LedgerReading,
+  LedgerReplay,
+  LedgerReplayRun,
+  LedgerReplayOutcome,
+} from "./decision/ledger.js";
+export { renderMermaidDecisions } from "./render/mermaidDecisions.js";
 export * from "./system/definition.js";
 export {
   updateSystemSettings,

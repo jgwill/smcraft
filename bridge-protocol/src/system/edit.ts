@@ -6,6 +6,7 @@
  * Pure — no I/O.
  */
 import {
+  MEMBER_EXTENSIONS,
   MEMBER_KINDS,
   RECONCILE_MODES,
   SYSTEM_ACTOR_KINDS,
@@ -43,7 +44,7 @@ export function addMember(def: SystemDefinition, member: SystemMember): SystemDe
   if (!member.path?.trim()) throw new Error("A member needs a path.");
   const kind = docKindOfPath(member.path);
   if (!MEMBER_KINDS.includes(kind) || !member.path.endsWith(".json")) {
-    throw new Error(`'${member.path}' is not a loom document a system can hold: use a .erdf.json, .smdf.json or .sqdf.json file.`);
+    throw new Error(`'${member.path}' is not a loom document a system can hold: use one of ${MEMBER_EXTENSIONS}.`);
   }
   const next = clone(def);
   if (next.members.some((m) => m.path === member.path)) throw new Error(`'${member.path}' is already a member.`);
