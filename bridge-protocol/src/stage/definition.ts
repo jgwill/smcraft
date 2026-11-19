@@ -246,7 +246,7 @@ export interface StageControlEnvelope {
 export interface StageContext {
   stage: string;
   doc?: string;
-  kind?: "machine" | "erd" | "sequence" | "system";
+  kind?: "machine" | "erd" | "sequence" | "system" | "decision";
   system?: string;
   focus?: string | null;
   /** The part of the drawing on screen, in its coordinates. */

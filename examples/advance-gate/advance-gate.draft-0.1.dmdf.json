@@ -1,0 +1,65 @@
+{
+  "settings": {
+    "namespace": "miadi.factory",
+    "name": "AdvanceGate",
+    "description": "Whether a seat working on its own takes the next act, holds it for the person, or reads first. The first drawing of the loom's proposed fourth format (jgwill/smcraft rispec 85).",
+    "notes": "Drawn from advance-gate.mjs questions 0.1.0 and its ledger of 2026-11-14 (README.md beside this file). Guillaume, 2026-11-14: 'a decision model that is based on try to represent what you try to do when you use that decision engine to help you choose'.",
+    "engine": "jev-1.14.0"
+  },
+  "inputs": [
+    { "name": "action", "description": "The act the seat would take, in the imperative. Its words move the triggers: 'release' read as an outside audience (J2)." },
+    { "name": "request", "description": "The person's own words that the act answers, verbatim." },
+    { "name": "facts", "description": "What is known. An 'Owners:' line names whose accounts and repositories the act touches (J1)." },
+    { "name": "repository", "description": "owner/repo the act writes to, or none." }
+  ],
+  "knowledge": [
+    { "name": "JevStudy", "kind": "source", "ref": "miadi-chronicle://564/jev-study-261026.md", "description": "Parts 1.3 (what the numbers are), S1 (the six triggers), S5 (the shared band)." },
+    { "name": "SixTriggers", "kind": "model", "ref": "jgwill/miadi-orchestration-kit claude/miadi-witness/scripts/choose-worker.mjs TRIGGERS", "description": "One text in every caller, so a change reaches all of them." },
+    { "name": "PersonsWord", "kind": "authority", "description": "A deletion, a credential, a name, money, someone else's repository or an outside audience stays the person's whatever the number." }
+  ],
+  "decisions": [
+    {
+      "name": "advance",
+      "logic": {
+        "kind": "question", "type": "choice", "rotate": true,
+        "instructions": "Given `request` (the person's own words) and `facts`, should the seat do `action` now on its own?",
+        "options": {
+          "advance": "The act was asked for, or is the reversible next step of what was asked, and the facts hold what it needs.",
+          "hold_for_person": "The act goes beyond the request, is hard to undo, or reaches people outside the circle.",
+          "look_first": "The act may be wanted, but the facts lack what it rests on."
+        }
+      },
+      "requires": ["action", "request", "facts"],
+      "knowledge": ["JevStudy"]
+    },
+    { "name": "deletes", "logic": { "kind": "question", "type": "noul", "instructions": "Does `action` delete a file, a branch, a record or a session that exists today?" }, "requires": ["action"], "knowledge": ["SixTriggers"] },
+    { "name": "credential", "logic": { "kind": "question", "type": "noul", "instructions": "Does `action` create, read, move or send a key, a token or a password?" }, "requires": ["action"], "knowledge": ["SixTriggers"] },
+    { "name": "names_new", "logic": { "kind": "question", "type": "noul", "instructions": "Does `action` give a new name to a package, repository, session, episode or public title?" }, "requires": ["action"], "knowledge": ["SixTriggers"] },
+    { "name": "money", "logic": { "kind": "question", "type": "noul", "instructions": "Does `action` spend money or change a plan or a balance?" }, "requires": ["action"], "knowledge": ["SixTriggers"] },
+    { "name": "foreign_repo", "logic": { "kind": "question", "type": "noul", "instructions": "Does `action` write to a repository or account that is not William's own (`repository` names it)?" }, "requires": ["action", "repository", "facts"], "knowledge": ["SixTriggers"] },
+    { "name": "outside_audience", "logic": { "kind": "question", "type": "noul", "instructions": "Does `action` publish, post, release or send something people outside the circle will see?" }, "requires": ["action"], "knowledge": ["SixTriggers"] },
+    {
+      "name": "band",
+      "logic": {
+        "kind": "table", "hit": "first",
+        "rules": [
+          { "when": "any of the six triggers >= 0.5", "then": "hold_for_person" },
+          { "when": "any of the six triggers in [0.4, 0.6)", "then": "hold_for_person" },
+          { "when": "advance confidence >= 0.6 (top probability 0.733 on three options)", "then": "the advance choice" },
+          { "when": "otherwise", "then": "seat_reads" }
+        ]
+      },
+      "requires": ["advance", "deletes", "credential", "names_new", "money", "foreign_repo", "outside_audience"],
+      "authority": ["PersonsWord"],
+      "outcomes": ["advance", "hold_for_person", "look_first", "seat_reads"]
+    },
+    {
+      "name": "ruling",
+      "logic": { "kind": "person", "who": "the seat; the person when a held trigger is theirs", "description": "Written beside the decision it answers with --on <id>: a verdict on Jev's choice and one on the band." },
+      "requires": ["band", "advance"],
+      "authority": ["PersonsWord"],
+      "outcomes": ["advance", "hold_for_person", "look_first"]
+    }
+  ],
+  "rulings": { "ledger": "~/.miadi/decisions/advance-gate.jsonl", "snapshot": "ledger-261114.jsonl", "key": "decision_id", "bar_after": 20 }
+}

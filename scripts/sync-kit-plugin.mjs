@@ -28,6 +28,7 @@ const DESIGN_SKILLS = [
   "stateloom-design",
   "stateloom-erd",
   "stateloom-sequence",
+  "stateloom-decision",
   "stateloom-system",
   "stateloom-stage",
   "stateloom-live-loop",

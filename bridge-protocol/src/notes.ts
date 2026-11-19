@@ -35,12 +35,29 @@ export function noteText(value: unknown): string | undefined {
   return JSON.stringify(value);
 }
 
-const NOTE_HOLDERS = ["settings", "states", "parallel", "entities", "participants", "messages", "fragments", "members", "state"] as const;
+const NOTE_HOLDERS = [
+  "settings",
+  "states",
+  "parallel",
+  "entities",
+  "participants",
+  "messages",
+  "fragments",
+  "members",
+  "state",
+  // A decision model (Spec 85): its inputs, knowledge and decisions, and the rules inside a table's logic.
+  "inputs",
+  "knowledge",
+  "decisions",
+  "logic",
+  "rules",
+] as const;
 
 /**
  * Every `notes` in a loom document turned into text (see `noteText`), at any
  * depth: settings, states and their regions, entities, participants, messages,
- * fragments and their messages, members. Pure: returns a new document when
+ * fragments and their messages, members, and a decision model's inputs,
+ * knowledge, decisions and rules. Pure: returns a new document when
  * something changed, the same one when nothing did. Every tool that loads a
  * document runs this first, so no reader meets a note that is not a string.
  */

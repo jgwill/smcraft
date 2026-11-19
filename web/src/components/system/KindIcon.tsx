@@ -54,6 +54,13 @@ export default function KindIcon({ kind, size = 16 }: { kind: IconName; size?: n
           <path d="M10 6.5h4M7 9.5l3 5M17 9.5l-3 5" />
         </>
       )}
+      {kind === "decision" && (
+        // What is read, and the one outcome above it.
+        <>
+          <path d="M12 9.5l6 5.5-6 5.5-6-5.5z" />
+          <path d="M12 9.5V3.5M9.5 6l2.5-2.5L14.5 6" />
+        </>
+      )}
       {kind === "link" && (
         <>
           <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.2 1.2" />

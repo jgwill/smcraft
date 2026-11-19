@@ -48,6 +48,7 @@ import {
   removeActor,
   removeMember,
   renderMermaid,
+  renderMermaidDecisions,
   renderMermaidEr,
   renderMermaidSequence,
   replayScenario,
@@ -58,6 +59,7 @@ import {
   summarizeSystem,
   updateMember,
   updateSystemSettings,
+  type DecisionModelDefinition,
   type EntityRelationshipDefinition,
   type LoadedMember,
   type PatchOp,
@@ -177,7 +179,7 @@ export function systemSummary(path: string): string {
     const count = (kind: string) => def.members.filter((m) => docKindOfPath(m.path) === kind).length;
     return (
       `existing system '${def.settings?.name ?? ""}' (${def.members.length} members: ${count("machine")} machine(s), ` +
-      `${count("erd")} ERD(s), ${count("sequence")} sequence(s); ${(def.actors ?? []).length} actors)`
+      `${count("erd")} ERD(s), ${count("sequence")} sequence(s)${count("decision") ? `, ${count("decision")} decision model(s)` : ""}; ${(def.actors ?? []).length} actors)`
     );
   }
   return existsSync(path)
@@ -578,7 +580,9 @@ export function systemRender(host: SystemHost, opts: { format?: string; path?: s
           ? renderMermaidEr(d as unknown as EntityRelationshipDefinition)
           : loaded.kind === "sequence"
             ? renderMermaidSequence(d as unknown as SequenceDefinition)
-            : renderMermaid(d as unknown as StateMachineDefinition);
+            : loaded.kind === "decision"
+              ? renderMermaidDecisions(d as unknown as DecisionModelDefinition)
+              : renderMermaid(d as unknown as StateMachineDefinition);
       lines.push("```mermaid", text, "```", "");
     } catch (e) {
       lines.push(`_cannot be drawn: ${message(e)}_`, "");
@@ -793,7 +797,7 @@ const systemArg = z.string().optional().describe("The .sysdf.json to act on; def
 export function registerSystemTools(server: McpServer, host: SystemHost): void {
   server.tool(
     "create_system",
-    "Create a system definition (.sysdf.json): the one document that names the drawings of one thing being built — its ERDs (.erdf.json), machines (.smdf.json) and scenarios (.sqdf.json) — and the actors they share. `members` are paths, relative to the system file or absolute; they are stored relative when beneath it. Without `path` it lands next to the active document as <name>.sysdf.json. The active document does not move. The new system is remembered: the system tools and show use it when neither an argument, the active document, nor a system listing the active document names another. Refuses to replace a system that has members unless overwrite is true.",
+    "Create a system definition (.sysdf.json): the one document that names the drawings of one thing being built — its ERDs (.erdf.json), machines (.smdf.json), scenarios (.sqdf.json) and decision models (.dmdf.json) — and the actors they share. `members` are paths, relative to the system file or absolute; they are stored relative when beneath it. Without `path` it lands next to the active document as <name>.sysdf.json. The active document does not move. The new system is remembered: the system tools and show use it when neither an argument, the active document, nor a system listing the active document names another. Refuses to replace a system that has members unless overwrite is true.",
     {
       namespace: z.string(),
       name: z.string(),
@@ -839,7 +843,7 @@ export function registerSystemTools(server: McpServer, host: SystemHost): void {
 
   server.tool(
     "add_member",
-    "Add a drawing to a system: a .erdf.json, .smdf.json or .sqdf.json path, relative to the system file or absolute (stored relative when it is beneath the system's folder). A system is never a member of another.",
+    "Add a drawing to a system: a .erdf.json, .smdf.json, .sqdf.json or .dmdf.json path, relative to the system file or absolute (stored relative when it is beneath the system's folder). A system is never a member of another.",
     { path: z.string(), notes: z.string().optional(), system: systemArg },
     async ({ path, notes, system }) => {
       let stored = "";

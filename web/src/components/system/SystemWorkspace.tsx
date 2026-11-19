@@ -57,7 +57,13 @@ import { DocConflict, notifySystemChanged, readDoc, reconcileNow, useSystem, wri
 
 type Tab = "members" | "checks" | "notes";
 
-const KIND_LABEL: Record<DocKind, string> = { erd: "ERD", machine: "STATE MACHINE", sequence: "SEQUENCE", system: "SYSTEM" };
+const KIND_LABEL: Record<DocKind, string> = {
+  erd: "ERD",
+  machine: "STATE MACHINE",
+  sequence: "SEQUENCE",
+  system: "SYSTEM",
+  decision: "DECISION MODEL",
+};
 
 function countsOf(kind: DocKind, def: unknown, short = false): string {
   if (!def) return "";
@@ -69,6 +75,10 @@ function countsOf(kind: DocKind, def: unknown, short = false): string {
     const d = def as SequenceDefinition;
     const f = d.fragments?.length ?? 0;
     return `${d.participants?.length ?? 0} participants · ${d.messages?.length ?? 0} messages${f && !short ? ` · ${f} fragment${f > 1 ? "s" : ""}` : ""}`;
+  }
+  if (kind === "decision") {
+    const d = def as { inputs?: unknown[]; decisions?: unknown[] };
+    return `${d.inputs?.length ?? 0} inputs · ${d.decisions?.length ?? 0} decisions`;
   }
   const d = def as StateMachineDefinition;
   let states = 0;

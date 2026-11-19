@@ -1,0 +1,535 @@
+{
+  "id": "83be094b-4ced-4939-ac48-441e5e9211a1",
+  "timestamp": "2026-11-19T04:00:13.576Z",
+  "engine": "claude",
+  "model": "opus",
+  "prompt": "# Brief: the decision model, rispec 85, from proposal to a working first version (jgwill/smcraft#33)\n\nFrom the factory mail seat (`f1-t6-mailing-and-prep-atelier-jerry-2611131123`, Claude Code, Opus 5.5), 2026-11-18 22:55 EST, on Guillaume's word in that seat: \"You could start a new session that would implement a PR of everything that makes sense.\"\n\nYou are a T8 session on Fable 5.2. Your working tree is `/workspace/repos/jgwill/smcraft/.worktrees/85-dmdf`, on branch `rispec/85-dmdf-decision-model`.\n\n## Your task\n\nMake jgwill/smcraft#33 the pull request of the decision model's first working version. Revise rispec 85 with what makes sense from the two documents below, then implement it in the loom, so that Episode 564's advance gate validates, renders and replays through the loom with no call to Jev. Push to the PR's branch, and update the PR's title and description to say what it now holds.\n\nRead first, in this order:\n1. `rispecs/85-dmdf-decision-model.spec.md` on your branch, and jgwill/smcraft#32 (its Action Steps are your plan, except the two that are Guillaume's: settling Q1 to Q4, and merging).\n2. `perplexity-report-261118.md` beside this brief: the report Guillaume sent the factory (DMN-inspired requirements graph, tables inside decisions, typed AI judgments, \"Jev makes judgments, code makes decisions\", six phases).\n3. `factory-assessment-261118.md` beside this brief: what the factory said fits, what is missing from the report, and the correction that spec 85 already existed.\n4. The first document and its fixtures: Episode 564's `advance-gate-261114/` (`advance-gate.dmdf.json`, `advance-gate.dmd.mmd`, `advance-gate.mjs`, `ledger-261114.jsonl` with 16 lines, `README.md`). A second document in the same format: `_staging_for_new_episodes/who-reads-a-session-before-it-exists-261114/decision-model/episode-birth.dmdf.json` in the chronicle.\n5. The loom's sibling formats, to follow their pattern: `bridge-protocol/src/erd/`, `bridge-protocol/src/sequence/`, `bridge-protocol/src/system/`, specs 80, 81, 82, and `examples/decision-gate/` (the gate drawn with the three existing kinds: Question kinds choice, score, noul and tandt, ThresholdPolicy, word owner, Ruling).\n\n## What \"makes sense\" means here\n\nKeep:\n- the draft's choices where Q1 to Q4 are still open: `.dmdf.json`, question, table and person logic, and a decision model that can stand alone and also join a system.\n- the person's ruling as a decision of its own (`logic.kind: \"person\"`), never a fallback: an outcome that waits for the word owner, which no bar can skip.\n\nAdd to the spec, and implement what is mechanical:\n- typed answers per question type (a noul's probability of yes, a choice's distribution and confidence, a score's position on its levels), never one generic number;\n- a criterion on every question, a noul included: it is a validation rule. The factory measured why: without one, \"is it done\" was 83.3% unclassifiable, and the drafts judge read 0.18 to 0.57;\n- a question group (the same snapshot, answered independently) kept apart from a dependency edge;\n- the hit policy stated on every table (the draft has `hit`);\n- each outcome mapped to a machine event where the decision drives a machine (the draft has `event`, `machine`, D008);\n- a definition version on the document, recorded with each run;\n- a declared failure route (the engine fails or times out) on a model that asks an engine;\n- the semantic definition kept apart from the provider binding (`settings.engine` today);\n- rulings calibrating the bars (`bar_after` today): specify how a bar moves after rulings; implement only what is mechanical.\n\nImplement, in `bridge-protocol/src/decision/` and `mcp/`:\n- types, `isDecisionModelDefinition`, validation (D001 to D008 and the new rules, numbered after them), `renderMermaidDecisions`, `toEngineRequest`;\n- a pure evaluator: given a document, input values and recorded answers, it returns the outcome of each table and the rule that fired, as a trace. A bounded rule language, never `eval`;\n- system membership (spec 82), behind what Q3 leaves open;\n- the MCP tools to read, validate, render and simulate from recorded answers;\n- a `stateloom-decision` skill if the other kinds have one each.\n\nThe acceptance test, the report's own: given a fixed input snapshot and fixed answers, every caller produces the same outcome and rule trace. Run it on the advance gate: its 16 recorded runs replayed through its table give their recorded bands. Where a recorded run cannot be replayed (the ledger lacks a field), say which and why. Do not invent the missing value.\n\n## Not yours\n\n- No call to Jev or any provider (each run costs paid tokens). No provider adapter in this PR.\n- No merge, no push to `main`, no npm publish, no image push, no release. Guillaume merges after answering Q1 to Q4.\n- Do not touch the shared checkout `/workspace/repos/jgwill/smcraft` (main is ahead of origin by two commits that are not yours, with untracked files) or the worktree `.worktrees/14-runtime-hardening`. Three tmux panes have that checkout as their folder: `mctgo-2611130417-t8-loomino-cockpit`, `stateloom-companion`, `stateloom-miadi-discussion-integration-feedback-2610210634`. Do not type into them.\n- Do not change files in Episode 564's `advance-gate-261114/` or in the handle's `decision-model/`. Copy what a test needs into the PR as a fixture, and name where it came from.\n- Do not edit `perplexity-report-261118.md` or `factory-assessment-261118.md`.\n- The web canvas for a decision model is a later PR, unless rendering the Mermaid in the existing designer takes one small change.\n\n## Facts verified at 22:49 EST on 2026-11-18\n\n- jgwill/smcraft#33 is open, branch `rispec/85-dmdf-decision-model` at `af4500639bc0df1c1dd55f91f1cdab9f961b8cd9`, one file `rispecs/85-dmdf-decision-model.spec.md`, no comments. The branch contains `origin/main`.\n- jgwill/smcraft#32 is open, with the Action Steps above.\n- `@miadi/stateloom-protocol` 0.1.16 in `bridge-protocol/` (test: `node --test dist/tests/*.test.js`), `@miadi/stateloom-mcp` 0.4.1 in `mcp/`.\n- Episode 564's `advance-gate.dmdf.json` has inputs, knowledge of kinds authority, model and source, seven question decisions (one choice, six nouls), the table `band` with `hit: first` and four rules, and the decision `ruling` with logic kind `person`.\n\n## Completion marks\n\n1. jgwill/smcraft#33 holds your commits (each with `#32` in its subject), its title and description say what it now holds, which tests ran with their real output, and what is left.\n2. The tests pass in `bridge-protocol` and `mcp`, including the advance gate's replay.\n3. `lane-report.md` beside this brief: what you built, what you left and why, what you would ask Guillaume (his Q1 to Q4, and any new question), and your model class.\n4. Last, one line in `DONE` beside this brief: `<ISO time> jgwill/smcraft#33 <head sha> <tests passed>/<tests run>`. The factory mail seat waits on that file.\n\nCommit `lane-report.md` and `DONE` to the chronicle repository on gaia with a pathspec (only those two files), and push. A rejected push means another seat moved first: integrate and push again.\n",
+  "result": {
+    "primary": {
+      "action": "make",
+      "target": "jgwill/smcraft#33 the pull request of the decision model's first working version: rispec 85 revised and implemented in the loom so Episode 564's advance gate validates, renders and replays with no call to Jev",
+      "urgency": "session",
+      "confidence": 0.95
+    },
+    "secondary": [
+      {
+        "action": "read",
+        "target": "rispecs/85-dmdf-decision-model.spec.md and jgwill/smcraft#32 Action Steps (plan, minus settling Q1 to Q4 and merging)",
+        "implicit": false,
+        "dependency": null,
+        "confidence": 0.95
+      },
+      {
+        "action": "read",
+        "target": "perplexity-report-261118.md and factory-assessment-261118.md beside the brief",
+        "implicit": false,
+        "dependency": "read rispec 85 and jgwill/smcraft#32",
+        "confidence": 0.95
+      },
+      {
+        "action": "read",
+        "target": "Episode 564 advance-gate-261114/ (advance-gate.dmdf.json, advance-gate.dmd.mmd, advance-gate.mjs, ledger-261114.jsonl, README.md) and _staging_for_new_episodes/who-reads-a-session-before-it-exists-261114/decision-model/episode-birth.dmdf.json",
+        "implicit": false,
+        "dependency": "read the two reports",
+        "confidence": 0.9
+      },
+      {
+        "action": "study",
+        "target": "sibling formats bridge-protocol/src/erd/, sequence/, system/, specs 80, 81, 82 and examples/decision-gate/",
+        "implicit": false,
+        "dependency": "read Episode 564 fixtures",
+        "confidence": 0.9
+      },
+      {
+        "action": "revise",
+        "target": "rispec 85: keep .dmdf.json, question/table/person logic, standalone plus system membership, person ruling as its own decision; add typed answers per question type, a criterion on every question, question group apart from dependency edge, hit policy on every table, outcome to machine event mapping, definition version recorded per run, declared failure route, semantic definition apart from provider binding, bar calibration after rulings",
+        "implicit": false,
+        "dependency": "study sibling formats",
+        "confidence": 0.9
+      },
+      {
+        "action": "implement",
+        "target": "bridge-protocol/src/decision/: types, isDecisionModelDefinition, validation D001 to D008 plus new rules numbered from D009, renderMermaidDecisions, toEngineRequest",
+        "implicit": false,
+        "dependency": "revise rispec 85",
+        "confidence": 0.9
+      },
+      {
+        "action": "implement",
+        "target": "pure evaluator with a bounded rule language (no eval) returning each table's outcome and fired rule as a trace",
+        "implicit": false,
+        "dependency": "implement decision types and validation",
+        "confidence": 0.9
+      },
+      {
+        "action": "implement",
+        "target": "decision model as a system member (spec 82), gated behind what Q3 leaves open",
+        "implicit": false,
+        "dependency": "implement decision types and validation",
+        "confidence": 0.75
+      },
+      {
+        "action": "implement",
+        "target": "mcp/ tools to read, validate, render and simulate a decision model from recorded answers",
+        "implicit": false,
+        "dependency": "implement evaluator",
+        "confidence": 0.85
+      },
+      {
+        "action": "create",
+        "target": "stateloom-decision skill, only if every other kind has its own skill",
+        "implicit": true,
+        "dependency": "implement MCP tools",
+        "confidence": 0.6
+      },
+      {
+        "action": "copy",
+        "target": "advance gate document, ledger-261114.jsonl and episode-birth.dmdf.json into the PR as test fixtures with their source path named",
+        "implicit": false,
+        "dependency": "read Episode 564 fixtures",
+        "confidence": 0.85
+      },
+      {
+        "action": "test",
+        "target": "acceptance replay: the 16 recorded runs through the band table give their recorded bands; same snapshot and answers give the same outcome and rule trace for every caller; name each unreplayable run and its missing field without inventing values",
+        "implicit": false,
+        "dependency": "implement evaluator",
+        "confidence": 0.9
+      },
+      {
+        "action": "build",
+        "target": "bridge-protocol dist before node --test dist/tests/*.test.js, and make mcp resolve the local bridge-protocol build",
+        "implicit": true,
+        "dependency": "implement decision types and validation",
+        "confidence": 0.8
+      },
+      {
+        "action": "check",
+        "target": "whether the existing designer renders the decision Mermaid with one small change; otherwise leave the web canvas to a later PR",
+        "implicit": true,
+        "dependency": "implement renderMermaidDecisions",
+        "confidence": 0.5
+      },
+      {
+        "action": "commit and push",
+        "target": "commits with #32 in each subject to branch rispec/85-dmdf-decision-model",
+        "implicit": false,
+        "dependency": "tests pass in bridge-protocol and mcp",
+        "confidence": 0.95
+      },
+      {
+        "action": "update",
+        "target": "jgwill/smcraft#33 title and description: what it holds, which tests ran with real output, what is left",
+        "implicit": false,
+        "dependency": "commit and push",
+        "confidence": 0.95
+      },
+      {
+        "action": "write",
+        "target": "lane-report.md beside the brief: built, left and why, questions for Guillaume (Q1 to Q4 and new ones), model class",
+        "implicit": false,
+        "dependency": "update PR",
+        "confidence": 0.9
+      },
+      {
+        "action": "write",
+        "target": "DONE line: <ISO time> jgwill/smcraft#33 <head sha> <tests passed>/<tests run>",
+        "implicit": false,
+        "dependency": "write lane-report.md",
+        "confidence": 0.9
+      },
+      {
+        "action": "commit and push",
+        "target": "lane-report.md and DONE only, by pathspec, to the chronicle repository on gaia; on rejected push integrate and push again",
+        "implicit": false,
+        "dependency": "write DONE",
+        "confidence": 0.9
+      },
+      {
+        "action": "check",
+        "target": "what the concurrent session t8-dmdf-decision-model-pr-2611182249 (19f3bb9f-7475-4484-a812-466504a37568) already holds in this same worktree, so two seats do not write the same files or push over each other",
+        "implicit": true,
+        "dependency": null,
+        "confidence": 0.85
+      }
+    ],
+    "context": {
+      "files_needed": [
+        "rispecs/85-dmdf-decision-model.spec.md",
+        "rispecs/80-*.spec.md",
+        "rispecs/81-*.spec.md",
+        "rispecs/82-*.spec.md",
+        "bridge-protocol/src/erd/",
+        "bridge-protocol/src/sequence/",
+        "bridge-protocol/src/system/",
+        "bridge-protocol/src/index.ts",
+        "bridge-protocol/package.json",
+        "mcp/src/ (tool registration)",
+        "mcp/package.json",
+        "examples/decision-gate/",
+        "perplexity-report-261118.md (beside the brief)",
+        "factory-assessment-261118.md (beside the brief)",
+        "Episode 564 advance-gate-261114/advance-gate.dmdf.json",
+        "Episode 564 advance-gate-261114/advance-gate.dmd.mmd",
+        "Episode 564 advance-gate-261114/advance-gate.mjs",
+        "Episode 564 advance-gate-261114/ledger-261114.jsonl",
+        "Episode 564 advance-gate-261114/README.md",
+        "$MIADI_CHRONICLE_ROOT/_staging_for_new_episodes/who-reads-a-session-before-it-exists-261114/decision-model/episode-birth.dmdf.json",
+        "skills/ (to check whether each kind has a stateloom-* skill)"
+      ],
+      "tools_required": [
+        "git (worktree /workspace/repos/jgwill/smcraft/.worktrees/85-dmdf)",
+        "gh (read jgwill/smcraft#32, edit jgwill/smcraft#33)",
+        "node / npm / tsc",
+        "node --test",
+        "git on the chronicle repository on gaia",
+        "miadi-hooks-interpret digest (to read the concurrent session)"
+      ],
+      "assumptions": [
+        "jgwill/smcraft#33 is open on rispec/85-dmdf-decision-model at af4500639bc0df1c1dd55f91f1cdab9f961b8cd9 with one file and the branch contains origin/main",
+        "jgwill/smcraft#32 is open and its Action Steps are the plan",
+        "@miadi/stateloom-protocol is 0.1.16 and @miadi/stateloom-mcp is 0.4.1",
+        "advance-gate.dmdf.json has inputs, knowledge of kinds authority, model and source, seven question decisions (one choice, six nouls), table band with hit first and four rules, and decision ruling with logic kind person",
+        "ledger-261114.jsonl has 16 lines that carry enough to replay most runs",
+        "a bounded rule language can express what advance-gate.mjs computes for the band table",
+        "the session runs on Fable 5.2, while this session reports Opus 5.5",
+        "this worktree is held by one T8 session, while the hook reports another session already replying here since 2026-11-19T03:51:36Z",
+        "the brief, the two reports, lane-report.md and DONE share one folder in the chronicle repository",
+        "the shared checkout has two unpushed commits on main that belong to another seat"
+      ]
+    },
+    "outputs": {
+      "artifacts": [
+        "bridge-protocol/src/decision/types.ts",
+        "bridge-protocol/src/decision/validate.ts",
+        "bridge-protocol/src/decision/mermaid.ts",
+        "bridge-protocol/src/decision/engine-request.ts",
+        "bridge-protocol/src/decision/evaluate.ts",
+        "bridge-protocol/src/decision/index.ts",
+        "bridge-protocol/src/tests/decision.test.ts",
+        "bridge-protocol/src/tests/decision-replay.test.ts",
+        "bridge-protocol test fixtures: advance-gate.dmdf.json, ledger-261114.jsonl, episode-birth.dmdf.json with provenance note",
+        "mcp decision tools (read, validate, render, simulate) and their tests",
+        "skills/stateloom-decision/SKILL.md (conditional)",
+        "lane-report.md (beside the brief, chronicle repository)",
+        "DONE (beside the brief, chronicle repository)"
+      ],
+      "updates": [
+        "rispecs/85-dmdf-decision-model.spec.md",
+        "bridge-protocol/src/index.ts (exports)",
+        "bridge-protocol/src/system/ (decision member kind behind Q3)",
+        "mcp server tool registration"
+      ],
+      "communications": [
+        "commits on rispec/85-dmdf-decision-model with #32 in each subject",
+        "jgwill/smcraft#33 title and description",
+        "chronicle repository commit and push of lane-report.md and DONE"
+      ]
+    },
+    "directions": {
+      "east": [
+        {
+          "text": "Make jgwill/smcraft#33 the first working version of the decision model, not only a proposal",
+          "confidence": 0.95,
+          "implicit": false
+        },
+        {
+          "text": "Keep the draft's open choices (Q1 to Q4) as they are and keep the person ruling as its own decision that no bar can skip",
+          "confidence": 0.9,
+          "implicit": false
+        },
+        {
+          "text": "Acceptance means a fixed snapshot and fixed answers give the same outcome and rule trace for every caller",
+          "confidence": 0.9,
+          "implicit": false
+        },
+        {
+          "text": "Boundaries: no Jev or provider call, no merge, no main push, no publish, no edits to Episode 564's folder, the handle's decision-model, the reports, the shared checkout or 14-runtime-hardening",
+          "confidence": 0.95,
+          "implicit": false
+        },
+        {
+          "text": "Another session already holds this worktree, so the first act is seeing what it did",
+          "confidence": 0.8,
+          "implicit": true
+        }
+      ],
+      "south": [
+        {
+          "text": "Read spec 85, #32, the perplexity report and the factory assessment in the order given",
+          "confidence": 0.95,
+          "implicit": false
+        },
+        {
+          "text": "Read the advance gate document, its Mermaid, its .mjs, the 16-line ledger and the episode-birth document",
+          "confidence": 0.9,
+          "implicit": false
+        },
+        {
+          "text": "Learn the sibling pattern from erd, sequence, system, specs 80 to 82 and examples/decision-gate",
+          "confidence": 0.9,
+          "implicit": false
+        },
+        {
+          "text": "Find which ledger fields each replay needs and which runs lack them",
+          "confidence": 0.8,
+          "implicit": true
+        },
+        {
+          "text": "Check whether each existing kind has its own stateloom skill",
+          "confidence": 0.7,
+          "implicit": true
+        },
+        {
+          "text": "Check how mcp consumes bridge-protocol locally so its tests see the new module",
+          "confidence": 0.7,
+          "implicit": true
+        }
+      ],
+      "west": [
+        {
+          "text": "Replay the 16 recorded runs through the band table and compare with recorded bands",
+          "confidence": 0.9,
+          "implicit": false
+        },
+        {
+          "text": "Name each unreplayable run and its missing field, inventing no value",
+          "confidence": 0.9,
+          "implicit": false
+        },
+        {
+          "text": "Run tests in bridge-protocol and mcp and keep their real output",
+          "confidence": 0.95,
+          "implicit": false
+        },
+        {
+          "text": "Verify no forbidden path changed and no tmux pane was typed into",
+          "confidence": 0.8,
+          "implicit": true
+        },
+        {
+          "text": "State the real model class in the lane report",
+          "confidence": 0.8,
+          "implicit": true
+        }
+      ],
+      "north": [
+        {
+          "text": "Revise rispec 85 with the nine additions",
+          "confidence": 0.9,
+          "implicit": false
+        },
+        {
+          "text": "Implement types, guard, validation D001 onward, Mermaid render, engine request, evaluator, system membership, MCP tools",
+          "confidence": 0.9,
+          "implicit": false
+        },
+        {
+          "text": "Commit with #32 in each subject and push to the PR branch",
+          "confidence": 0.95,
+          "implicit": false
+        },
+        {
+          "text": "Update the PR title and description",
+          "confidence": 0.95,
+          "implicit": false
+        },
+        {
+          "text": "Write lane-report.md and DONE, commit both by pathspec to the chronicle repository and push",
+          "confidence": 0.9,
+          "implicit": false
+        }
+      ]
+    },
+    "actionStack": [
+      {
+        "text": "Check what the concurrent session t8-dmdf-decision-model-pr-2611182249 already holds in this worktree",
+        "direction": "east",
+        "dependency": null,
+        "completed": false
+      },
+      {
+        "text": "Read rispec 85 and jgwill/smcraft#32 Action Steps",
+        "direction": "south",
+        "dependency": "Check what the concurrent session t8-dmdf-decision-model-pr-2611182249 already holds in this worktree",
+        "completed": false
+      },
+      {
+        "text": "Read perplexity-report-261118.md and factory-assessment-261118.md beside the brief",
+        "direction": "south",
+        "dependency": "Read rispec 85 and jgwill/smcraft#32 Action Steps",
+        "completed": false
+      },
+      {
+        "text": "Read Episode 564 advance-gate-261114 fixtures and episode-birth.dmdf.json",
+        "direction": "south",
+        "dependency": "Read perplexity-report-261118.md and factory-assessment-261118.md beside the brief",
+        "completed": false
+      },
+      {
+        "text": "Read sibling formats erd, sequence, system, specs 80 to 82 and examples/decision-gate",
+        "direction": "south",
+        "dependency": "Read Episode 564 advance-gate-261114 fixtures and episode-birth.dmdf.json",
+        "completed": false
+      },
+      {
+        "text": "Name what to keep and what to add to rispec 85, holding Q1 to Q4 open",
+        "direction": "east",
+        "dependency": "Read sibling formats erd, sequence, system, specs 80 to 82 and examples/decision-gate",
+        "completed": false
+      },
+      {
+        "text": "Revise rispec 85 with typed answers, criteria, question groups, hit policy, outcome events, definition version, failure route, provider binding split and bar calibration",
+        "direction": "north",
+        "dependency": "Name what to keep and what to add to rispec 85, holding Q1 to Q4 open",
+        "completed": false
+      },
+      {
+        "text": "Copy the advance gate and episode-birth documents and the 16-line ledger into the PR as fixtures with their source named",
+        "direction": "north",
+        "dependency": "Read Episode 564 advance-gate-261114 fixtures and episode-birth.dmdf.json",
+        "completed": false
+      },
+      {
+        "text": "Implement types, isDecisionModelDefinition and validation D001 to D008 plus new rules from D009 in bridge-protocol/src/decision/",
+        "direction": "north",
+        "dependency": "Revise rispec 85 with typed answers, criteria, question groups, hit policy, outcome events, definition version, failure route, provider binding split and bar calibration",
+        "completed": false
+      },
+      {
+        "text": "Implement renderMermaidDecisions and toEngineRequest",
+        "direction": "north",
+        "dependency": "Implement types, isDecisionModelDefinition and validation D001 to D008 plus new rules from D009 in bridge-protocol/src/decision/",
+        "completed": false
+      },
+      {
+        "text": "Implement the pure evaluator with a bounded rule language returning outcome and rule trace",
+        "direction": "north",
+        "dependency": "Implement types, isDecisionModelDefinition and validation D001 to D008 plus new rules from D009 in bridge-protocol/src/decision/",
+        "completed": false
+      },
+      {
+        "text": "Add decision models as system members per spec 82 behind Q3",
+        "direction": "north",
+        "dependency": "Implement types, isDecisionModelDefinition and validation D001 to D008 plus new rules from D009 in bridge-protocol/src/decision/",
+        "completed": false
+      },
+      {
+        "text": "Add MCP tools to read, validate, render and simulate decision models from recorded answers",
+        "direction": "north",
+        "dependency": "Implement the pure evaluator with a bounded rule language returning outcome and rule trace",
+        "completed": false
+      },
+      {
+        "text": "Add a stateloom-decision skill if every other kind has one",
+        "direction": "north",
+        "dependency": "Add MCP tools to read, validate, render and simulate decision models from recorded answers",
+        "completed": false
+      },
+      {
+        "text": "Write the replay test: 16 ledger runs through the band table give their recorded bands, unreplayable runs named with the missing field",
+        "direction": "west",
+        "dependency": "Implement the pure evaluator with a bounded rule language returning outcome and rule trace",
+        "completed": false
+      },
+      {
+        "text": "Build and run tests in bridge-protocol and mcp",
+        "direction": "west",
+        "dependency": "Write the replay test: 16 ledger runs through the band table give their recorded bands, unreplayable runs named with the missing field",
+        "completed": false
+      },
+      {
+        "text": "Verify no file changed in Episode 564's advance-gate-261114, the handle's decision-model, the shared checkout or 14-runtime-hardening",
+        "direction": "west",
+        "dependency": "Build and run tests in bridge-protocol and mcp",
+        "completed": false
+      },
+      {
+        "text": "Commit each change with #32 in the subject and push to rispec/85-dmdf-decision-model",
+        "direction": "north",
+        "dependency": "Verify no file changed in Episode 564's advance-gate-261114, the handle's decision-model, the shared checkout or 14-runtime-hardening",
+        "completed": false
+      },
+      {
+        "text": "Update jgwill/smcraft#33 title and description with what it holds, the real test output and what is left",
+        "direction": "north",
+        "dependency": "Commit each change with #32 in the subject and push to rispec/85-dmdf-decision-model",
+        "completed": false
+      },
+      {
+        "text": "Write lane-report.md beside the brief with what was built, what was left, questions for Guillaume and the model class",
+        "direction": "north",
+        "dependency": "Update jgwill/smcraft#33 title and description with what it holds, the real test output and what is left",
+        "completed": false
+      },
+      {
+        "text": "Write the DONE line with ISO time, jgwill/smcraft#33, head sha and tests passed over tests run",
+        "direction": "north",
+        "dependency": "Write lane-report.md beside the brief with what was built, what was left, questions for Guillaume and the model class",
+        "completed": false
+      },
+      {
+        "text": "Commit lane-report.md and DONE to the chronicle repository with a pathspec and push, integrating on rejection",
+        "direction": "north",
+        "dependency": "Write the DONE line with ISO time, jgwill/smcraft#33, head sha and tests passed over tests run",
+        "completed": false
+      }
+    ],
+    "ambiguities": [
+      {
+        "text": "A second session (t8-dmdf-decision-model-pr-2611182249, 19f3bb9f-7475-4484-a812-466504a37568) is already replying in this same worktree on the same brief",
+        "suggestion": "Read it with miadi-hooks-interpret digest before writing. If it is the T8 seat the brief opened, this decomposition informs it and no second seat writes to the branch."
+      },
+      {
+        "text": "The brief says the session runs on Fable 5.2, and this session runs Opus 5.5",
+        "suggestion": "Write the model actually running in lane-report.md."
+      },
+      {
+        "text": "'beside this brief' names no folder for the reports, lane-report.md and DONE",
+        "suggestion": "Locate the brief file in the chronicle repository (find perplexity-report-261118.md) and use its folder."
+      },
+      {
+        "text": "'the chronicle repository on gaia' has no path",
+        "suggestion": "Use $MIADI_CHRONICLE_ROOT and confirm its remote before committing."
+      },
+      {
+        "text": "'every caller produces the same outcome' does not list the callers",
+        "suggestion": "Treat the bridge-protocol evaluator, the MCP simulate tool and the recorded advance-gate.mjs results as the callers and compare all three in the test."
+      },
+      {
+        "text": "'A bounded rule language' has no grammar named",
+        "suggestion": "Take the smallest grammar that expresses the draft's band rules (comparisons, and/or over typed answers and inputs), parsed into an AST, and state it in spec 85."
+      },
+      {
+        "text": "'system membership behind what Q3 leaves open' does not say how to gate it",
+        "suggestion": "Add a decision member kind that is optional and changes no existing Y or L rule, and mark it pending Q3 in the spec."
+      },
+      {
+        "text": "'implement only what is mechanical' for bar calibration does not define mechanical",
+        "suggestion": "Implement recording bar_after with each ruling and a deterministic replay of recorded bar moves, and leave the movement policy specified only."
+      },
+      {
+        "text": "'if the other kinds have one each' depends on the skills directory",
+        "suggestion": "List the stateloom-* skills per kind and add stateloom-decision only if erd, sequence and system each have one."
+      },
+      {
+        "text": "'<tests passed>/<tests run>' does not say whether bridge-protocol and mcp are summed",
+        "suggestion": "Sum both packages in DONE and give the per-package split in the lane report and PR."
+      },
+      {
+        "text": "Version bumps are not mentioned while publishing is forbidden",
+        "suggestion": "Leave package versions unchanged and name the bump as left for the release."
+      },
+      {
+        "text": "'one small change' for rendering in the existing designer has no threshold",
+        "suggestion": "Make it only if it is a single file change in the web package that the existing tests cover, otherwise list it under what is left."
+      }
+    ]
+  },
+  "options": {
+    "extractImplicit": true,
+    "mapDependencies": true
+  },
+  "folder_name": "2611182300--83be094b-4ced-4939-ac48-441e5e9211a1",
+  "pde_dir": "/workspace/repos/jgwill/smcraft/.worktrees/85-dmdf/.pde/2611182300--83be094b-4ced-4939-ac48-441e5e9211a1"
+}

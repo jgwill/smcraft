@@ -57,9 +57,11 @@ function contextMenuPlacement(x: number, y: number): CSSProperties {
 }
 
 /**
- * The document's type is its extension (Specs 80–82, `docKindOfPath`): a
+ * The document's type is its extension (Specs 80–82 and 85, `docKindOfPath`): a
  * `.erdf.json` opens the ERD workspace, a `.sqdf.json` the sequence workspace,
- * a `.sysdf.json` the system map, anything else the state designer. Decided
+ * a `.sysdf.json` the system map, anything else the state designer. A
+ * `.dmdf.json` (a decision model) has no canvas yet: it opens a notice, so the
+ * state designer never loads it, and never saves a machine over it. Decided
  * before any of them mounts, so the state designer's store and bridge never see
  * another kind: `?doc=` answers by its extension, and without it the serving
  * process names its default document.
@@ -97,6 +99,8 @@ export default function Home() {
       <SequenceWorkspace key={key} />
     ) : kind === "system" ? (
       <SystemWorkspace key={key} />
+    ) : kind === "decision" ? (
+      <DecisionNotice key={key} />
     ) : (
       <MachineDesigner />
     );
@@ -117,6 +121,19 @@ export default function Home() {
         {guarded}
       </div>
     </StageProvider>
+  );
+}
+
+/** A decision model (Spec 85) is read, checked and replayed by the loom's tools. Its canvas is a later change. */
+function DecisionNotice() {
+  return (
+    <div role="status" className="app-shell flex items-center justify-center bg-gray-950 p-6 text-center text-sm text-gray-300">
+      <p className="max-w-md">
+        This document is a decision model. It is not drawn on this canvas yet: its drawing is the Mermaid file that
+        render_diagram writes beside it, and validate_decision_model, simulate_decision and replay_decision_ledger read it.
+        The file on disk is unchanged.
+      </p>
+    </div>
   );
 }
 
