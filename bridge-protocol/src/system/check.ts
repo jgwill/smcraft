@@ -27,7 +27,7 @@
  * Pure — no I/O.
  */
 import type { StateMachineDefinition } from "../definition.js";
-import { outcomesOf, type DecisionModelDefinition } from "../decision/definition.js";
+import { eventOf, outcomesOf, safeModel, type DecisionModelDefinition } from "../decision/definition.js";
 import { validateDecisionModel } from "../decision/validate.js";
 import { stateOfList, type EntityRelationshipDefinition } from "../erd/definition.js";
 import { checkLinks, checkStateOf, guardFields } from "../erd/links.js";
@@ -283,10 +283,12 @@ export function checkSystem(system: SystemDefinition | null, members: readonly L
   }
 
   // ── D008: a decision model against the machines and the data ──────────────
-  for (const { member, def } of decisions) {
+  for (const { member, def: written } of decisions) {
+    // Read through `safeModel`: what is mis-shaped was reported by the model's own rules above.
+    const def = safeModel(written);
     let saidNoErd = false;
     for (const input of def.inputs ?? []) {
-      if (!input?.name || !input.entity) continue;
+      if (!input.name || typeof input.entity !== "string" || !input.entity) continue;
       if (!erd) {
         if (!saidNoErd) warn("D008", "Inputs name entities, but the system has no ERD to hold them", member);
         saidNoErd = true;
@@ -294,19 +296,19 @@ export function checkSystem(system: SystemDefinition | null, members: readonly L
         err("D008", `Input "${input.name}" is the entity "${input.entity}", which no member ERD defines`, member, `input:${input.name}`);
       }
     }
-    for (const d of def.decisions ?? []) {
-      if (!d?.name) continue;
+    for (const d of def.decisions) {
+      if (!d.name) continue;
       const element = `decision:${d.name}`;
-      if (d.machine && !machineNames.has(d.machine)) {
+      if (typeof d.machine === "string" && d.machine && !machineNames.has(d.machine)) {
         err("D008", `"${d.name}" drives the machine "${d.machine}", which is not a member`, member, element);
         continue;
       }
       const fired = new Map<string, string[]>();
       for (const outcome of outcomesOf(d)) {
-        const event = d.events?.[outcome] ?? d.event;
-        if (event) fired.set(event, [...(fired.get(event) ?? []), outcome]);
+        const event = eventOf(d, outcome);
+        if (typeof event === "string" && event) fired.set(event, [...(fired.get(event) ?? []), outcome]);
       }
-      if (d.event && !fired.has(d.event)) fired.set(d.event, []);
+      if (typeof d.event === "string" && d.event && !fired.has(d.event)) fired.set(d.event, []);
       for (const [event, from] of fired) {
         const defined = d.machine ? events.get(d.machine)?.has(event) : [...events.values()].some((ids) => ids.has(event));
         if (defined) continue;

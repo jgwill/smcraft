@@ -25,7 +25,9 @@ Copied on 2026-11-18 from Episode 564 of the Miadi chronicle,
   text**. This repository is public, and each line's `action`, `request`, `facts` and `words`
   name people, mailboxes and accounts. Those four fields were left out, with `repository`,
   `run_id` and `paid_input_tokens`. Every number, every id, every recorded band and every ruling
-  is as it was written. The replay reads none of the fields left out.
+  is as it was written. No table reads any of the fields left out, so no outcome depends on
+  them. The model still says where they are in a line of the full ledger (`rulings.record`), and
+  a replay of that ledger would carry each ruling's words. Here it has none to carry.
 - `advance-gate.dmdf.json` is written here. Its questions, option texts and band are the ones
   `advance-gate.mjs` (the episode's script, questions 0.1.0) sent that day. The six trigger
   questions and their criteria are `TRIGGERS` of

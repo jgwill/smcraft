@@ -152,7 +152,7 @@ rules. While one is active, `get_definition`, `load_definition`, `render_diagram
 | `validate_decision_model` | Rules D001–D007 and D009–D022; D008 (the events and entities it names) is `check_system`'s |
 | `decision_request` | The request the model makes of its engine, built from the document. Nothing is sent |
 | `simulate_decision` | One run from recorded answers: each table's outcome, the rule that decided it and what each rule read. A person's decision is `awaiting_owner` unless a ruling is given |
-| `replay_decision_ledger` | Every recorded run of a ledger replayed through the model, each compared with the outcome it recorded, and the rulings counted against `rulings.bar_after`. `bars` tries other bar values on the same answers and changes nothing |
+| `replay_decision_ledger` | Every recorded run of a ledger replayed through the model, each compared with the outcome it recorded, and the rulings in force counted against `rulings.bar_after`. A line that lacks a field a table reads is named, not completed. `bars` tries other bar values on the same answers and changes nothing |
 
 ### The stage and the marks
 

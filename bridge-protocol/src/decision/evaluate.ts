@@ -17,17 +17,23 @@
  *   (`no_rule`, `conflict`, `error`, `not_evaluable`);
  * - a person's decision is `awaiting_owner` until a ruling is recorded for it,
  *   and then `ruled`. Nothing here computes it: no rule, no bar, no failure
- *   route. Waiting is not failing.
+ *   route. Waiting is not failing: a table that requires a decision still
+ *   awaiting its owner never takes its failure route, whatever its rules read
+ *   first. It waits too.
  *
- * Never throws on a document it can read.
+ * Never throws, whatever the document holds: it is read through `safeModel`,
+ * and what is mis-shaped is `validateDecisionModel`'s to report.
  *
  * Pure — no I/O.
  */
 import { readAnswer, type TypedAnswer } from "./answers.js";
 import {
+  DMD_LIMITS,
   barsOf,
   decisionsInOrder,
   outcomesOf,
+  own,
+  safeModel,
   type DecisionModelDefinition,
   type DmdDecision,
   type DmdTableLogic,
@@ -50,7 +56,7 @@ export interface DecisionRunInput {
   /** Each person's recorded ruling, by decision name. */
   rulings?: Record<string, DmdRuling | null | undefined>;
   /** Bars to try in place of the document's. A bar the document does not have is ignored. */
-  bars?: Record<string, number>;
+  bars?: Record<string, number> | null;
 }
 
 export type DmdResultStatus =
@@ -114,16 +120,28 @@ export interface DecisionRun {
   bars: Record<string, number>;
   /** One result per decision, each after what it requires. */
   results: DmdDecisionResult[];
+  /** Why nothing was run, when the model is past the loom's bound. */
+  problem?: string;
 }
 
-export function evaluateDecisions(def: DecisionModelDefinition, input: DecisionRunInput = {}): DecisionRun {
-  const values = input.values ?? {};
-  const answers = input.answers ?? {};
-  const rulings = input.rulings ?? {};
-  const bars = barsOf(def, input.bars);
-  const inputs = new Set((def.inputs ?? []).filter((i) => i?.name).map((i) => i.name));
+export function evaluateDecisions(model: DecisionModelDefinition, input: DecisionRunInput | null = {}): DecisionRun {
+  const def = safeModel(model);
+  const values = input?.values ?? {};
+  const answers = input?.answers ?? {};
+  const rulings = input?.rulings ?? {};
+  const bars = barsOf(def, input?.bars);
+  const definition = {
+    namespace: typeof def.settings.namespace === "string" ? def.settings.namespace : "",
+    name: typeof def.settings.name === "string" ? def.settings.name : "",
+    version: typeof def.settings.version === "string" && def.settings.version.trim() ? def.settings.version : null,
+  };
+  if (def.decisions.length > DMD_LIMITS.MAX_DECISIONS) {
+    return { definition, bars, results: [], problem: `the model has ${def.decisions.length} decisions, more than the ${DMD_LIMITS.MAX_DECISIONS} a decision model may have; nothing was run` };
+  }
+  const inputs = new Set((def.inputs ?? []).filter((i) => typeof i.name === "string" && i.name).map((i) => i.name));
   const done = new Map<string, DmdDecisionResult>();
-  const byName = new Map((def.decisions ?? []).filter((d) => d?.name).map((d) => [d.name, d]));
+  const order = decisionsInOrder(def);
+  const byName = new Map(order.map((d) => [d.name, d]));
 
   /** A required decision's single outcome, or the stop that says why it has none. */
   const outcomeOf = (name: string): string => {
@@ -154,7 +172,7 @@ export function evaluateDecisions(def: DecisionModelDefinition, input: DecisionR
         if (inputs.has(name)) {
           required(name);
           if (path.length) throw new RuleStop("error", `\`${name}\` is an input: \`${text}\` reads nothing`, name);
-          const v = values[name];
+          const v = own(values, name);
           if (typeof v !== "number" && typeof v !== "string" && typeof v !== "boolean") {
             throw new RuleStop("error", `the input \`${name}\` has no value in this run`, name);
           }
@@ -169,10 +187,11 @@ export function evaluateDecisions(def: DecisionModelDefinition, input: DecisionR
           if (r.status !== "answered" || !r.answer) throw new RuleStop("missing", `\`${name}\` has no valid answer`, name);
           const answer = r.answer as unknown as Record<string, unknown>;
           if (!path.length) throw new RuleStop("error", `\`${name}\` is a ${r.answer.type} answer, not one number: read one of its fields`, name);
-          const field = path[0] === "type" ? undefined : answer[path[0]];
+          // Only what the answer itself holds: `q.constructor` finds nothing.
+          const field = path[0] === "type" ? undefined : own(answer, path[0]);
           if (path.length === 1 && (typeof field === "number" || typeof field === "string")) return field;
           if (path.length === 2 && path[0] === "probabilities" && field && typeof field === "object") {
-            const p = (field as Record<string, unknown>)[path[1]];
+            const p = own(field as Record<string, unknown>, path[1]);
             if (typeof p === "number") return p;
           }
           throw new RuleStop("error", `a ${r.answer.type} answer has no \`${path.join(".")}\``, name);
@@ -219,15 +238,22 @@ export function evaluateDecisions(def: DecisionModelDefinition, input: DecisionR
     const trace: DmdRuleTrace[] = [];
     const held: number[] = [];
     const given: string[] = [];
+    // What this table requires that still awaits its owner: a person, or a table that waits on one.
+    const waitsOn = (d.requires ?? []).filter((r) => done.get(r)?.status === "awaiting_owner");
     const stop = (e: RuleStop, reads: Record<string, RuleValue>, n: number, when: string): DmdDecisionResult => {
       trace.push({ rule: n, when, held: null, reads, stopped: e.message });
       if (e.kind === "awaiting") return { ...base, status: "awaiting_owner", awaiting: e.subject ? [e.subject] : [], trace };
       if (e.kind === "missing") {
+        // A failure route is for an engine. While someone this table requires has not ruled, it never
+        // fires in their place, whichever of the two a rule happened to read first.
+        if (waitsOn.length) return { ...base, status: "awaiting_owner", awaiting: waitsOn, missing: e.subject ? [e.subject] : [], trace };
         const route = logic.failure?.then;
+        const routed = typeof route === "string" && outcomes.includes(route);
         return {
           ...base,
           status: "failed",
-          ...(route !== undefined && outcomes.includes(route) ? { outcome: route } : {}),
+          // A table that collects gives what it collected: its failure route is the one outcome it holds.
+          ...(routed ? (logic.hit === "collect" ? { outcomes: [route], rules: [] } : { outcome: route }) : {}),
           missing: e.subject ? [e.subject] : [],
           message: route === undefined ? "an answer the table reads is missing, and it declares no failure route" : `rule ${n} read an answer that is missing or invalid; the table goes to its failure route`,
           trace,
@@ -278,11 +304,11 @@ export function evaluateDecisions(def: DecisionModelDefinition, input: DecisionR
     return { ...base, status: "no_rule", message: "no rule holds", trace };
   };
 
-  for (const d of decisionsInOrder(def)) {
+  for (const d of order) {
     const logic = d.logic;
     let result: DmdDecisionResult;
     if (logic?.kind === "question") {
-      const reading = readAnswer(logic, answers[d.name]);
+      const reading = readAnswer(logic, own(answers, d.name));
       result =
         reading.status === "answered"
           ? { decision: d.name, kind: "question", status: "answered", answer: reading.answer }
@@ -293,8 +319,8 @@ export function evaluateDecisions(def: DecisionModelDefinition, input: DecisionR
       result = table(d, logic);
     } else if (logic?.kind === "person") {
       const who = typeof logic.who === "string" ? logic.who : "";
-      const ruling = rulings[d.name];
-      if (!ruling) {
+      const ruling = own(rulings, d.name);
+      if (!ruling || typeof ruling !== "object") {
         result = { decision: d.name, kind: "person", status: "awaiting_owner", who };
       } else if (typeof ruling.by !== "string" || !ruling.by.trim()) {
         result = { decision: d.name, kind: "person", status: "error", who, message: "the ruling does not say who ruled; a ruling is a person's, never a computed step" };
@@ -319,15 +345,7 @@ export function evaluateDecisions(def: DecisionModelDefinition, input: DecisionR
     done.set(d.name, result);
   }
 
-  return {
-    definition: {
-      namespace: def.settings?.namespace ?? "",
-      name: def.settings?.name ?? "",
-      version: typeof def.settings?.version === "string" && def.settings.version.trim() ? def.settings.version : null,
-    },
-    bars,
-    results: decisionsInOrder(def).map((d) => done.get(d.name)!),
-  };
+  return { definition, bars, results: order.map((d) => done.get(d.name)!) };
 }
 
 const short = (v: RuleValue): string => (typeof v === "number" ? String(Number(v.toFixed(4))) : JSON.stringify(v));
@@ -335,6 +353,7 @@ const short = (v: RuleValue): string => (typeof v === "number" ? String(Number(v
 /** A run as lines a person can read: each decision, and for a table the rule that decided and what it read. */
 export function formatDecisionRun(run: DecisionRun): string {
   const lines: string[] = [`${run.definition.name || "decision model"} ${run.definition.version ?? "(no version)"}`];
+  if (run.problem) lines.push(run.problem);
   const bars = Object.entries(run.bars);
   if (bars.length) lines.push(`bars: ${bars.map(([k, v]) => `${k} ${v}`).join(", ")}`);
   for (const r of run.results) {
@@ -373,9 +392,9 @@ export function formatDecisionRun(run: DecisionRun): string {
           ? `${r.outcomes.join(", ") || "nothing"} (rules ${(r.rules ?? []).join(", ") || "none"})`
           : `${r.outcome} (rule ${r.rule})`
         : r.status === "failed"
-          ? `${r.outcome ?? "no outcome"}, by its failure route (no valid answer for ${(r.missing ?? []).join(", ")})`
+          ? `${r.outcomes?.join(", ") ?? r.outcome ?? "no outcome"}, by its failure route (no valid answer for ${(r.missing ?? []).join(", ")})`
           : r.status === "awaiting_owner"
-            ? `awaiting its owner (${(r.awaiting ?? []).join(", ")})`
+            ? `awaiting its owner (${(r.awaiting ?? []).join(", ")})${r.missing?.length ? `; no valid answer for ${r.missing.join(", ")} either` : ""}`
             : `${r.status}: ${r.message ?? ""}`;
     lines.push(`${r.decision}: ${what}`);
     for (const t of r.trace ?? []) {

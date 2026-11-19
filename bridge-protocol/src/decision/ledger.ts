@@ -7,29 +7,40 @@
  * the document again, from the answers the line holds, and says for each
  * whether the tables give what was recorded. No engine is asked.
  *
- * Where a line does not hold something the replay needs, the run is reported
- * as not replayable, with the field it lacks. Nothing is assumed in its place:
- * a key that is absent is a ledger that never kept it, while a `null` is an
+ * Where a line does not hold something a table reads, the run is reported as
+ * not replayable, with the field it lacks. Nothing is assumed in its place: a
+ * key that is absent is a ledger that never kept it, while a `null` is an
  * engine that never answered, and the two are not the same finding.
  *
- * A ruling is compared with what it answered (the table's outcome, the
- * engine's choice), which is the count a person reads before moving a bar.
- * The loom never moves one.
+ * A ruling counts when it can stand: it names a run the ledger holds and a
+ * person's decision of the model, rules one of that decision's outcomes, and
+ * says who ruled. A ruling that cannot stand, and a withdrawal that finds no
+ * ruling, are reported and never counted.
  *
- * Pure — no I/O. The caller reads the file and hands over its parsed lines.
+ * Each ruling in force is compared with what the replay gives for the decisions
+ * it answered (the table's outcome, the engine's choice). Under the document's
+ * own bars that is what the ruling answered at the time; under bars a caller
+ * tries, it is what the ruling would have met. That count is what a person
+ * reads before moving a bar. The loom never moves one.
+ *
+ * Pure — no I/O. The caller reads the file and hands over its parsed lines,
+ * with `null` for a line it left out so the others keep their numbers.
  */
 import {
-  decisionOf,
   decisionsInOrder,
+  outcomesOf,
+  own,
+  safeModel,
   type DecisionModelDefinition,
   type DmdQuestionLogic,
 } from "./definition.js";
-import { evaluateDecisions, type DecisionRun, type DmdResultStatus, type DmdRuling } from "./evaluate.js";
+import { evaluateDecisions, type DecisionRun, type DmdDecisionResult, type DmdResultStatus, type DmdRuling } from "./evaluate.js";
 
 const isObject = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === "object" && !Array.isArray(x);
 
 /** The value at a dot-separated path, `undefined` when any step is absent. */
-function at(line: unknown, path: string): unknown {
+function at(line: unknown, path: unknown): unknown {
+  if (typeof path !== "string" || !path) return undefined;
   let here: unknown = line;
   for (const key of path.split(".")) {
     if (!isObject(here) || !Object.hasOwn(here, key)) return undefined;
@@ -47,9 +58,9 @@ export interface LedgerRun {
   version: string | null;
   values: Record<string, unknown>;
   answers: Record<string, unknown>;
-  /** The outcomes the line recorded, by decision. */
+  /** The outcomes the line recorded, by decision. A table that collects is recorded as its outcomes joined by ", ". */
   recorded: Record<string, string>;
-  /** What a replay needs and the line never kept, each with where it was looked for. */
+  /** What a table reads and the line never kept, each with where it was looked for. */
   lacks: string[];
 }
 
@@ -65,13 +76,18 @@ export interface LedgerRuling {
   at?: string;
   /** False once a later line withdrew it. */
   standing: boolean;
+  /** Why it cannot stand, when it cannot: it is then reported and never counted. */
+  unusable?: string;
 }
 
 export interface LedgerReading {
+  /** The lines read: every line the caller handed over that is not `null`. */
   lines: number;
   runs: LedgerRun[];
   rulings: LedgerRuling[];
   withdrawals: number;
+  /** The line numbers of withdrawals that found no ruling to withdraw. */
+  unmatched_withdrawals: number[];
   /** Lines that are none of the three. */
   other: number;
 }
@@ -82,67 +98,71 @@ const ANSWER_PARTS: Record<DmdQuestionLogic["type"], string[]> = {
   score: ["score", "confidence", "probabilities"],
 };
 
-export function readLedger(def: DecisionModelDefinition, lines: readonly unknown[]): LedgerReading {
+export function readLedger(model: DecisionModelDefinition, lines: readonly unknown[]): LedgerReading {
+  const def = safeModel(model);
   const record = def.rulings?.record;
-  const key = def.rulings?.key || "decision_id";
+  const key = typeof def.rulings?.key === "string" && def.rulings.key ? def.rulings.key : "decision_id";
   const decisions = decisionsInOrder(def);
+  const byName = new Map(decisions.map((d) => [d.name, d]));
   const questions = decisions.filter((d) => d.logic?.kind === "question");
   const persons = decisions.filter((d) => d.logic?.kind === "person");
-  // Only what a table reads is needed to replay a table: a question's answer, and an input a table requires.
-  const tableInputs = new Set<string>();
-  const inputNames = new Set((def.inputs ?? []).map((i) => i?.name));
-  for (const d of decisions) {
-    if (d.logic?.kind === "table") for (const r of d.requires ?? []) if (inputNames.has(r)) tableInputs.add(r);
-  }
+  // Only what a table reads is needed to replay a table: an answer or an input it requires.
+  const tableReads = new Set<string>();
+  for (const d of decisions) if (d.logic?.kind === "table") for (const r of d.requires ?? []) tableReads.add(r);
 
-  const out: LedgerReading = { lines: lines.length, runs: [], rulings: [], withdrawals: 0, other: 0 };
+  const out: LedgerReading = { lines: 0, runs: [], rulings: [], withdrawals: 0, unmatched_withdrawals: [], other: 0 };
   lines.forEach((line, i) => {
+    if (line === null || line === undefined) return;
+    out.lines += 1;
     const kind = isObject(line) ? line.kind : undefined;
     if (kind === "decision") {
       const lacks: string[] = [];
       const values: Record<string, unknown> = {};
       for (const input of def.inputs ?? []) {
-        if (!input?.name) continue;
-        const path = record?.values?.[input.name] ?? `values.${input.name}`;
+        if (typeof input.name !== "string" || !input.name) continue;
+        const path = own(record?.values, input.name) ?? `values.${input.name}`;
         const v = at(line, path);
         if (v !== undefined) values[input.name] = v;
-        else if (tableInputs.has(input.name)) lacks.push(`the value of ${input.name} (${path})`);
+        else if (tableReads.has(input.name)) lacks.push(`the value of ${input.name} (${path})`);
       }
       const answers: Record<string, unknown> = {};
       for (const q of questions) {
         const logic = q.logic as DmdQuestionLogic;
-        const map = record?.answers?.[q.name];
+        const needed = tableReads.has(q.name);
+        const map = own(record?.answers, q.name);
         if (!map) {
           const v = at(line, `answers.${q.name}`);
-          if (v === undefined) lacks.push(`the answer of ${q.name} (answers.${q.name})`);
-          else answers[q.name] = v;
+          if (v !== undefined) answers[q.name] = v;
+          else if (needed) lacks.push(`the answer of ${q.name} (answers.${q.name})`);
           continue;
         }
-        const parts = (ANSWER_PARTS[logic.type] ?? []).map((part) => ({ part, path: map[part], value: map[part] ? at(line, map[part]) : undefined }));
+        const parts = (own(ANSWER_PARTS, logic.type) ?? []).map((part) => ({ part, path: own(map, part), value: at(line, own(map, part)) }));
         const absent = parts.filter((p) => p.value === undefined);
-        if (absent.length) {
-          lacks.push(`the answer of ${q.name} (${absent.map((p) => p.path ?? `no path for ${p.part}`).join(", ")})`);
+        if (absent.length || !parts.length) {
+          if (needed) lacks.push(`the answer of ${q.name} (${absent.map((p) => p.path ?? `no path for ${p.part}`).join(", ") || "no question type"})`);
           continue;
         }
         // Every part null: the engine was asked and gave nothing. That is a recorded fact, and it replays as one.
         answers[q.name] = parts.every((p) => p.value === null) ? null : Object.fromEntries(parts.map((p) => [p.part, p.value]));
       }
       const recorded: Record<string, string> = {};
+      const keep = (name: string, v: unknown): void => {
+        if (!byName.has(name)) return;
+        if (typeof v === "string") recorded[name] = v;
+        else if (Array.isArray(v) && v.every((x) => typeof x === "string")) recorded[name] = v.join(", ");
+      };
       const mapped = record?.outcomes;
-      if (mapped) {
-        for (const [name, path] of Object.entries(mapped)) {
-          const v = at(line, path);
-          if (typeof v === "string") recorded[name] = v;
-        }
-      } else {
-        const own = at(line, "outcomes");
-        if (isObject(own)) for (const [name, v] of Object.entries(own)) if (typeof v === "string") recorded[name] = v;
+      if (mapped) for (const [name, path] of Object.entries(mapped)) keep(name, at(line, path));
+      else {
+        const written = at(line, "outcomes");
+        if (isObject(written)) for (const [name, v] of Object.entries(written)) keep(name, v);
       }
       const version = at(line, record?.version ?? "definition.version");
       const when = at(line, "at");
+      const id = (line as Record<string, unknown>).id;
       out.runs.push({
         line: i + 1,
-        id: typeof (line as Record<string, unknown>).id === "string" ? ((line as Record<string, unknown>).id as string) : null,
+        id: typeof id === "string" ? id : null,
         ...(typeof when === "string" ? { at: when } : {}),
         version: typeof version === "string" ? version : null,
         values,
@@ -163,7 +183,7 @@ export function readLedger(def: DecisionModelDefinition, lines: readonly unknown
       out.rulings.push({
         line: i + 1,
         run: typeof l[key] === "string" ? (l[key] as string) : null,
-        decision: named,
+        decision: typeof named === "string" ? named : null,
         outcome: text(record?.ruling?.outcome ?? "outcome"),
         by: text(record?.ruling?.by ?? "decided_by"),
         words: text(record?.ruling?.words ?? "words"),
@@ -177,14 +197,41 @@ export function readLedger(def: DecisionModelDefinition, lines: readonly unknown
       const l = line as Record<string, unknown>;
       const run = typeof l[key] === "string" ? (l[key] as string) : null;
       const stamp = typeof l.withdrawn_ruling_at === "string" ? l.withdrawn_ruling_at : null;
-      // The ruling it names by its time, else the last one given on that run.
-      const candidates = out.rulings.filter((r) => r.standing && r.run === run && (stamp === null || r.at === stamp));
+      const decision = typeof l.decision === "string" ? l.decision : null;
+      // The ruling it names by its time, else the last one given on that run (for that decision, when it names one).
+      const candidates = out.rulings.filter(
+        (r) => r.standing && r.run === run && (stamp === null || r.at === stamp) && (decision === null || r.decision === decision),
+      );
       const target = candidates[candidates.length - 1];
       if (target) target.standing = false;
+      else out.unmatched_withdrawals.push(i + 1);
       return;
     }
     out.other += 1;
   });
+
+  // A ruling that cannot stand is said to, with why. It is never counted and never given to a run.
+  const runIds = new Set(out.runs.map((r) => r.id).filter((id): id is string => id !== null));
+  for (const r of out.rulings) {
+    const person = r.decision ? byName.get(r.decision) : undefined;
+    const why =
+      r.run === null
+        ? `it names no run (no "${key}")`
+        : !runIds.has(r.run)
+          ? `the ledger holds no run "${r.run}"`
+          : !person || person.logic?.kind !== "person"
+            ? r.decision
+              ? `"${r.decision}" is not a person's decision of the model`
+              : "it does not say which person's decision it rules, and the model has more than one"
+            : r.outcome === null
+              ? "it rules nothing (no outcome)"
+              : !outcomesOf(person).includes(r.outcome)
+                ? `it rules "${r.outcome}", which is not an outcome of "${person.name}"`
+                : !r.by?.trim()
+                  ? "it does not say who ruled"
+                  : undefined;
+    if (why) r.unusable = why;
+  }
   return out;
 }
 
@@ -197,6 +244,17 @@ export interface LedgerReplayOutcome {
   same: boolean;
 }
 
+/** A ruling in force on a run, and how it compares with what the replay gives for the decisions it answered. */
+export interface LedgerRulingInForce {
+  decision: string;
+  outcome: string;
+  by: string;
+  words: string | null;
+  at?: string;
+  line: number;
+  against: Record<string, "same" | "different">;
+}
+
 export interface LedgerReplayRun {
   id: string | null;
   line: number;
@@ -206,22 +264,14 @@ export interface LedgerReplayRun {
   version_matches: boolean | null;
   replayable: boolean;
   lacks: string[];
-  /** The replayed run, with its rule trace. Null when the line lacks what a replay needs. */
+  /** The replayed run, with its rule trace. Null when the line lacks what a table reads. */
   run: DecisionRun | null;
   /** Each recorded outcome beside what the replay gives. */
   outcomes: Record<string, LedgerReplayOutcome>;
   /** Every recorded outcome replays as recorded. Null when not replayable, or when the line recorded none. */
   same: boolean | null;
-  /** The ruling in force on this run, and how it compares with what it answered. */
-  ruling?: {
-    decision: string | null;
-    outcome: string | null;
-    by: string | null;
-    words: string | null;
-    at?: string;
-    line: number;
-    against: Record<string, "same" | "different">;
-  };
+  /** The rulings in force on this run: one per person's decision, the last that still stands. */
+  rulings: LedgerRulingInForce[];
 }
 
 export interface LedgerReplay {
@@ -235,32 +285,54 @@ export interface LedgerReplay {
   not_replayable: number;
   version_differs: number;
   rulings: {
-    /** One per run: the last ruling on it that still stands. */
+    /** Rulings in force: one per run and person's decision, the last that still stands and can stand. */
     in_force: number;
     withdrawn: number;
+    /** Rulings that cannot stand, each with why. Never counted. */
+    unusable: { line: number; why: string }[];
+    /** Withdrawals that found no ruling, by line. */
+    unmatched_withdrawals: number[];
     bar_after: number | null;
-    /** Whether `bar_after` rulings stand. Null when the document sets no count. */
+    /** The person's decision whose rulings are counted against `bar_after`: `rulings.decision`, or every one. */
+    counted: string | null;
+    /** Whether `bar_after` of them stand. Null when the document sets no count. */
     reached: boolean | null;
-    /** Per decision a ruling answered: how many rulings said the same, and how many differed. */
+    /** Per decision a ruling answered: how many rulings said the same as the replay gives, and how many differed. */
     against: Record<string, { same: number; different: number }>;
   };
   runs: LedgerReplayRun[];
 }
 
+/** What a decision gives as one text: its outcome, a choice's option, what a collecting table collected. */
+function valueOf(r: DmdDecisionResult | undefined): string | null {
+  if (!r) return null;
+  if (r.kind === "question") return r.answer?.type === "choice" ? r.answer.choice : null;
+  if (r.outcomes) return r.outcomes.join(", ");
+  return r.outcome ?? null;
+}
+
 /** Replay every recorded run. `bars` tries other bar values on the same answers. */
 export function replayLedger(
-  def: DecisionModelDefinition,
+  model: DecisionModelDefinition,
   lines: readonly unknown[],
-  opts: { bars?: Record<string, number> } = {},
+  opts: { bars?: Record<string, number> | null } = {},
 ): LedgerReplay {
+  const def = safeModel(model);
   const reading = readLedger(def, lines);
-  const current = typeof def.settings?.version === "string" && def.settings.version.trim() ? def.settings.version : null;
-  const inForce = new Map<string, LedgerRuling>();
-  for (const r of reading.rulings) if (r.standing && r.run) inForce.set(r.run, r);
+  const current = typeof def.settings.version === "string" && def.settings.version.trim() ? def.settings.version : null;
+  const requiresOf = new Map(decisionsInOrder(def).map((d) => [d.name, d.requires ?? []]));
 
-  const against: Record<string, { same: number; different: number }> = {};
+  // In force: per run and person's decision, the last ruling that still stands and can stand.
+  const inForce = new Map<string, Map<string, LedgerRuling>>();
+  for (const r of reading.rulings) {
+    if (!r.standing || r.unusable || !r.run || !r.decision) continue;
+    if (!inForce.has(r.run)) inForce.set(r.run, new Map());
+    inForce.get(r.run)!.set(r.decision, r);
+  }
+
+  const against = new Map<string, { same: number; different: number }>();
   const runs: LedgerReplayRun[] = reading.runs.map((recorded) => {
-    const ruling = recorded.id ? inForce.get(recorded.id) : undefined;
+    const held = [...(recorded.id ? (inForce.get(recorded.id)?.values() ?? []) : [])];
     const base = {
       id: recorded.id,
       line: recorded.line,
@@ -269,56 +341,61 @@ export function replayLedger(
       version_matches: recorded.version === null ? null : recorded.version === current,
       lacks: recorded.lacks,
     };
-    const rulingOf = (how: Record<string, "same" | "different">): LedgerReplayRun["ruling"] =>
-      ruling
-        ? { decision: ruling.decision, outcome: ruling.outcome, by: ruling.by, words: ruling.words, ...(ruling.at ? { at: ruling.at } : {}), line: ruling.line, against: how }
-        : undefined;
+    const inForceOf = (how: (r: LedgerRuling) => Record<string, "same" | "different">): LedgerRulingInForce[] =>
+      held.map((r) => ({
+        decision: r.decision as string,
+        outcome: r.outcome as string,
+        by: r.by as string,
+        words: r.words,
+        ...(r.at ? { at: r.at } : {}),
+        line: r.line,
+        against: how(r),
+      }));
     if (recorded.lacks.length) {
-      const held = rulingOf({});
-      return { ...base, replayable: false, run: null, outcomes: {}, same: null, ...(held ? { ruling: held } : {}) };
+      return { ...base, replayable: false, run: null, outcomes: {}, same: null, rulings: inForceOf(() => ({})) };
     }
 
-    const given: Record<string, DmdRuling> = {};
-    if (ruling?.decision && ruling.outcome && ruling.by) {
-      given[ruling.decision] = { outcome: ruling.outcome, by: ruling.by, words: ruling.words, ...(ruling.at ? { at: ruling.at } : {}) };
-    }
+    const given: Record<string, DmdRuling> = Object.fromEntries(
+      held.map((r) => [r.decision as string, { outcome: r.outcome as string, by: r.by as string, words: r.words, ...(r.at ? { at: r.at } : {}) }]),
+    );
     const run = evaluateDecisions(def, { values: recorded.values, answers: recorded.answers, rulings: given, bars: opts.bars });
-    const outcomes: Record<string, LedgerReplayOutcome> = {};
-    for (const [name, was] of Object.entries(recorded.recorded)) {
-      const r = run.results.find((x) => x.decision === name);
-      const replayed = r?.kind === "question" ? (r.answer?.type === "choice" ? r.answer.choice : null) : (r?.outcome ?? null);
-      outcomes[name] = { recorded: was, replayed, status: r?.status ?? "error", rule: r?.rule ?? null, same: replayed === was };
-    }
+    const resultOf = new Map(run.results.map((r) => [r.decision, r]));
+    const outcomes: Record<string, LedgerReplayOutcome> = Object.fromEntries(
+      Object.entries(recorded.recorded).map(([name, was]) => {
+        const r = resultOf.get(name);
+        const replayed = valueOf(r);
+        return [name, { recorded: was, replayed, status: r?.status ?? "error", rule: r?.rule ?? null, same: replayed === was }];
+      }),
+    );
     const compared = Object.values(outcomes);
-
-    const how: Record<string, "same" | "different"> = {};
-    if (ruling?.decision && ruling.outcome) {
-      for (const name of decisionOf(def, ruling.decision)?.requires ?? []) {
-        const r = run.results.find((x) => x.decision === name);
-        if (!r) continue;
-        const value = r.kind === "question" ? (r.answer?.type === "choice" ? r.answer.choice : undefined) : r.outcome;
-        if (value === undefined) continue;
-        how[name] = value === ruling.outcome ? "same" : "different";
-        against[name] ??= { same: 0, different: 0 };
-        against[name][how[name]] += 1;
+    const rulings = inForceOf((ruling) => {
+      const how = new Map<string, "same" | "different">();
+      for (const name of requiresOf.get(ruling.decision as string) ?? []) {
+        const value = valueOf(resultOf.get(name));
+        if (value === null) continue;
+        const verdict = value === ruling.outcome ? "same" : "different";
+        how.set(name, verdict);
+        const tally = against.get(name) ?? { same: 0, different: 0 };
+        tally[verdict] += 1;
+        against.set(name, tally);
       }
-    }
-    const held = rulingOf(how);
-    return {
-      ...base,
-      replayable: true,
-      run,
-      outcomes,
-      same: compared.length ? compared.every((o) => o.same) : null,
-      ...(held ? { ruling: held } : {}),
-    };
+      return Object.fromEntries(how);
+    });
+    return { ...base, replayable: true, run, outcomes, same: compared.length ? compared.every((o) => o.same) : null, rulings };
   });
 
   const barAfter = Number.isInteger(def.rulings?.bar_after) ? (def.rulings!.bar_after as number) : null;
+  const counted = typeof def.rulings?.decision === "string" ? def.rulings.decision : null;
+  let inForceCount = 0;
+  for (const perRun of inForce.values()) for (const decision of perRun.keys()) if (counted === null || decision === counted) inForceCount += 1;
   const replayed = runs.filter((r) => r.replayable);
   return {
-    definition: { namespace: def.settings?.namespace ?? "", name: def.settings?.name ?? "", version: current },
-    bars: replayed[0]?.run?.bars ?? evaluateDecisions(def, { bars: opts.bars }).bars,
+    definition: {
+      namespace: typeof def.settings.namespace === "string" ? def.settings.namespace : "",
+      name: typeof def.settings.name === "string" ? def.settings.name : "",
+      version: current,
+    },
+    bars: evaluateDecisions(def, { bars: opts.bars }).bars,
     lines: reading.lines,
     counts: { runs: reading.runs.length, rulings: reading.rulings.length, withdrawals: reading.withdrawals, other: reading.other },
     replayed: replayed.length,
@@ -327,11 +404,14 @@ export function replayLedger(
     not_replayable: runs.length - replayed.length,
     version_differs: runs.filter((r) => r.version_matches === false).length,
     rulings: {
-      in_force: inForce.size,
+      in_force: inForceCount,
       withdrawn: reading.rulings.filter((r) => !r.standing).length,
+      unusable: reading.rulings.filter((r) => r.standing && r.unusable).map((r) => ({ line: r.line, why: r.unusable as string })),
+      unmatched_withdrawals: reading.unmatched_withdrawals,
       bar_after: barAfter,
-      reached: barAfter === null ? null : inForce.size >= barAfter,
-      against,
+      counted,
+      reached: barAfter === null ? null : inForceCount >= barAfter,
+      against: Object.fromEntries(against),
     },
     runs,
   };
@@ -358,8 +438,14 @@ export function formatLedgerReplay(replay: LedgerReplay): string {
     const parts = Object.entries(r.outcomes).map(
       ([name, o]) => `${name} ${o.replayed ?? `no outcome (${o.status})`}${o.rule ? ` by rule ${o.rule}` : ""}, recorded ${o.recorded}: ${o.same ? "same" : "DIFFERENT"}`,
     );
-    const ruled = r.ruling
-      ? ` · ruled ${r.ruling.outcome ?? "?"} by ${r.ruling.by ?? "?"}${Object.keys(r.ruling.against).length ? ` (${Object.entries(r.ruling.against).map(([k, v]) => `${v === "same" ? "as" : "against"} ${k}`).join(", ")})` : ""}`
+    const many = r.rulings.length > 1;
+    const ruled = r.rulings.length
+      ? r.rulings
+          .map((g) => {
+            const how = Object.entries(g.against).map(([k, v]) => `${v === "same" ? "as" : "against"} ${k}`).join(", ");
+            return ` · ${many ? `${g.decision} ` : ""}ruled ${g.outcome} by ${g.by}${how ? ` (${how})` : ""}`;
+          })
+          .join("")
       : " · no ruling";
     const version = r.version_matches === false ? ` · recorded under ${r.version}` : "";
     lines.push(`${head}: ${parts.join("; ") || "no outcome recorded"}${ruled}${version}`);
@@ -367,7 +453,9 @@ export function formatLedgerReplay(replay: LedgerReplay): string {
   const g = replay.rulings;
   const tally = Object.entries(g.against).map(([k, v]) => `${k}: ${v.same} the same, ${v.different} different`).join("; ");
   lines.push(
-    `rulings in force: ${g.in_force}${g.withdrawn ? ` (${g.withdrawn} withdrawn)` : ""}${g.bar_after !== null ? `, of the ${g.bar_after} after which a person may set a bar: ${g.reached ? "reached" : "not reached"}` : ""}${tally ? ` · ${tally}` : ""}`,
+    `rulings in force${g.counted ? ` on ${g.counted}` : ""}: ${g.in_force}${g.withdrawn ? ` (${g.withdrawn} withdrawn)` : ""}${g.bar_after !== null ? `, of the ${g.bar_after} after which a person may set a bar: ${g.reached ? "reached" : "not reached"}` : ""}${tally ? ` · compared with what the replay gives, ${tally}` : ""}`,
   );
+  for (const u of g.unusable) lines.push(`the ruling on line ${u.line} is not counted: ${u.why}`);
+  if (g.unmatched_withdrawals.length) lines.push(`the withdrawal(s) on line ${g.unmatched_withdrawals.join(", ")} found no ruling to withdraw`);
   return lines.join("\n");
 }

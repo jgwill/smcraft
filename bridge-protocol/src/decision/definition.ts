@@ -76,7 +76,7 @@ export type DmdQuestionType = "noul" | "choice" | "score";
 
 export const DMD_QUESTION_TYPES: readonly DmdQuestionType[] = ["noul", "choice", "score"];
 
-/** The engine's published limits (Jev, Episode 564 study part 1.2). */
+/** The engine's published limits (Jev, Episode 564 study part 1.2), and the loom's own bound on a model's size. */
 export const DMD_LIMITS = {
   MIN_CHOICE_OPTIONS: 2,
   MAX_CHOICE_OPTIONS: 255,
@@ -84,6 +84,8 @@ export const DMD_LIMITS = {
   MAX_SCORE_LEVELS: 10,
   /** How far a distribution may be from summing to one. */
   SUM_TOLERANCE: 0.025,
+  /** A model with more decisions than this is refused, and is not run. */
+  MAX_DECISIONS: 500,
 } as const;
 
 export interface DmdQuestionLogic {
@@ -253,6 +255,88 @@ export function isDecisionModelDefinition(doc: unknown): doc is DecisionModelDef
   );
 }
 
+const isObject = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === "object" && !Array.isArray(x);
+
+/**
+ * The value a document's map gives a name, and only its own: a name such as
+ * `constructor` finds nothing where the document wrote nothing.
+ */
+export function own<T>(map: Record<string, T> | null | undefined, key: string): T | undefined {
+  return isObject(map) && Object.hasOwn(map, key) ? (map as Record<string, T>)[key] : undefined;
+}
+
+/**
+ * A name no input, decision, bar, group or option may take: one every
+ * JavaScript object already carries (`constructor`, `toString`, `__proto__`).
+ * A document that used one would have its lookups answered by the language.
+ */
+export function isReservedName(name: unknown): boolean {
+  return typeof name === "string" && name in Object.prototype;
+}
+
+const namesIn = (x: unknown): string[] => (Array.isArray(x) ? x.filter((s): s is string => typeof s === "string") : []);
+const objectsIn = <T>(x: unknown): T[] => (Array.isArray(x) ? (x.filter(isObject) as T[]) : []);
+const textMap = (x: unknown): Record<string, string> | undefined =>
+  isObject(x) ? Object.fromEntries(Object.entries(x).filter(([, v]) => typeof v === "string")) as Record<string, string> : undefined;
+
+/**
+ * The document as every reader but the validator sees it: each list is a list
+ * and each map a map, whatever a hand or an agent wrote in their place. What is
+ * mis-shaped is left out here and REPORTED by `validateDecisionModel`, so a
+ * document that is wrong is said to be wrong and never makes a reader throw.
+ *
+ * Pure. Returns a new document; the input is untouched. A document this
+ * function made is returned as it is, so asking twice costs nothing.
+ */
+export function safeModel(def: unknown): DecisionModelDefinition {
+  if (isObject(def) && SAFE.has(def)) return def as unknown as DecisionModelDefinition;
+  const d = isObject(def) ? def : {};
+  const settings = isObject(d.settings) ? (d.settings as unknown as DmdSettings) : ({ namespace: "", name: "" } as DmdSettings);
+  const decisions = objectsIn<Record<string, unknown>>(d.decisions).map((raw) => {
+    const logic = isObject(raw.logic) ? { ...raw.logic } : undefined;
+    if (logic) {
+      if ("rules" in logic) logic.rules = objectsIn(logic.rules);
+      if ("levels" in logic) logic.levels = namesIn(logic.levels);
+      if ("options" in logic) logic.options = textMap(logic.options) ?? {};
+      if ("criteria" in logic && !isObject(logic.criteria)) delete logic.criteria;
+      if ("failure" in logic && !isObject(logic.failure)) delete logic.failure;
+    }
+    const next: Record<string, unknown> = { ...raw, logic };
+    for (const key of ["requires", "knowledge", "authority"]) if (key in raw) next[key] = namesIn(raw[key]);
+    if ("outcomes" in raw) {
+      if (Array.isArray(raw.outcomes)) next.outcomes = namesIn(raw.outcomes);
+      else delete next.outcomes;
+    }
+    if ("events" in raw) next.events = textMap(raw.events) ?? {};
+    return next as unknown as DmdDecision;
+  });
+  const out: DecisionModelDefinition = { settings, decisions };
+  if ("inputs" in d) out.inputs = objectsIn<DmdInput>(d.inputs);
+  if ("knowledge" in d) out.knowledge = objectsIn<DmdKnowledge>(d.knowledge);
+  if ("groups" in d) out.groups = objectsIn<Record<string, unknown>>(d.groups).map((g) => ({ ...g, questions: namesIn(g.questions) }) as unknown as DmdGroup);
+  if ("bars" in d) out.bars = objectsIn<DmdBar>(d.bars);
+  if (isObject(d.binding)) out.binding = d.binding as DmdBinding;
+  if (isObject(d.rulings)) {
+    const rulings = { ...d.rulings } as Record<string, unknown>;
+    if (isObject(rulings.record)) {
+      const record = { ...rulings.record } as Record<string, unknown>;
+      if (typeof record.version !== "string") delete record.version;
+      for (const key of ["values", "outcomes", "ruling"]) if (key in record) record[key] = textMap(record[key]) ?? {};
+      if ("answers" in record) {
+        record.answers = isObject(record.answers)
+          ? Object.fromEntries(Object.entries(record.answers).map(([name, fields]) => [name, textMap(fields) ?? {}]))
+          : {};
+      }
+      rulings.record = record;
+    } else delete rulings.record;
+    out.rulings = rulings as DmdRulings;
+  }
+  SAFE.add(out);
+  return out;
+}
+
+const SAFE = new WeakSet<object>();
+
 export function emptyDecisionModel(namespace: string, name: string, description?: string): DecisionModelDefinition {
   return {
     settings: description ? { namespace, name, description, version: "0.1.0" } : { namespace, name, version: "0.1.0" },
@@ -263,20 +347,27 @@ export function emptyDecisionModel(namespace: string, name: string, description?
 }
 
 export function decisionOf(def: DecisionModelDefinition, name: string): DmdDecision | undefined {
-  return (def.decisions ?? []).find((d) => d?.name === name);
+  return safeModel(def).decisions.find((d) => d.name === name);
 }
 
-/** What a decision can decide: its `outcomes`, or a choice question's option keys. */
+/**
+ * What a decision can decide. A choice question decides one of its options,
+ * whatever `outcomes` it also writes (D005 asks that they agree): the option
+ * the engine picks is the value a table takes `from` it. Every other decision
+ * decides one of its `outcomes`.
+ */
 export function outcomesOf(decision: DmdDecision | undefined): string[] {
   if (!decision) return [];
+  if (decision.logic?.kind === "question" && decision.logic.type === "choice") {
+    return isObject(decision.logic.options) ? Object.keys(decision.logic.options) : [];
+  }
   if (Array.isArray(decision.outcomes)) return decision.outcomes.filter((o) => typeof o === "string");
-  if (decision.logic?.kind === "question" && decision.logic.type === "choice") return Object.keys(decision.logic.options ?? {});
   return [];
 }
 
 /** The event an outcome fires, when the decision drives a machine. */
 export function eventOf(decision: DmdDecision, outcome: string): string | undefined {
-  return decision.events?.[outcome] ?? decision.event;
+  return own(decision.events, outcome) ?? decision.event;
 }
 
 /** The provider's model in force: `binding.model`, else draft 0.1's `settings.engine`. */
@@ -286,12 +377,22 @@ export function bindingOf(def: DecisionModelDefinition): DmdBinding {
   return binding;
 }
 
-/** The bars in force for a run: the document's, with the caller's overrides on top. */
-export function barsOf(def: DecisionModelDefinition, overrides: Record<string, number> = {}): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const b of def.bars ?? []) if (b?.name && typeof b.value === "number") out[b.name] = b.value;
-  for (const [name, value] of Object.entries(overrides)) if (name in out && typeof value === "number") out[name] = value;
-  return out;
+/**
+ * The bars in force for a run: the document's, with the caller's overrides on
+ * top. An override names a bar the document has, or it is ignored: a caller
+ * tries a value, it never adds a bar.
+ */
+export function barsOf(def: DecisionModelDefinition, overrides?: Record<string, number> | null): Record<string, number> {
+  const bars = new Map<string, number>();
+  for (const b of Array.isArray(def.bars) ? def.bars : []) {
+    if (b && typeof b.name === "string" && b.name && !isReservedName(b.name) && typeof b.value === "number" && Number.isFinite(b.value)) {
+      bars.set(b.name, b.value);
+    }
+  }
+  for (const [name, value] of Object.entries(isObject(overrides) ? overrides : {})) {
+    if (bars.has(name) && typeof value === "number" && Number.isFinite(value)) bars.set(name, value);
+  }
+  return Object.fromEntries(bars);
 }
 
 /**
@@ -300,7 +401,7 @@ export function barsOf(def: DecisionModelDefinition, overrides: Record<string, n
  * order, so a reader still meets every decision once.
  */
 export function decisionsInOrder(def: DecisionModelDefinition): DmdDecision[] {
-  const all = (def.decisions ?? []).filter((d) => d?.name);
+  const all = safeModel(def).decisions.filter((d) => typeof d.name === "string" && d.name);
   const names = new Set(all.map((d) => d.name));
   const placed = new Set<string>();
   const out: DmdDecision[] = [];
@@ -322,19 +423,21 @@ export function decisionsInOrder(def: DecisionModelDefinition): DmdDecision[] {
 
 /** Every question a decision depends on, through any number of decisions. */
 export function questionsBehind(def: DecisionModelDefinition, name: string): Set<string> {
+  const byName = new Map(safeModel(def).decisions.map((d) => [d.name, d]));
   const out = new Set<string>();
   const seen = new Set<string>();
-  const walk = (n: string): void => {
-    for (const r of decisionOf(def, n)?.requires ?? []) {
+  // A list to walk, not a call per step: a long chain of requirements never exhausts the stack.
+  const todo = [name];
+  while (todo.length) {
+    for (const r of byName.get(todo.pop() as string)?.requires ?? []) {
       if (seen.has(r)) continue;
       seen.add(r);
-      const d = decisionOf(def, r);
+      const d = byName.get(r);
       if (!d) continue;
       if (d.logic?.kind === "question") out.add(r);
-      walk(r);
+      todo.push(r);
     }
-  };
-  walk(name);
+  }
   return out;
 }
 
@@ -351,19 +454,28 @@ export interface DmdRequestGroup {
  * that wait on no other question share one request (`default`), and each
  * question that needs another's answer is a request of its own.
  */
-export function requestGroups(def: DecisionModelDefinition): DmdRequestGroup[] {
+export function requestGroups(model: DecisionModelDefinition): DmdRequestGroup[] {
+  const def = safeModel(model);
   const questions = decisionsInOrder(def).filter((d) => d.logic?.kind === "question");
   const out: DmdRequestGroup[] = [];
   const grouped = new Set<string>();
   for (const g of def.groups ?? []) {
-    if (!g?.name) continue;
+    if (typeof g.name !== "string" || !g.name) continue;
     const members = (g.questions ?? []).filter((q) => questions.some((d) => d.name === q));
     members.forEach((q) => grouped.add(q));
     out.push({ name: g.name, questions: members, declared: true });
   }
+  // A request the loom makes never takes the name of one the document wrote (D010 refuses the clash too).
+  const taken = new Set(out.map((g) => g.name));
+  const named = (want: string): string => {
+    let name = want;
+    for (let n = 2; taken.has(name); n += 1) name = `${want}-${n}`;
+    taken.add(name);
+    return name;
+  };
   const free = questions.filter((d) => !grouped.has(d.name));
   const independent = free.filter((d) => questionsBehind(def, d.name).size === 0).map((d) => d.name);
-  if (independent.length) out.push({ name: "default", questions: independent, declared: false });
-  for (const d of free) if (questionsBehind(def, d.name).size > 0) out.push({ name: d.name, questions: [d.name], declared: false });
+  if (independent.length) out.push({ name: named("default"), questions: independent, declared: false });
+  for (const d of free) if (questionsBehind(def, d.name).size > 0) out.push({ name: named(d.name), questions: [d.name], declared: false });
   return out;
 }

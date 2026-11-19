@@ -205,7 +205,7 @@ test("replay_decision_ledger replays Episode 564's recorded runs to their record
     assert.equal(text[8], "ag-20261114183703040: band hold_for_person by rule 2, recorded hold_for_person: same · ruled look_first by mia (against band, as advance)");
     assert.equal(
       text[11],
-      "rulings in force: 7 (1 withdrawn), of the 20 after which a person may set a bar: not reached · band: 1 the same, 6 different; advance: 6 the same, 1 different",
+      "rulings in force on ruling: 7 (1 withdrawn), of the 20 after which a person may set a bar: not reached · compared with what the replay gives, band: 1 the same, 6 different; advance: 6 the same, 1 different",
     );
     // The whole replay as JSON is the protocol's, run for run and rule for rule.
     assert.deepEqual(JSON.parse(replayed.blocks[1]), JSON.parse(JSON.stringify(replayLedger(r.read(), r.lines()))));
@@ -225,12 +225,18 @@ test("a line the replay cannot read is said to, and a ledger is read only where 
   try {
     const lines = r.lines();
     delete lines[0].triggers.credential;
-    writeFileSync(join(r.dir, "partial.jsonl"), lines.map((l) => JSON.stringify(l)).join("\n") + "\nnot json\n");
-    const partial = await r.call("replay_decision_ledger", { ledger: "partial.jsonl" });
+    // A blank line in the middle: every line after it keeps the number it has in the file.
+    const written = lines.map((l) => JSON.stringify(l));
+    writeFileSync(join(r.dir, "partial.jsonl"), [...written.slice(0, 8), "", ...written.slice(8), "not json", ""].join("\n"));
+    const partial = await r.call("replay_decision_ledger", { ledger: "partial.jsonl", json: true });
     assert.equal(partial.isError, false, partial.text);
+    assert.match(partial.text, /AdvanceGate 0\.1\.0: 17 line\(s\), of which 7 run\(s\), 8 ruling\(s\), 1 withdrawal\(s\), 1 other/);
     assert.match(partial.text, /6 of 7 run\(s\) replayed: 6 give what was recorded, 0 differ, 1 cannot be replayed/);
     assert.match(partial.text, /ag-20261114180612587: cannot be replayed, the line lacks the answer of credential \(triggers\.credential\)/);
-    assert.match(partial.text, /1 line\(s\) are not JSON and were not read: 17/);
+    assert.match(partial.text, /1 line\(s\) are not JSON and were not read: 18/);
+    const numbered = JSON.parse(partial.blocks[1]) as { runs: { id: string; line: number; rulings: { line: number }[] }[] };
+    assert.deepEqual(numbered.runs.map((x) => x.line), [1, 3, 5, 7, 10, 12, 13]);
+    assert.equal(numbered.runs[4].rulings[0].line, 11);
 
     // A recorded band that the rules no longer give is an error.
     lines[2].band = "advance";
@@ -279,6 +285,41 @@ test("the tools that answer by extension read, load, draw and annotate a decisio
     assert.equal(loaded.isError, undefined, loaded.content[0].text);
     assert.match(loaded.content[0].text, /^Loaded decision model → .*new\.dmdf\.json: AdvanceGate \(no version\) \(4 inputs, 7 questions, 1 table, 1 ruled by a person\)\n\[D012\]/);
     assert.equal(existsSync(join(r.dir, "new.dmdf.json")), true);
+  } finally {
+    await r.close();
+  }
+});
+
+test("a document in the wrong shape is refused in words by every tool, and none of them throws", async () => {
+  const r = await rig();
+  try {
+    const broken = r.read() as unknown as Record<string, any>;
+    broken.bars = { owner_at: 0.5 };
+    broken.decisions.push(null);
+    broken.decisions[1].requires = "action";
+    broken.settings.notes = ["first paragraph", "second paragraph"];
+    r.setActive("broken.dmdf.json");
+    const loaded = decisionLoadDefinition(r.host, JSON.stringify(broken));
+    assert.equal(loaded.isError, undefined, loaded.content[0].text);
+    assert.match(loaded.content[0].text, /\[D018\] "bars" is not a list/);
+    assert.match(loaded.content[0].text, /\[D002\] Decision at index 9 is not an object/);
+    assert.match(loaded.content[0].text, /\[D003\] "deletes" does not write "requires" as a list of names/);
+
+    const checked = await r.call("validate_decision_model");
+    assert.equal(checked.isError, true);
+    assert.match(checked.text, /problem\(s\) in 'AdvanceGate'/);
+    assert.match(checked.text, /band — table, first, 4 rule\(s\)/, "what it holds is still listed");
+    for (const [tool, args] of [
+      ["simulate_decision", { answers: {} }],
+      ["decision_request", { values: { action: "a", request: "r", facts: "f", repository: "none" } }],
+      ["replay_decision_ledger", {}],
+    ] as const) {
+      const out = await r.call(tool, args);
+      assert.doesNotMatch(out.text, /TypeError|is not iterable|is not a function/, tool);
+    }
+    assert.equal(decisionRender(r.host, {}).isError, undefined);
+    // A note a hand wrote as a list of paragraphs is read as text.
+    assert.match(decisionGetNotes(r.host).content[0].text, /\[diagram\]\nfirst paragraph\n\nsecond paragraph/);
   } finally {
     await r.close();
   }

@@ -9,12 +9,16 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
+  DMD_LIMITS,
   emptyDecisionModel,
   isDecisionModelDefinition,
   isDmdfPath,
+  outcomesOf,
   requestGroups,
+  safeModel,
   type DecisionModelDefinition,
 } from "../decision/definition.js";
+import { normalizeNotes } from "../notes.js";
 import { checkRule, evalRule, parseRule, ruleRefs, RuleStop, type RuleNode, type RuleScope } from "../decision/expression.js";
 import { readAnswer } from "../decision/answers.js";
 import { ruleEnvOf, validateDecisionModel } from "../decision/validate.js";
@@ -681,11 +685,11 @@ test("every caller of the evaluator gets the same outcome and rule trace for a r
   const reading = readLedger(gate(), lines);
   const replay = replayLedger(gate(), lines);
   reading.runs.forEach((recorded, i) => {
-    const ruling = replay.runs[i].ruling!;
+    const [ruling] = replay.runs[i].rulings;
     const alone = evaluateDecisions(gate(), {
       values: recorded.values,
       answers: recorded.answers,
-      rulings: { ruling: { outcome: ruling.outcome!, by: ruling.by!, words: ruling.words, at: ruling.at } },
+      rulings: { ruling: { outcome: ruling.outcome, by: ruling.by, words: ruling.words, at: ruling.at } },
     });
     assert.equal(JSON.stringify(alone), JSON.stringify(replay.runs[i].run));
   });
@@ -697,12 +701,15 @@ test("the rulings on the advance gate: seven stand, one was withdrawn, and the b
   assert.deepEqual(replay.rulings, {
     in_force: 7,
     withdrawn: 1,
+    unusable: [],
+    unmatched_withdrawals: [],
     bar_after: 20,
+    counted: "ruling",
     reached: false,
     against: { band: { same: 1, different: 6 }, advance: { same: 6, different: 1 } },
   });
   assert.deepEqual(
-    replay.runs.map((r) => [r.ruling!.outcome, r.ruling!.line, r.run!.results.find((x) => x.decision === "ruling")!.status]),
+    replay.runs.map((r) => [r.rulings[0].outcome, r.rulings[0].line, r.run!.results.find((x) => x.decision === "ruling")!.status]),
     [
       ["advance", 2, "ruled"],
       ["look_first", 4, "ruled"],
@@ -717,9 +724,11 @@ test("the rulings on the advance gate: seven stand, one was withdrawn, and the b
   // What the loom computes agrees with every verdict the ledger does hold.
   const said = (v: "same" | "different") => (v === "same" ? "confirm" : "override");
   for (const r of replay.runs) {
-    const line = lines[r.ruling!.line - 1];
-    assert.equal(said(r.ruling!.against.advance), line.verdict, `line ${r.ruling!.line}`);
-    if (line.verdict_on_band !== undefined) assert.equal(said(r.ruling!.against.band), line.verdict_on_band, `line ${r.ruling!.line}`);
+    assert.equal(r.rulings.length, 1);
+    const [ruling] = r.rulings;
+    const line = lines[ruling.line - 1];
+    assert.equal(said(ruling.against.advance), line.verdict, `line ${ruling.line}`);
+    if (line.verdict_on_band !== undefined) assert.equal(said(ruling.against.band), line.verdict_on_band, `line ${ruling.line}`);
   }
   // The first four rulings never recorded a verdict on the band (Episode 564, J5). The ledger is not completed here.
   assert.deepEqual(lines.map((l, i) => (l.kind === "ruling" && l.verdict_on_band === undefined ? i + 1 : 0)).filter(Boolean), [2, 4, 6, 8]);
@@ -771,7 +780,7 @@ test("a ledger in the format's own shape needs no map, and other bars can be tri
   const replay = replayLedger(def, lines);
   assert.deepEqual([replay.replayed, replay.same, replay.counts.other], [2, 2, 1]);
   assert.deepEqual([replay.rulings.in_force, replay.rulings.reached], [2, true]);
-  assert.equal(replay.runs[0].ruling!.words, "Yes.");
+  assert.equal(replay.runs[0].rulings[0].words, "Yes.");
 
   const stricter = replayLedger(def, lines, { bars: { sure_at: 0.95 } });
   assert.deepEqual(stricter.bars, { sure_at: 0.95 });
@@ -880,4 +889,336 @@ test("D008: an outcome's event is an event of the machine it drives, and an inpu
   delete flawed.settings.version;
   flawed.settings.engine = "engine-0";
   assert.deepEqual(d008(flawed).map((i) => `${i.severity} ${i.ruleId} ${i.member}`), ["error D012 refund.dmdf.json", "warning D017 refund.dmdf.json"]);
+});
+
+// ── What an independent review found (2026-11-18), each kept as a test ───────
+
+test("a document written in the wrong shape is reported, and no reader throws on it", () => {
+  const wrong: [string, (d: Record<string, any>) => void, string][] = [
+    ["bars as a map", (d) => void (d.bars = { sure_at: 0.8 }), "D018"],
+    ["requires as one name", (d) => void (d.decisions[0].requires = "message"), "D003"],
+    ["levels as a map", (d) => void (d.decisions[1].logic = { kind: "question", type: "score", instructions: "How urgent is `message`?", levels: { "0": "low", "1": "high" } }), "D005"],
+    ["groups as a map", (d) => void (d.groups = { desk: ["asks_refund"] }), "D010"],
+    ["a group's questions as one name", (d) => void (d.groups = [{ name: "desk", questions: "asks_refund" }]), "D010"],
+    ["a record path that is a number", (d) => void (d.rulings = { record: { values: { message: 5 }, version: 2 } }), "D022"],
+    ["a decision that is null", (d) => void d.decisions.push(null), "D002"],
+    ["rules as a map", (d) => void (d.decisions[2].logic.rules = { first: "x" }), "D006"],
+    ["options as a list", (d) => void (d.decisions[1].logic.options = ["billing", "delivery"]), "D005"],
+    ["events as a list", (d) => void (d.decisions[2].events = ["Refund"]), "D013"],
+    ["a failure route as a word", (d) => void (d.decisions[2].logic.failure = "review"), "D015"],
+    ["inputs as a map", (d) => void (d.inputs = { message: {} }), "D002"],
+    ["rulings as a list", (d) => void (d.rulings = []), "D022"],
+    ["binding as a word", (d) => void (d.binding = "engine-1"), "D017"],
+  ];
+  const lines = [
+    { kind: "decision", id: "r1", values: { message: "m", amount: 12 }, answers: ANSWERS, outcomes: { handling: "refund" } },
+    { kind: "ruling", decision_id: "r1", decision: "sign_off", outcome: "approve", decided_by: "Ada" },
+  ];
+  for (const [what, change, rule] of wrong) {
+    const def = refund() as unknown as Record<string, any>;
+    change(def);
+    const model = def as unknown as DecisionModelDefinition;
+    assert.ok(validateDecisionModel(model).some((e) => e.ruleId === rule && e.severity !== "warning"), `${what}: ${ids(model).join(" ")}`);
+    assert.doesNotThrow(() => evaluateDecisions(model, { values: { message: "m", amount: 12 }, answers: ANSWERS }), what);
+    assert.doesNotThrow(() => renderMermaidDecisions(model), what);
+    assert.doesNotThrow(() => replayLedger(model, lines), what);
+    assert.doesNotThrow(() => requestGroups(model), what);
+    // The request refuses with a sentence when it cannot be built. It never fails on the document's shape.
+    try {
+      toEngineRequest(model, { message: "m", amount: 12 });
+    } catch (e) {
+      assert.ok(e instanceof Error && !(e instanceof TypeError) && !(e instanceof RangeError), `${what}: ${String(e)}`);
+    }
+  }
+  // Not a document at all.
+  for (const nothing of [null, undefined, 7, "x", [], { decisions: "many" }]) {
+    const model = nothing as unknown as DecisionModelDefinition;
+    assert.ok(validateDecisionModel(model).length > 0);
+    assert.deepEqual(evaluateDecisions(model).results, []);
+    assert.equal(renderMermaidDecisions(model).split("\n")[0], "flowchart BT");
+    assert.equal(replayLedger(model, lines).replayed, 1);
+  }
+  // A caller's own arguments may be null.
+  assert.doesNotThrow(() => evaluateDecisions(refund(), null));
+  assert.doesNotThrow(() => evaluateDecisions(refund(), { bars: null, values: null as never, answers: null as never, rulings: null as never }));
+  // A document made safe is returned as it is when asked again.
+  const once = safeModel(refund());
+  assert.equal(safeModel(once), once);
+});
+
+test("a name every JavaScript object carries is refused, and never answers for the document", () => {
+  // Refused by the rules.
+  const named = (f: (d: DecisionModelDefinition) => void): string[] => {
+    const def = refund();
+    f(def);
+    return errors(def);
+  };
+  assert.ok(named((d) => void (d.inputs![0].name = "constructor")).includes("D002"));
+  assert.ok(named((d) => void (d.decisions[3].name = "toString")).includes("D002"));
+  assert.deepEqual(named((d) => void d.bars!.push({ name: "__proto__", value: 0.5 })), ["D018"]);
+  assert.deepEqual(named((d) => void (d.groups = [{ name: "valueOf", questions: ["asks_refund"] }])), ["D010"]);
+  assert.ok(named((d) => void ((d.decisions[1].logic as { options: Record<string, string> }).options = { hasOwnProperty: "x", billing: "y" })).includes("D005"));
+
+  // And harmless where a document that was never checked is run anyway.
+  const def = refund();
+  def.inputs!.push({ name: "constructor" });
+  def.decisions[2].requires!.push("constructor");
+  (def.decisions[2].logic as { rules: { if: string }[] }).rules[0].if = "constructor >= sure_at";
+  const tried = evaluateDecisions(def, { values: { constructor: 0.1, amount: 12 }, answers: ANSWERS, bars: { constructor: 0.9, toString: 3, sure_at: 0.05 } });
+  assert.deepEqual(tried.bars, { sure_at: 0.05 }, "an override never adds a bar");
+  assert.deepEqual(result(tried, "handling").trace![0].reads, { constructor: 0.1, sure_at: 0.05 });
+
+  const odd = refund();
+  odd.decisions[0].name = "toString";
+  odd.decisions[3].name = "constructor";
+  const run = evaluateDecisions(odd, { values: { amount: 12 } });
+  assert.equal(result(run, "toString").status, "missing");
+  assert.deepEqual(result(run, "constructor"), { decision: "constructor", kind: "person", status: "awaiting_owner", who: "the desk manager" });
+
+  // A rule cannot read what an answer does not hold.
+  const env = ruleEnvOf(refund(), refund().decisions[2]);
+  assert.match(checkRule(tree("asks_refund.constructor == asks_refund.constructor"), env)[0], /a noul answer has no `constructor`/);
+  assert.match(checkRule(tree("asks_refund.__proto__ == 1"), env)[0], /a noul answer has no `__proto__`/);
+});
+
+test("a table that requires a decision still awaiting its owner never takes its failure route", () => {
+  // `risk` is not answered and `sign_off` is not ruled. Whichever a rule reads first, the payout waits.
+  const model = (hit: string, rules: object[]): DecisionModelDefinition => ({
+    settings: { namespace: "demo", name: "Payout", version: "1" },
+    inputs: [{ name: "message" }],
+    decisions: [
+      { name: "risk", logic: { kind: "question", type: "noul", instructions: "Is `message` risky?", criteria: { true: "It is." } }, requires: ["message"] },
+      { name: "sign_off", logic: { kind: "person", who: "the desk manager" }, outcomes: ["approve", "refuse"] },
+      { name: "payout", logic: { kind: "table", hit, rules, failure: { then: "pay" } } as never, requires: ["risk", "sign_off"], outcomes: ["pay", "close"] },
+    ],
+  });
+  const safe = { when: "not risky", if: "risk.yes < 0.5", then: "pay" };
+  const approved = { when: "approved", if: 'sign_off.outcome == "approve"', then: "pay" };
+  const both = { when: "not risky and approved", if: 'risk.yes < 0.5 and sign_off.outcome == "approve"', then: "pay" };
+  const last = { when: "otherwise", if: "otherwise", then: "close" };
+  for (const hit of ["first", "unique", "collect"]) {
+    for (const rules of [[safe, approved], [approved, safe], [both, last]]) {
+      const def = model(hit, rules);
+      const payout = result(evaluateDecisions(def, { values: { message: "m" } }), "payout");
+      assert.equal(payout.status, "awaiting_owner", `${hit} ${JSON.stringify(rules.map((r) => r.when))}`);
+      assert.equal(payout.outcome, undefined);
+      assert.equal(payout.outcomes, undefined);
+      assert.deepEqual(payout.awaiting, ["sign_off"]);
+    }
+  }
+  // Once the person has ruled, the engine's failure is the table's to route.
+  const ruled = evaluateDecisions(model("first", [both, last]), { values: { message: "m" }, rulings: { sign_off: { outcome: "refuse", by: "Ada" } } });
+  assert.equal(result(ruled, "payout").status, "failed");
+  assert.equal(result(ruled, "payout").outcome, "pay");
+  assert.match(formatDecisionRun(evaluateDecisions(model("first", [safe, approved]), { values: { message: "m" } })), /payout: awaiting its owner \(sign_off\); no valid answer for risk either/);
+});
+
+test("a collecting table that fails gives its failure route as what it collected", () => {
+  const def: DecisionModelDefinition = {
+    settings: { namespace: "demo", name: "Flags", version: "1" },
+    inputs: [{ name: "message" }],
+    decisions: [
+      { name: "late", logic: { kind: "question", type: "noul", instructions: "Is `message` late?", criteria: { true: "It is." } }, requires: ["message"] },
+      { name: "flags", logic: { kind: "table", hit: "collect", rules: [{ when: "late", if: "late.yes >= 0.5", then: "late" }], failure: { then: "unknown" } }, requires: ["late"], outcomes: ["late", "unknown"] },
+      {
+        name: "route",
+        logic: {
+          kind: "table",
+          hit: "first",
+          rules: [
+            { when: "nothing is known", if: 'collected(flags, "unknown")', then: "desk" },
+            { when: "otherwise", if: "flags.count > 0 or otherwise", then: "queue" },
+          ],
+        } as never,
+        requires: ["flags"],
+        outcomes: ["desk", "queue"],
+      },
+    ],
+  };
+  (def.decisions[2].logic as { rules: { if: string }[] }).rules[1].if = "otherwise";
+  assert.deepEqual(errors(def), []);
+  const run = evaluateDecisions(def, { values: { message: "m" } });
+  assert.deepEqual([result(run, "flags").status, result(run, "flags").outcomes], ["failed", ["unknown"]]);
+  assert.deepEqual([result(run, "route").status, result(run, "route").outcome], ["decided", "desk"]);
+  assert.match(formatDecisionRun(run), /flags: unknown, by its failure route/);
+});
+
+test("a choice decides one of its options, whatever outcomes it also writes", () => {
+  const def = refund();
+  const table = def.decisions[2];
+  (table.logic as { rules: object[] }).rules[1] = { when: "the category decides", if: "answered(category)", from: "category" };
+  table.outcomes = ["refund", "respond", "review", "billing"];
+  def.decisions[1].outcomes = ["billing"];
+  assert.deepEqual(outcomesOf(def.decisions[1]), ["billing", "delivery", "other"]);
+  // D005 says the choice's outcomes are not its options, and D006 that the table cannot take every option.
+  assert.deepEqual(errors(def), ["D005", "D006"]);
+  def.decisions[1].outcomes = ["other", "billing", "delivery"];
+  table.outcomes = ["refund", "respond", "review", "billing", "delivery", "other"];
+  assert.deepEqual(errors(def), []);
+});
+
+test("options named with whole numbers cannot be sent in another order, and that is said", () => {
+  const def = refund();
+  (def.decisions[1].logic as { options: Record<string, string>; rotate?: boolean }).options = { "1": "A charge.", "2": "A parcel.", "3": "Neither." };
+  assert.deepEqual(errors(def), []);
+  assert.deepEqual(Object.keys(toEngineRequest(def, { message: "m" }).questions.category.criteria as object), ["1", "2", "3"]);
+  assert.throws(() => toEngineRequest(def, { message: "m" }, { optionOrder: { category: ["3", "1", "2"] } }), /cannot be sent in another order/);
+  (def.decisions[1].logic as { rotate?: boolean }).rotate = true;
+  assert.deepEqual(errors(def), ["D005"]);
+  assert.throws(() => toEngineRequest(def, { message: "m" }, { rotation: 1 }), /named with a whole number \(1, 2, 3\)/);
+  // The turn that changes nothing is still the order written.
+  assert.doesNotThrow(() => toEngineRequest(def, { message: "m" }, { rotation: 3 }));
+});
+
+test("a group does not take a name the loom gives its own requests", () => {
+  const def = refund();
+  def.decisions.push({ name: "urgent", logic: { kind: "question", type: "noul", instructions: "Is `message` urgent?", criteria: { true: "It asks for today." } }, requires: ["message"] });
+  def.decisions[2].requires!.push("urgent");
+  def.groups = [{ name: "default", questions: ["asks_refund"] }];
+  assert.deepEqual(errors(def), ["D010"]);
+  // Even unchecked, every request has a name of its own and can be asked for.
+  assert.deepEqual(requestGroups(def).map((g) => g.name), ["default", "default-2"]);
+  assert.deepEqual(Object.keys(toEngineRequest(def, { message: "m" }, { group: "default-2" }).questions), ["category", "urgent"]);
+  def.groups = [{ name: "category", questions: ["asks_refund"] }];
+  assert.deepEqual(errors(def), ["D010"]);
+});
+
+test("an invalid answer reads the same whatever order its keys arrived in", () => {
+  const choice = refund().decisions[1].logic as never;
+  const a = readAnswer(choice, { choice: "billing", confidence: 0.5, probabilities: { billing: 0.5, delivery: 0.2, other: 0.1, y: 0.1, x: 0.1 } });
+  const b = readAnswer(choice, { probabilities: { x: 0.1, y: 0.1, other: 0.1, delivery: 0.2, billing: 0.5 }, confidence: 0.5, choice: "billing" });
+  assert.equal(a.status, "invalid");
+  assert.equal(JSON.stringify(a), JSON.stringify(b));
+});
+
+const TWO_PEOPLE = (): DecisionModelDefinition => ({
+  settings: { namespace: "demo", name: "TwoKeys", version: "1" },
+  inputs: [{ name: "message" }],
+  decisions: [
+    { name: "extra", logic: { kind: "question", type: "noul", instructions: "Is `message` long?", criteria: { true: "It is." } }, requires: ["message"] },
+    { name: "seat", logic: { kind: "person", who: "the seat" }, outcomes: ["go", "stop"] },
+    { name: "owner", logic: { kind: "person", who: "the owner" }, outcomes: ["go", "stop"] },
+    {
+      name: "final",
+      logic: {
+        kind: "table",
+        hit: "first",
+        rules: [
+          { when: "both say go", if: 'seat.outcome == "go" and owner.outcome == "go"', then: "go" },
+          { when: "otherwise", if: "otherwise", then: "stop" },
+        ],
+      },
+      requires: ["seat", "owner"],
+      outcomes: ["go", "stop"],
+    },
+  ],
+  rulings: { key: "run", bar_after: 2 },
+});
+
+test("a run keeps the ruling of each person who ruled on it", () => {
+  const lines = [
+    { kind: "decision", id: "r1", outcomes: { final: "go" } },
+    { kind: "ruling", run: "r1", decision: "seat", outcome: "go", decided_by: "mia", at: "t1" },
+    { kind: "ruling", run: "r1", decision: "owner", outcome: "go", decided_by: "Guillaume", at: "t2" },
+  ];
+  const replay = replayLedger(TWO_PEOPLE(), lines);
+  const [run] = replay.runs;
+  // `extra` is read by no table: a line that never kept it is still replayed.
+  assert.equal(run.replayable, true);
+  assert.deepEqual(run.lacks, []);
+  assert.deepEqual(run.run!.results.map((r) => `${r.decision}:${r.status}`), ["extra:missing", "seat:ruled", "owner:ruled", "final:decided"]);
+  assert.equal(run.outcomes.final.same, true);
+  assert.deepEqual(run.rulings.map((r) => [r.decision, r.by]), [["seat", "mia"], ["owner", "Guillaume"]]);
+  assert.deepEqual([replay.rulings.in_force, replay.rulings.reached, replay.rulings.counted], [2, true, null]);
+  assert.match(formatLedgerReplay(replay), /r1: final go by rule 1, recorded go: same · seat ruled go by mia · owner ruled go by Guillaume/);
+
+  // Counted against the bar: only the decision the document names, when it names one.
+  const owned = TWO_PEOPLE();
+  owned.rulings!.decision = "owner";
+  const counted = replayLedger(owned, lines).rulings;
+  assert.deepEqual([counted.in_force, counted.reached, counted.counted], [1, false, "owner"]);
+});
+
+test("a ruling that cannot stand, and a withdrawal that finds nothing, are reported and never counted", () => {
+  const lines = [
+    { kind: "decision", id: "r1", outcomes: { final: "stop" } },
+    { kind: "ruling", run: "no-such-run", decision: "seat", outcome: "go", decided_by: "mia" },
+    { kind: "ruling", run: "r1", decision: "seat", decided_by: "mia" },
+    { kind: "ruling", run: "r1", decision: "owner", outcome: "go" },
+    { kind: "ruling", run: "r1", decision: "final", outcome: "go", decided_by: "mia" },
+    { kind: "ruling", run: "r1", decision: "seat", outcome: "perhaps", decided_by: "mia" },
+    { kind: "ruling", run: "r1", outcome: "go", decided_by: "mia" },
+    null,
+    { kind: "ruling", run: "r1", decision: "seat", outcome: "go", decided_by: "mia", at: "2026-11-14T18:53:07.326Z" },
+    { kind: "ruling_withdrawn", run: "r1", withdrawn_ruling_at: "2026-11-14T18:53:07Z" },
+  ];
+  const replay = replayLedger(TWO_PEOPLE(), lines);
+  assert.equal(replay.lines, 9, "a line left out is not a line read, and the others keep their numbers");
+  assert.deepEqual(replay.rulings.unusable, [
+    { line: 2, why: 'the ledger holds no run "no-such-run"' },
+    { line: 3, why: "it rules nothing (no outcome)" },
+    { line: 4, why: "it does not say who ruled" },
+    { line: 5, why: '"final" is not a person\'s decision of the model' },
+    { line: 6, why: 'it rules "perhaps", which is not an outcome of "seat"' },
+    { line: 7, why: "it does not say which person's decision it rules, and the model has more than one" },
+  ]);
+  assert.deepEqual(replay.rulings.unmatched_withdrawals, [10]);
+  assert.deepEqual([replay.rulings.in_force, replay.rulings.withdrawn, replay.rulings.reached], [1, 0, false]);
+  assert.deepEqual(replay.runs[0].rulings.map((r) => [r.decision, r.line]), [["seat", 9]]);
+  // The owner has not ruled, so the table that reads both still waits.
+  assert.equal(replay.runs[0].run!.results.find((r) => r.decision === "final")!.status, "awaiting_owner");
+  const text = formatLedgerReplay(replay);
+  assert.match(text, /the ruling on line 4 is not counted: it does not say who ruled/);
+  assert.match(text, /the withdrawal\(s\) on line 10 found no ruling to withdraw/);
+});
+
+test("a ruling is compared with what the replay gives, under the bars the replay ran", () => {
+  const lines = ledger();
+  const own = replayLedger(gate(), lines);
+  assert.deepEqual(own.rulings.against.band, { same: 1, different: 6 });
+  assert.match(formatLedgerReplay(own), /compared with what the replay gives, band: 1 the same, 6 different; advance: 6 the same, 1 different$/);
+  // With the owner's bar and the uncertain band out of reach, the third run takes the engine's choice,
+  // and the ruling on it, which was "advance", then agrees with the band.
+  const tried = replayLedger(gate(), lines, { bars: { owner_at: 0.99, uncertain_from: 0.98, uncertain_to: 0.99 } });
+  assert.equal(tried.runs[2].outcomes.band.replayed, "advance");
+  assert.equal(tried.runs[2].rulings[0].against.band, "same");
+  assert.deepEqual(tried.rulings.against.band, { same: 2, different: 5 });
+});
+
+test("a model past the loom's bound is refused whole, and a long chain is walked without a stack", () => {
+  const chain = (n: number): DecisionModelDefinition => ({
+    settings: { namespace: "demo", name: "Chain", version: "1" },
+    inputs: [{ name: "n", type: "number" }],
+    decisions: Array.from({ length: n }, (_, i) => ({
+      name: `t${i}`,
+      logic: { kind: "table", hit: "first", rules: [{ when: "always", if: "otherwise", then: "on" }] } as never,
+      requires: [i === 0 ? "n" : `t${i - 1}`],
+      outcomes: ["on"],
+    })),
+  });
+  const long = chain(DMD_LIMITS.MAX_DECISIONS);
+  assert.deepEqual(errors(long), []);
+  assert.equal(evaluateDecisions(long, { values: { n: 1 } }).results.at(-1)!.outcome, "on");
+
+  const tooLong = chain(DMD_LIMITS.MAX_DECISIONS + 1);
+  assert.deepEqual(errors(tooLong), ["D002"]);
+  const refused = evaluateDecisions(tooLong, { values: { n: 1 } });
+  assert.deepEqual(refused.results, []);
+  assert.match(refused.problem!, /501 decisions, more than the 500/);
+  // A circle in a long chain is still found.
+  long.decisions[0].requires = ["n", `t${DMD_LIMITS.MAX_DECISIONS - 1}`];
+  assert.deepEqual(errors(long), ["D004"]);
+});
+
+test("a note written as a list of paragraphs is text for every reader of a decision model", () => {
+  const def = refund() as unknown as Record<string, any>;
+  def.settings.notes = ["one", "two"];
+  def.decisions[2].notes = ["why review?"];
+  def.decisions[2].logic.rules[0].notes = ["small means 25 or less"];
+  def.inputs[0].notes = [];
+  const read = normalizeNotes(def) as Record<string, any>;
+  assert.equal(read.settings.notes, "one\n\ntwo");
+  assert.equal(read.decisions[2].notes, "why review?");
+  assert.equal(read.decisions[2].logic.rules[0].notes, "small means 25 or less");
+  assert.equal("notes" in read.inputs[0], false);
 });

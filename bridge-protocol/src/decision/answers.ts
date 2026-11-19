@@ -79,14 +79,18 @@ export function readAnswer(question: DmdQuestionLogic, raw: unknown): AnswerRead
     return { status: "answered", answer: { type: "noul", yes } };
   }
 
-  const keys = question.type === "choice" ? Object.keys(question.options ?? {}) : (question.levels ?? []).map((_, i) => String(i));
+  const keys =
+    question.type === "choice"
+      ? Object.keys(isObject(question.options) ? question.options : {})
+      : (Array.isArray(question.levels) ? question.levels : []).map((_, i) => String(i));
   if (!isUnit(raw.confidence)) failures.push(`confidence must be within 0 and 1, got ${JSON.stringify(raw.confidence)}`);
   const probabilities = raw.probabilities;
   if (!isObject(probabilities)) {
     failures.push("no probabilities");
   } else {
     const missing = keys.filter((k) => !Object.hasOwn(probabilities, k));
-    const extra = Object.keys(probabilities).filter((k) => !keys.includes(k));
+    // Sorted, so the same invalid answer reads the same whatever order its keys arrived in.
+    const extra = Object.keys(probabilities).filter((k) => !keys.includes(k)).sort();
     if (missing.length) failures.push(`probabilities must cover what was declared; missing ${missing.join(", ")}`);
     if (extra.length) failures.push(`probabilities name what was not declared: ${extra.join(", ")}`);
     const bad = keys.filter((k) => Object.hasOwn(probabilities, k) && !isUnit(probabilities[k]));

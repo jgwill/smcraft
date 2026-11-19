@@ -104,9 +104,9 @@ When a decision drives a machine, every outcome fires an event (D013), and each 
 | `instructions` | The question. An input is named in backticks, and only one the decision requires (D007) |
 | `criteria` | A noul's criterion: `{ "true": what makes it yes, "false": what makes it no }` |
 | `criteria_from` | A noul's criterion when it arrives with the run: an input the decision requires and names (an acceptance line) |
-| `options` | A choice's options, each with what makes it the one. 2 to 255 |
+| `options` | A choice's options, each with what makes it the one. 2 to 255. A choice decides one of its options: when it also writes `outcomes`, they are the same names |
 | `levels` | A score's levels, lowest first. 2 to 10 |
-| `rotate` | The options' order changes per call and the order used is recorded (study jaggedness item 8) |
+| `rotate` | The options' order changes per call and the order used is recorded (study jaggedness item 8). Options that rotate are named with words: a JSON object written by JavaScript puts a key that is a whole number first, so `"1"`, `"2"`, `"3"` can be sent in one order only (D005) |
 
 **Every question states its criterion, a noul included** (D009). The Factory measured why twice: without its acceptance line, "is it done" came back 83.3% unclassifiable, and on 2026-11-15 a judge's question without its criterion read 0.18 to 0.57 on five moments.
 
@@ -126,7 +126,7 @@ A decision's bare name is never a value. `deletes >= 0.5` is refused, and the me
 
 The questions of one group go to the engine in **one request**: they see the same snapshot and each is answered without the others. A group is drawn as a box around its questions.
 
-A group is never a dependency. A question that needs another's answer `requires` it, which is an arrow, and the two are then two requests (D010). Questions that no group names are grouped by the loom: those that wait on no other question share one request, and each question that needs an answer is a request of its own. Answering together is not statistical independence: two questions of one group may be about related facts.
+A group is never a dependency. A question that needs another's answer `requires` it, which is an arrow, and the two are then two requests (D010). Questions that no group names are grouped by the loom: those that wait on no other question share one request named `default`, and each question that needs an answer is a request of its own, named after it. A group the document writes takes neither of those names (D010). Answering together is not statistical independence: two questions of one group may be about related facts.
 
 ### A table — `logic.kind: "table"`
 
@@ -170,11 +170,13 @@ call     := ( "max" | "min" | "answered" | "collected" ) "(" or ( "," or )* ")"
 ref      := name ( "." name | "[" string "]" )*
 ```
 
-A reference names an input, a bar, or one field of a required decision. `answered(q)` says whether a question has a valid answer, so a missing answer is told apart from a negative one. It asks about a question only: whether a person has ruled is never a rule's to route around. `collected(t, "x")` asks a `collect` table. `and` and `or` stop at the first operand that settles them. A rule is at most 2000 characters and 32 levels deep. Before any run, D014 checks that each rule parses, reads only what its table requires, and compares like with like.
+A reference names an input, a bar, or one field of a required decision. `answered(q)` says whether a question has a valid answer, so a missing answer is told apart from a negative one. It asks about a question only: whether a person has ruled is never a rule's to route around. `collected(t, "x")` asks a `collect` table. `and` and `or` stop at the first operand that settles them. A rule is at most 2000 characters and nests at most 32 deep, the rule itself being the first level. Before any run, D014 checks that each rule parses, reads only what its table requires, and compares like with like.
 
 ### The failure route — `logic.failure`
 
-A table that reads an engine's answers says where it goes when the engine fails, times out, or breaks its contract (D015). When a rule reads a question that has no valid answer, the table is `failed` and its outcome is `failure.then`. The outcome is one of the table's own, so a machine it drives receives it like any other (D013). Without a declared route a failed table has no outcome, and nothing is assumed in its place.
+A table that reads an engine's answers says where it goes when the engine fails, times out, or breaks its contract (D015). When a rule reads a question that has no valid answer, the table is `failed` and its outcome is `failure.then` (for a `collect` table, the one outcome it then holds). The outcome is one of the table's own, so a machine it drives receives it like any other (D013). Without a declared route a failed table has no outcome, and nothing is assumed in its place.
+
+The failure route is for an engine. A table that requires a decision still awaiting its owner never takes it: see the person, below.
 
 ### A person — `logic.kind: "person"`
 
@@ -183,7 +185,9 @@ A table that reads an engine's answers says where it goes when the engine fails,
 | `who` | Who rules: the seat, a named person, a circle |
 | `description` | What they rule on, and how it is recorded |
 
-A person's decision lists the `outcomes` that can be ruled (D016). Its result is `awaiting_owner` until a ruling is recorded for it, and then `ruled`, with who ruled and their words, which are never edited. It carries no rule, no bar and no failure route (D016). A table that reads an unruled person's decision is `awaiting_owner` too: its failure route is for an engine, not for a person. `toEngineRequest` never sends a person's decision. An event mapped from its outcome fires only from a recorded ruling.
+A person's decision lists the `outcomes` that can be ruled (D016). Its result is `awaiting_owner` until a ruling is recorded for it, and then `ruled`, with who ruled and their words, which are never edited. It carries no rule, no bar and no failure route (D016). `toEngineRequest` never sends a person's decision. An event mapped from its outcome fires only from a recorded ruling.
+
+**Waiting is not failing.** A table that reads an unruled person's decision is `awaiting_owner` too. And while a table requires any decision that still awaits its owner, a missing answer never sends it to its failure route, whichever of the two a rule reads first and whatever its hit policy: it waits, and says what it waits on and which answer is missing. Once the person has ruled, an engine's failure is the table's to route. A rule that holds before either is read still decides, as its place in the table says.
 
 ### Bars — `bars`
 
@@ -192,7 +196,7 @@ A bar is a threshold a rule reads by name. It is a choice someone made: `set_by`
 **How a bar moves.** A person moves it, never the loom.
 
 1. Each ruling is kept in the ledger beside the run it answers.
-2. The replay counts the rulings in force (one per run, the last that still stands) and compares each with what it answered: the table's outcome and the engine's choice.
+2. The replay counts the rulings in force (per run and person's decision, the last that still stands and can stand) and compares each with what the replay gives for the decisions it answered: the table's outcome and the engine's choice. Under the document's own bars, that is what the ruling answered.
 3. When `rulings.bar_after` rulings stand, a person may set a bar. Before that the count is shown as not reached.
 4. A candidate value is tried on the recorded answers (`bars` on `simulate_decision` and `replay_decision_ledger`): the replay says which recorded runs would then decide differently. The document is not changed by a trial.
 5. The person writes the new `value` with `set_by` and `calibrated_from`, and raises `settings.version`. Runs recorded under the earlier version keep it.
@@ -217,9 +221,15 @@ A line of the ledger, in the format's own shape:
 
 `answers` holds each question's answer as the engine gave it. A ledger written before this shape is read through `rulings.record`, which gives the dot-separated path of each value, each answer field, each recorded outcome and the version inside a line (`"deletes": { "noul": "triggers.deletes" }`).
 
+A ruling counts when it can stand: it names a run the ledger holds and a person's decision of the model, it rules one of that decision's outcomes, and it says who ruled. A ruling that cannot stand, and a withdrawal that finds no ruling, are reported with their line and never counted. When a model has several person's decisions, each ruling line names its own in `decision`, and `rulings.decision` is the one counted against `bar_after`.
+
 ## Validation Rules
 
 An issue is an error unless marked as a warning. A warning is a document the loom reads and draws, and does less with.
+
+A document written in the wrong shape (a list where a map belongs, an entry that is not an object, a path that is not text) is reported under the rule that owns the field, and the rest of it is still checked. No reader of a decision model throws on a document, whatever it holds: the validator, the evaluator, the drawing, the request and the replay all read it through `safeModel`.
+
+A name every JavaScript object already carries (`constructor`, `toString`, `__proto__` and the like) is refused for an input, a decision, a knowledge, a bar, a group, an option and an outcome, under the rule of each. A model has at most 500 decisions (D002). Past that it is refused whole and not run.
 
 | Rule | Description |
 |------|-------------|
@@ -227,12 +237,12 @@ An issue is an error unless marked as a warning. A warning is a document the loo
 | D002 | Input and decision names are non-empty and unique together; knowledge names are unique, with a known kind |
 | D003 | Every `requires` names an input or a decision; every `knowledge` names a `source` or `model`; every `authority` names an `authority` |
 | D004 | The requirements form no cycle |
-| D005 | A decision's logic is a question, a table or a person. A question has a `type` of `noul`, `choice` or `score`, and instructions; a `choice` has 2 to 255 options, a `score` 2 to 10 levels |
+| D005 | A decision's logic is a question, a table or a person. A question has a `type` of `noul`, `choice` or `score`, and instructions; a `choice` has 2 to 255 options, a `score` 2 to 10 levels. A choice's `outcomes`, when written, are its options. A choice that rotates names no option with a whole number |
 | D006 | A table lists its outcomes and has at least one rule. Each rule has a `when`, and one of `then` (one of the outcomes) or `from` (a required decision, all of whose values are among the outcomes) |
 | D007 | A question's text names, in backticks, only inputs it requires (`` `action` `` needs `action` in `requires`) |
 | D008 | (system) A decision's `machine` is a member machine, each event an outcome fires exists in it, and an input's `entity` exists in a member ERD |
 | D009 | Every question states its criterion: a noul in `criteria.true`, or in a required input named by `criteria_from` and by its instructions; a choice on every option; a score on every level |
-| D010 | A group names questions of the model, a question is in one group at most, and no question of a group needs the answer of another |
+| D010 | A group names questions of the model, a question is in one group at most, and no question of a group needs the answer of another. A group is not named `default` or after a decision |
 | D011 | A table states its hit policy: `first`, `unique` or `collect` |
 | D012 | `settings.version` is present |
 | D013 | When a decision drives a machine, `events` names only its outcomes, and every outcome has an event |
@@ -244,7 +254,7 @@ An issue is an error unless marked as a warning. A warning is a document the loo
 | D019 | Warning: a `first` table with no `otherwise` rule, or with one before its last rule; a `unique` table with an `otherwise` rule |
 | D020 | Warning: a table with a rule written in words only (`when` without `if`). The loom draws it and does not run it |
 | D021 | Warning: a question whose answer no decision requires |
-| D022 | `rulings.bar_after` is a whole number of 1 or more, `rulings.decision` names a person's decision, and `rulings.record` names inputs, questions and decisions of the model, with every field of each answer |
+| D022 | `rulings.bar_after` is a whole number of 1 or more, `rulings.decision` names a person's decision, and `rulings.record` names inputs, questions and decisions of the model, with every field of each answer, each as a path in text |
 
 ## Evaluation — `evaluateDecisions(def, { values, answers, rulings, bars })`
 
@@ -253,7 +263,7 @@ One run from recorded answers. It asks no engine and reads no clock. It returns 
 | A decision | Can be |
 |------------|--------|
 | question | `answered` (with its typed answer), `missing`, `invalid` (with why) |
-| table | `decided` (its outcome, the rule that decided it), `failed` (its failure route, the questions that had no answer), `awaiting_owner`, or no outcome with the reason: `no_rule`, `conflict`, `error`, `not_evaluable` |
+| table | `decided` (its outcome, the rule that decided it), `failed` (its failure route, the questions that had no answer), `awaiting_owner` (what it waits on, and any answer missing as well), or no outcome with the reason: `no_rule`, `conflict`, `error`, `not_evaluable` |
 | person | `awaiting_owner` (with `who`), `ruled` (the outcome, who ruled, their words) |
 
 A table's result carries its **rule trace**: each rule tried, in order, whether it held, and every value it read, keyed as the rule wrote it (`"foreign_repo.yes": 0.47`, `"owner_at": 0.5`). An explanation of a run is this trace, read aloud. It is never a story about what the engine thought.
@@ -268,7 +278,7 @@ A provider adapter (sending the request, checking and recording the response) is
 
 ## The ledger replay — `replayLedger(def, lines, { bars })`
 
-Runs every recorded run through the document again, from the answers its line holds, and says for each whether the tables give the outcome the line recorded, with the rule that decided it and the ruling in force. A line that lacks what the replay needs is **not replayable**, and the report names the field. A key that is absent is a ledger that never kept it. A `null` is an engine that never answered: that is a recorded fact, and it replays through the failure route.
+Runs every recorded run through the document again, from the answers its line holds, and says for each whether the tables give the outcome the line recorded, with the rule that decided it and the rulings in force. A line that lacks something a table reads is **not replayable**, and the report names the field. An answer no table reads may be absent. A key that is absent is a ledger that never kept it. A `null` is an engine that never answered: that is a recorded fact, and it replays through the failure route.
 
 On Episode 564's ledger of 2026-11-14 (16 lines: 7 runs, 8 rulings, 1 withdrawal), the 7 runs replay to their recorded bands: `hold_for_person` by rule 1 five times, by rule 2 once, and `seat_reads` by rule 4 once. Seven rulings are in force. One ruled as the band did and six ruled against it. Twenty are needed before a bar may be set.
 

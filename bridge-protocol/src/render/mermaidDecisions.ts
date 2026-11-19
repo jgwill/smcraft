@@ -20,7 +20,7 @@
  *
  * Pure — no randomness, no clock, no I/O.
  */
-import { requestGroups, type DecisionModelDefinition, type DmdDecision } from "../decision/definition.js";
+import { requestGroups, safeModel, type DecisionModelDefinition, type DmdDecision } from "../decision/definition.js";
 
 const clean = (text: unknown): string =>
   String(text ?? "")
@@ -53,7 +53,8 @@ function firesLine(d: DmdDecision): string {
 }
 
 /** Render `def` as a Mermaid `flowchart BT` string. */
-export function renderMermaidDecisions(def: DecisionModelDefinition): string {
+export function renderMermaidDecisions(model: DecisionModelDefinition): string {
+  const def = safeModel(model);
   const lines: string[] = ["flowchart BT"];
   const ids = new Map<string, string>();
   const pad = "  ";

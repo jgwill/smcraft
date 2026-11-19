@@ -18,10 +18,15 @@
 import {
   bindingOf,
   decisionOf,
+  own,
   requestGroups,
+  safeModel,
   type DecisionModelDefinition,
   type DmdQuestionType,
 } from "./definition.js";
+
+/** A key JavaScript keeps in number order whatever order it was written in. */
+const WHOLE_NUMBER = /^(0|[1-9]\d*)$/;
 
 export interface EngineQuestion {
   type: DmdQuestionType;
@@ -48,10 +53,11 @@ export interface EngineRequestOptions {
 }
 
 export function toEngineRequest(
-  def: DecisionModelDefinition,
-  values: Record<string, unknown> = {},
+  written: DecisionModelDefinition,
+  values: Record<string, unknown> | null = {},
   opts: EngineRequestOptions = {},
 ): EngineRequest {
+  const def = safeModel(written);
   const groups = requestGroups(def);
   if (!groups.length) throw new Error(`'${def.settings?.name ?? ""}' asks its engine nothing: it has no question.`);
   const group = opts.group === undefined ? groups[0] : groups.find((g) => g.name === opts.group);
@@ -62,14 +68,15 @@ export function toEngineRequest(
   for (const q of group.questions) for (const r of decisionOf(def, q)?.requires ?? []) needed.add(r);
   // Inputs first, in the order the document writes them, then the decisions a question waits on.
   const order = [
-    ...(def.inputs ?? []).map((i) => i?.name),
-    ...(def.decisions ?? []).map((d) => d?.name),
+    ...(def.inputs ?? []).map((i) => i.name),
+    ...def.decisions.map((d) => d.name),
   ].filter((n): n is string => typeof n === "string" && needed.has(n));
   const state: Record<string, unknown> = {};
   const absent: string[] = [];
   for (const name of order) {
-    if (values[name] === undefined || values[name] === null) absent.push(name);
-    else state[name] = values[name];
+    const value = own(values, name);
+    if (value === undefined || value === null) absent.push(name);
+    else state[name] = value;
   }
   if (absent.length) {
     throw new Error(`The request '${group.name}' needs a value for: ${absent.join(", ")}. A missing value is not sent as an empty one.`);
@@ -89,8 +96,8 @@ export function toEngineRequest(
       const options = logic.options ?? {};
       const keys = Object.keys(options);
       let sent = keys;
-      const recorded = opts.optionOrder?.[name];
-      if (recorded) {
+      const recorded = own(opts.optionOrder, name);
+      if (Array.isArray(recorded)) {
         if (recorded.length !== keys.length || recorded.some((k) => !keys.includes(k)) || new Set(recorded).size !== keys.length) {
           throw new Error(`The order given for '${name}' (${recorded.join(", ")}) is not its options (${keys.join(", ")}) in some order.`);
         }
@@ -98,6 +105,11 @@ export function toEngineRequest(
       } else if (logic.rotate && keys.length && Number.isInteger(opts.rotation)) {
         const k = (((opts.rotation as number) % keys.length) + keys.length) % keys.length;
         sent = [...keys.slice(k), ...keys.slice(0, k)];
+      }
+      // A JavaScript object writes a key that is a whole number before the others, in number order.
+      // An order it cannot hold is refused here, never sent as another order than the one recorded.
+      if (sent.some((k, i) => k !== keys[i]) && keys.some((k) => WHOLE_NUMBER.test(k))) {
+        throw new Error(`The options of '${name}' cannot be sent in another order: an option named with a whole number (${keys.filter((k) => WHOLE_NUMBER.test(k)).join(", ")}) is always written first. Name the options with words.`);
       }
       question.criteria = Object.fromEntries(sent.map((k) => [k, options[k]]));
     } else {

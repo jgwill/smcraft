@@ -27,9 +27,11 @@ import {
   isDecisionModelDefinition,
   isDmdfPath,
   normalizeNotes,
+  noteText,
   renderMermaidDecisions,
   replayLedger,
   requestGroups,
+  safeModel,
   toEngineRequest,
   validateDecisionModel,
   type DecisionModelDefinition,
@@ -89,8 +91,9 @@ function active(host: DecisionHost): DecisionModelDefinition | ToolResult {
 
 const isRefusal = (x: DecisionModelDefinition | ToolResult): x is ToolResult => "content" in x;
 
-function counts(def: DecisionModelDefinition): string {
-  const of = (kind: string) => (def.decisions ?? []).filter((d) => d?.logic?.kind === kind).length;
+function counts(written: DecisionModelDefinition): string {
+  const def = safeModel(written);
+  const of = (kind: string) => def.decisions.filter((d) => d.logic?.kind === kind).length;
   const n = (count: number, one: string) => `${count} ${one}${count === 1 ? "" : "s"}`;
   return `${n((def.inputs ?? []).length, "input")}, ${n(of("question"), "question")}, ${n(of("table"), "table")}, ${of("person")} ruled by a person`;
 }
@@ -108,7 +111,9 @@ const formatIssues = (issues: DmdValidationError[]): string =>
   issues.map((e) => `[${e.ruleId}]${e.severity === "warning" ? " (warning)" : ""} ${e.message}`).join("\n");
 
 /** One line per input, knowledge and decision — what validate_decision_model shows under its verdict. */
-export function summarizeDecisionModel(def: DecisionModelDefinition): string {
+export function summarizeDecisionModel(written: DecisionModelDefinition): string {
+  // Through `safeModel`: a document the rules have just refused is still listed, never thrown on.
+  const def = safeModel(written);
   const lines: string[] = [];
   for (const i of def.inputs ?? []) lines.push(`input ${i.name}${i.entity ? ` (the entity ${i.entity})` : ""}`);
   for (const k of def.knowledge ?? []) lines.push(`${k.kind} ${k.name}`);
@@ -152,9 +157,10 @@ export function decisionLoadDefinition(host: DecisionHost, json: string): ToolRe
   const path = host.projectFile();
   const denial = host.outsideRoot(path);
   if (denial) return fail(denial);
+  // Checked before it is written, so what the caller reads is about the file that is then on disk.
+  const issues = validateDecisionModel(parsed);
   writeDecisionModel(path, parsed);
   host.emitFull(parsed);
-  const issues = validateDecisionModel(parsed);
   return ok(
     `Loaded decision model → ${path}: ${parsed.settings?.name ?? ""} ${parsed.settings?.version ?? "(no version)"} (${counts(parsed)})` +
       (issues.length ? `\n${formatIssues(issues)}` : ""),
@@ -189,14 +195,24 @@ export function decisionRender(host: DecisionHost, opts: { format?: string; path
   };
 }
 
-function decisionNotes(def: DecisionModelDefinition): { target: string | null; notes: string }[] {
+function decisionNotes(written: DecisionModelDefinition): { target: string | null; notes: string }[] {
+  const def = safeModel(written);
   const out: { target: string | null; notes: string }[] = [];
-  if (def.settings?.notes?.trim()) out.push({ target: null, notes: def.settings.notes });
-  for (const list of [def.inputs ?? [], def.knowledge ?? [], def.decisions ?? []]) {
-    for (const item of list) if (item?.notes?.trim()) out.push({ target: item.name, notes: item.notes });
+  // `noteText`: a note written by hand as a list of paragraphs is still a note.
+  const keep = (target: string | null, value: unknown): void => {
+    const text = noteText(value);
+    if (text?.trim()) out.push({ target, notes: text });
+  };
+  keep(null, def.settings.notes);
+  for (const list of [def.inputs ?? [], def.knowledge ?? [], def.decisions]) {
+    for (const item of list) keep(String(item.name ?? ""), item.notes);
   }
   return out;
 }
+
+const isObject = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === "object" && !Array.isArray(x);
+const entriesNamed = (list: unknown, name: string): { notes?: string } | undefined =>
+  (Array.isArray(list) ? list : []).find((x) => isObject(x) && x.name === name) as { notes?: string } | undefined;
 
 export function decisionGetNotes(host: DecisionHost): ToolResult {
   const def = readDecisionModel(host.projectFile());
@@ -213,12 +229,11 @@ export function decisionSetNotes(host: DecisionHost, target: string | undefined,
     else delete holder.notes;
   };
   let what = "the decision model";
-  if (!target) set(def.settings);
-  else {
-    const holder =
-      (def.decisions ?? []).find((d) => d?.name === target) ??
-      (def.inputs ?? []).find((i) => i?.name === target) ??
-      (def.knowledge ?? []).find((k) => k?.name === target);
+  if (!target) {
+    if (!isObject(def.settings)) return fail(`The decision model at ${host.projectFile()} has no settings to keep a note in.`);
+    set(def.settings);
+  } else {
+    const holder = entriesNamed(def.decisions, target) ?? entriesNamed(def.inputs, target) ?? entriesNamed(def.knowledge, target);
     if (!holder) return fail(`'${target}' is not an input, a knowledge or a decision of '${def.settings?.name ?? ""}'.`);
     set(holder);
     what = `'${target}'`;
@@ -238,19 +253,19 @@ function ledgerPath(doc: string, def: DecisionModelDefinition, given?: string): 
   return isAbsolute(home) ? home : resolve(dirname(doc), home);
 }
 
+/** Every line of the file in its place, so each keeps the file's own number: `null` for a blank one. */
 function readLines(path: string): { lines: unknown[]; unreadable: number[] } {
-  const lines: unknown[] = [];
   const unreadable: number[] = [];
-  readFileSync(path, "utf8")
+  const lines = readFileSync(path, "utf8")
     .split("\n")
-    .forEach((raw, i) => {
-      if (!raw.trim()) return;
+    .map((raw, i) => {
+      if (!raw.trim()) return null;
       try {
-        lines.push(JSON.parse(raw));
+        return JSON.parse(raw) as unknown;
       } catch {
-        // Kept in its place so line numbers stay the file's, and counted as neither a run nor a ruling.
-        lines.push({ kind: "unreadable" });
+        // Counted as neither a run nor a ruling, and named below by its number.
         unreadable.push(i + 1);
+        return { kind: "unreadable" };
       }
     });
   return { lines, unreadable };
@@ -339,7 +354,7 @@ export function registerDecisionTools(server: McpServer, host: DecisionHost): vo
 
   server.tool(
     "replay_decision_ledger",
-    "Replay the recorded runs of the active decision model's ledger through the model, asking no engine, and say for each whether the tables give the outcome the line recorded, with the rule that decided it and the ruling in force. `ledger` is a .jsonl path (relative to the document, absolute, or under ~); omitted, the document's rulings.snapshot beside it, else its rulings.ledger. A line that lacks what the replay needs is reported as not replayable with the field it lacks, and nothing is put in its place. The count of rulings in force is given against rulings.bar_after, with how many rulings agreed with what they answered. `bars` tries other bar values on the same recorded answers; the document is never changed, and setting a bar stays a person's act. `json: true` adds the whole replay, every run with its rule trace.",
+    "Replay the recorded runs of the active decision model's ledger through the model, asking no engine, and say for each whether the tables give the outcome the line recorded, with the rule that decided it and the rulings in force. `ledger` is a .jsonl path (relative to the document, absolute, or under ~); omitted, the document's rulings.snapshot beside it, else its rulings.ledger. A line that lacks something a table reads is reported as not replayable with the field it lacks, and nothing is put in its place. The count of rulings in force is given against rulings.bar_after, with how many rulings agree with what the replay gives for the decisions they answered. A ruling that cannot stand (no such run, no outcome, nobody named) and a withdrawal that finds no ruling are reported with their line and not counted. `bars` tries other bar values on the same recorded answers; the document is never changed, and setting a bar stays a person's act. `json: true` adds the whole replay, every run with its rule trace.",
     {
       ledger: z.string().optional(),
       bars: z.record(z.string(), z.number()).optional(),

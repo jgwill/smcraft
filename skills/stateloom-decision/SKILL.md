@@ -86,7 +86,10 @@ of an environment variable. Never write a key in a document.
   instructions.
 - An input is named in backticks, and only one the decision `requires` (D007).
 - `type` is `noul` (is this true?), `choice` (`options`, 2 to 255) or `score` (`levels`,
-  2 to 10, lowest first).
+  2 to 10, lowest first). Name a choice's options with words, never with numbers: options
+  named `"1"`, `"2"` cannot be sent in another order.
+- Do not name anything `constructor`, `toString` or another name every JavaScript object
+  carries, and do not name a group `default` or after a question.
 
 ### What a rule reads from an answer
 
@@ -148,7 +151,9 @@ and read it by name, so a person can find it and try another value.
 ```
 
 Never give a person's decision a rule, a bar or a failure route (D016). If an outcome is a
-named person's to give, draw it as a person, not as a "review" outcome of a table.
+named person's to give, draw it as a person, not as a "review" outcome of a table. A table
+that requires a person who has not ruled waits with them: its failure route never fires in
+their place.
 
 ---
 
@@ -174,10 +179,11 @@ engine "had".
 - `bars` tries other values. It never changes the document.
 
 `replay_decision_ledger` runs every recorded run of a ledger through the model and says
-whether each gives the outcome it recorded. A line that lacks a field is reported as not
-replayable, with the field. It also counts the rulings in force against `rulings.bar_after`
-and how many agreed with what they answered. Use it before proposing a bar, and after
-changing a rule.
+whether each gives the outcome it recorded. A line that lacks a field a table reads is
+reported as not replayable, with the field. It also counts the rulings in force against
+`rulings.bar_after` and how many agree with what the replay gives. A ruling that names no
+run, rules nothing or does not say who ruled is reported and not counted. Use it before
+proposing a bar, and after changing a rule.
 
 ---
 
