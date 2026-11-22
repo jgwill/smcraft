@@ -549,7 +549,7 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
                 const reply = findMarkedReply(markedReplies, docPath, selectedMark.id, answer);
                 if (!reply) return;
                 return () => {
-                  if (narrow) setSelected(null);
+                  setSelected(null);
                   void stage.present(replyTour(reply, "/api/companion/", answer.author.name), {
                     voice: replyVoice,
                     origin: answer.author.name,
