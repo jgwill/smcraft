@@ -75,6 +75,7 @@ export interface StageSnapshot {
   index: number;
   playing: boolean;
   speaking: boolean;
+  playbackError: string | null;
   /** The tour loaded carries its own voice (`present`): the page's voice choice does not apply to it. */
   ownVoice: boolean;
 }
@@ -113,6 +114,8 @@ export interface StageSession {
   next(): void;
   prev(): void;
   goto(index: number): void;
+  /** Jump to a step and start playback in the same user gesture. */
+  playFrom(index: number): void;
   /** Put the tour away and clear the stage. */
   stop(): void;
   /** Close a live step's caption (a tour stays loaded, paused). */
@@ -170,6 +173,7 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
   let index = 0;
   let playing = false;
   let speaking = false;
+  let playbackError: string | null = null;
   let nonce = 0;
   let timer: Timer | null = null;
   /** Moves whenever what is being heard is let go, so a cancelled voice's late answer advances nothing. */
@@ -185,11 +189,11 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
   /** Set while the catch-up on join puts the hub's stage on screen. */
   let catching = false;
 
-  let snapshot: StageSnapshot = { status: client.status, stage, shown, tour, index, playing, speaking, ownVoice: false };
+  let snapshot: StageSnapshot = { status: client.status, stage, shown, tour, index, playing, speaking, playbackError, ownVoice: false };
   const subscribers = new Set<() => void>();
 
   function commit(): void {
-    snapshot = { status: client.status, stage, shown, tour, index, playing, speaking, ownVoice: !!tour && override !== undefined };
+    snapshot = { status: client.status, stage, shown, tour, index, playing, speaking, playbackError, ownVoice: !!tour && override !== undefined };
     for (const cb of [...subscribers]) cb();
   }
 
@@ -205,6 +209,7 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
   /** Let the step on stage be heard or read, then — when `advance` — go on. */
   function dwell(step: TourStep, advance: boolean, inTour = advance): void {
     quiet();
+    playbackError = null;
     const mine = ++dwellSeq;
     const after = (): void => {
       if (mine !== dwellSeq) return;
@@ -223,7 +228,15 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
       speaking = true;
       speakingWith = heard;
       commit();
-      heard.speak(step).then(after, after);
+      heard.speak(step).then(after, (error: unknown) => {
+        if (mine !== dwellSeq) return;
+        quiet();
+        playing = false;
+        playbackError = error instanceof Error && error.name === "NotAllowedError"
+          ? "Press Play to hear this step."
+          : "Audio could not play. Press Play to retry.";
+        commit();
+      });
     } else if (advance) {
       timer = setTimer(() => {
         timer = null;
@@ -235,11 +248,12 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
   function show(next: Omit<StageShown, "nonce"> | null, advance: boolean): void {
     nonce += 1;
     quiet();
+    playbackError = null;
     shown = next ? { ...next, nonce, ...(catching ? { caught: true } : {}) } : null;
     commit();
     opts.onShow?.(shown);
     const inTour = !!shown && shown.index !== null;
-    if (shown && (voiceFor(inTour) || advance)) dwell(shown.step, advance, inTour);
+    if (shown && (advance || (!inTour && voiceFor(false)))) dwell(shown.step, advance, inTour);
   }
 
   function tourStep(i: number): Omit<StageShown, "nonce"> | null {
@@ -274,6 +288,7 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
   }
 
   function liveStep(env: StageStepEnvelope): void {
+    settle(false);
     playing = false;
     show({ step: env.step, index: null, count: null, title: env.title, origin: env.origin, tourPath: env.tour }, false);
   }
@@ -296,6 +311,12 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
     index = Math.min(Math.max(0, Math.floor(i)), last);
     ended = false;
     show(tourStep(index), playing);
+  }
+
+  function playFrom(i: number): void {
+    if (!tour?.def.steps.length) return;
+    playing = true;
+    goto(i);
   }
 
   function next(): void {
@@ -437,6 +458,9 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
       joining = false;
       joined = false;
       quiet();
+      playing = false;
+      settle(false);
+      commit();
       client.leaveStage(stage);
       client.disconnect();
     },
@@ -445,13 +469,17 @@ export function createStageSession(opts: StageSessionOptions): StageSession {
     next,
     prev,
     goto,
+    playFrom,
     stop,
     dismiss,
     setVoice(v) {
-      // A tour with its own voice keeps it; the page's voice is for the rest.
-      if (override === undefined) quiet();
+      if (voice === v) return;
       voice = v;
-      commit();
+      if (shown && playing && override === undefined) dwell(shown.step, true);
+      else {
+        if (override === undefined) quiet();
+        commit();
+      }
     },
     present(def, options = {}) {
       if (!Array.isArray(def?.steps) || !def.steps.length) return Promise.resolve(false);

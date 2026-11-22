@@ -6,7 +6,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { browserDictation, joinHeard } from "../speech.js";
+import { browserDictation, browserVoice, joinHeard } from "../speech.js";
 
 type Segment = { transcript: string; isFinal: boolean };
 
@@ -80,4 +80,41 @@ test("joinHeard keeps an empty side out of the text", () => {
   assert.equal(joinHeard("in between", ""), "in between");
   assert.equal(joinHeard("in between", "When it"), "in between When it");
   assert.equal(joinHeard("in between  ", "  When it"), "in between When it");
+});
+
+test("recordings reuse the activated audio element and an old rejection cannot finish a new clip", async () => {
+  let rejectOld!: (error: Error) => void;
+  const players: FakeAudio[] = [];
+  class FakeAudio {
+    src = "";
+    ended = false;
+    onended?: () => void;
+    constructor() { players.push(this); }
+    play() {
+      return this.src === "/1.mp3"
+        ? new Promise<void>((_, reject) => { rejectOld = reject; })
+        : Promise.resolve();
+    }
+    pause() {}
+  }
+  const globals = globalThis as unknown as { window: unknown; Audio?: unknown };
+  const oldAudio = globals.Audio;
+  globals.window = {};
+  globals.Audio = FakeAudio;
+  try {
+    const voice = browserVoice({ speech: false });
+    assert.ok(voice);
+    const first = voice.speak({ say: "First", audio: "/1.mp3" });
+    const second = voice.speak({ say: "Second", audio: "/2.mp3" });
+    rejectOld(new Error("cancelled"));
+    await first;
+    assert.equal(players.length, 1);
+    assert.equal(players[0]?.src, "/2.mp3");
+    assert.ok(players[0]?.onended, "the new clip still owns its end handler");
+    players[0].ended = true;
+    players[0].onended();
+    await second;
+  } finally {
+    globals.Audio = oldAudio;
+  }
 });

@@ -90,6 +90,21 @@ export interface CompanionMark {
 export type CompanionItem = CompanionTake | CompanionReply | CompanionMark;
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
+const replyWords = (text: string) => text.trim().replace(/\s+/g, " ");
+
+/** Match a saved reply to the answer in the mark sidecar. The two writes have separate clocks. */
+export function findMarkedReply<T extends { mark?: CompanionReply["mark"]; text: string; at: string }>(
+  replies: readonly T[], doc: string, id: string, answer: { text: string; at: string },
+): T | undefined {
+  const words = replyWords(answer.text);
+  const at = Date.parse(answer.at);
+  const matches = replies.filter((reply) =>
+    reply.mark?.id === id &&
+    (reply.mark.doc === doc || (!doc.startsWith("/") && reply.mark.doc.endsWith(`/${doc}`))) &&
+    replyWords(reply.text) === words,
+  );
+  return matches.sort((a, b) => Math.abs(Date.parse(a.at) - at) - Math.abs(Date.parse(b.at) - at))[0];
+}
 const authorOf = (v: unknown): { name: string; role: "person" | "agent" } => {
   const o = (v && typeof v === "object" ? v : {}) as { name?: unknown; role?: unknown };
   const role = o.role === "agent" ? "agent" : "person";

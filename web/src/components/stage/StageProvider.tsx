@@ -345,6 +345,7 @@ export default function StageProvider({ children }: { children: ReactNode }) {
       shown={stage.shown}
       playing={stage.playing}
       speaking={stage.speaking}
+      playbackError={stage.playbackError}
       voice={stage.ownVoice ? undefined : voiceOn}
       onToggleVoice={() => {
         const next = !voiceOn;
@@ -353,9 +354,9 @@ export default function StageProvider({ children }: { children: ReactNode }) {
       }}
       onPlay={stage.play}
       onPause={stage.pause}
-      onNext={stage.next}
-      onPrev={stage.prev}
-      onGoto={stage.goto}
+      onNext={stage.ownVoice ? () => stage.playFrom(stage.index + 1) : stage.next}
+      onPrev={stage.ownVoice ? () => stage.playFrom(stage.index - 1) : stage.prev}
+      onGoto={stage.ownVoice ? stage.playFrom : stage.goto}
       onClose={stage.dismiss}
       onAnswer={() => setAnswerNonce((n) => n + 1)}
       held={held}

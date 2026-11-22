@@ -29,6 +29,7 @@ export interface StageCaptionProps {
   } | null;
   playing?: boolean;
   speaking?: boolean;
+  playbackError?: string | null;
   /** The canvas's voice is on. Absent: no voice button. */
   voice?: boolean;
   onToggleVoice?: () => void;
@@ -57,6 +58,7 @@ export function StageCaption({
   shown,
   playing = false,
   speaking = false,
+  playbackError,
   voice,
   onToggleVoice,
   onPlay,
@@ -108,6 +110,7 @@ export function StageCaption({
       )}
 
       <p className="slc-stage-caption-say">{step.say}</p>
+      {playbackError && <div className="slc-stage-card-error" role="status">{playbackError}</div>}
 
       {inTour && count! <= MAX_DOTS && count! > 1 && (
         <nav className={`slc-stage-dots${many ? " slc-stage-dots--many" : ""}`} aria-label="Steps">

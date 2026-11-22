@@ -68,6 +68,7 @@ import {
 } from "@miadi/stateloom-protocol";
 import { useStageContext } from "./StageProvider";
 import { episodeOf } from "./CompanionLayer";
+import { browserVoice, findMarkedReply, replyTour, useMarkedReplies } from "@miadi/stateloom-react";
 import { presenceLine, useEpisodePresence } from "./useEpisodePresence";
 import { urlParam } from "@/lib/systemParam";
 import { MARK_REQUEST_EVENT, clearMarkRequest, markRequested } from "@/lib/markRequest";
@@ -334,6 +335,8 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
   const selectedMark = marks.find((m) => m.id === selected) ?? null;
   // A thread on screen is read, and stays read as replies land in it.
   const selectedReplies = selectedMark?.replies?.length ?? 0;
+  const markedReplies = useMarkedReplies("/api/companion/", episode, selectedMark?.id ?? null, selectedReplies);
+  const replyVoice = useMemo(() => browserVoice({ recordings: true, speech: false }), []);
   useEffect(() => {
     if (selectedMark) markRead(selectedMark);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -541,6 +544,18 @@ export default function StageLayer({ docPath, kind, viewport, setViewport, boxes
           ) : selectedMark ? (
             <MarkThread
               mark={selectedMark}
+              playReply={(answer) => {
+                if (!stage) return;
+                const reply = findMarkedReply(markedReplies, docPath, selectedMark.id, answer);
+                if (!reply) return;
+                return () => {
+                  if (narrow) setSelected(null);
+                  void stage.present(replyTour(reply, "/api/companion/", answer.author.name), {
+                    voice: replyVoice,
+                    origin: answer.author.name,
+                  });
+                };
+              }}
               number={marks.indexOf(selectedMark) + 1}
               listener={stage?.listener}
               busy={busy}

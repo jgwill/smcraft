@@ -122,6 +122,7 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
   });
   const recRef = useRef<RecorderSnapshot>(IDLE);
   const playingRef = useRef<string | null>(null);
+  const playSequence = useRef(0);
   const queue = useRef<CompanionReply[]>([]);
   /** The reply stopped because the person pressed Record: its sequence goes on after the take. */
   const heldForTake = useRef(false);
@@ -142,6 +143,7 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
   const playRef = useRef<(reply: CompanionReply, from?: number) => Promise<void>>(async () => {});
   const play = useCallback(
     async (reply: CompanionReply, from = 0) => {
+      const sequence = ++playSequence.current;
       setPlaying(reply.id);
       setUnheard((u) => u.filter((id) => id !== reply.id));
       // A reply that walks the diagram needs the board. On a phone the dock folds to its
@@ -151,7 +153,7 @@ export default function CompanionLayer({ stage, defaultEpisode }: { stage: Stage
       setNotice(more ? `${more} more of ${WHO}'s replies wait after this one.` : null);
       const done = await stageRef.current.present(replyTour(reply, BASE, WHO), { voice, origin: WHO, from });
       // Another reply took the stage from this one: that play owns what follows.
-      if (playingRef.current !== reply.id) return;
+      if (sequence !== playSequence.current || playingRef.current !== reply.id) return;
       setPlaying(null);
       if (heldForTake.current) return;
       if (!done) {

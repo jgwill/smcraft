@@ -315,3 +315,37 @@ test("connect, disconnect, connect again (React's development mount) still joins
   await tick();
   assert.equal(s.getSnapshot().index, 0, "the abandoned join, answered late, changes nothing");
 });
+
+test("a paused reply waits for Play and a rejected clip stays on its step until chosen again", async () => {
+  const { client } = fakeClient();
+  const c = clock();
+  const heard: string[] = [];
+  const voice = {
+    speak(step: { say: string }) {
+      heard.push(step.say);
+      return heard.length === 2 ? Promise.reject(new Error("audio unavailable")) : Promise.resolve();
+    },
+    cancel() {},
+  };
+  const s = createStageSession({ url: "x", client, gapMs: 100, setTimer: c.setTimer, clearTimer: c.clearTimer });
+  const reply = { ...tour, steps: Array.from({ length: 6 }, (_, i) => ({ say: String(i + 1) })) };
+  const done = s.present(reply, { autoplay: false, voice });
+  await tick();
+  assert.deepEqual(heard, []);
+  s.play();
+  await tick();
+  c.advance(100);
+  await tick();
+  c.advance(1000);
+  assert.equal(s.getSnapshot().index, 1);
+  assert.equal(s.getSnapshot().playing, false);
+  assert.match(s.getSnapshot().playbackError ?? "", /retry/);
+  s.playFrom(2);
+  for (let i = 2; i < 6; i++) {
+    assert.equal(s.getSnapshot().index, i);
+    await tick();
+    c.advance(100);
+  }
+  assert.equal(await done, true);
+  assert.deepEqual(heard, ["1", "2", "3", "4", "5", "6"]);
+});

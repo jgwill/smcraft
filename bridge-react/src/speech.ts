@@ -51,62 +51,55 @@ export function browserVoice(options: BrowserVoiceOptions = {}): StageVoice | nu
   const canPlay = typeof Audio !== "undefined";
   if (!synth && !canPlay) return null;
   let audio: HTMLAudioElement | null = null;
-  let finish: (() => void) | null = null;
-
-  const done = (): void => {
-    const f = finish;
-    finish = null;
-    f?.();
-  };
-
-  const cancel = (): void => {
-    if (audio) {
-      audio.onended = null;
-      audio.onerror = null;
-      audio.onplaying = null;
-      audio.pause();
-      audio = null;
-    }
-    if (synth?.speaking || synth?.pending) synth.cancel();
-    done();
-  };
+  let cancelStep: (() => void) | null = null;
 
   return {
     speak(step: TourStep): Promise<void> {
-      cancel();
-      return new Promise<void>((resolve) => {
-        // Some browsers never fire `end` (a voice that failed to load, a tab
-        // in the background): the step is let go after twice its reading time.
-        let safety = setTimeout(done, stepHoldMs({ ...step, holdMs: undefined }) * 2 + 4000);
-        finish = () => {
-          clearTimeout(safety);
-          resolve();
+      cancelStep?.();
+      return new Promise<void>((resolve, reject) => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let cleanup: (() => void) | undefined;
+        const finish = (error?: unknown) => {
+          if (cancelStep !== cancel) return;
+          cancelStep = null;
+          clearTimeout(timer);
+          cleanup?.();
+          if (error === undefined) resolve();
+          else reject(error);
         };
+        const cancel = () => finish();
+        cancelStep = cancel;
+
         if (step.audio && canPlay && options.recordings !== false) {
-          const own = new Audio(step.audio);
-          audio = own;
-          own.onended = done;
-          own.onerror = done;
-          // A recording knows its own length once it plays: a slow voice, or one rendered
-          // when asked for, is not cut at the reading-time guess.
-          own.onplaying = () => {
-            if (audio !== own || !Number.isFinite(own.duration)) return;
-            clearTimeout(safety);
-            safety = setTimeout(done, (own.duration - own.currentTime) * 1000 + 4000);
+          // WebKit grants playback permission to the element. Keep it across all steps.
+          const player = audio ??= new Audio();
+          player.src = step.audio;
+          player.onended = () => { if (player.ended) finish(); };
+          player.onerror = () => { if (player.error) finish(player.error); };
+          // Bound a stalled start, including an on-demand render. Once playing, wait
+          // for the recording's own end even when it takes longer than reading the text.
+          const waitForAudio = () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => finish(new Error("Recording did not continue")), 90000);
           };
-          own.play().catch(done);
+          waitForAudio();
+          player.onwaiting = waitForAudio;
+          player.onplaying = () => clearTimeout(timer);
+          cleanup = () => {
+            player.onended = null;
+            player.onerror = null;
+            player.onplaying = null;
+            player.onwaiting = null;
+            if (!player.ended) player.pause();
+          };
+          player.play().catch(finish);
           return;
         }
         if (options.speech === false) {
-          const held = setTimeout(done, stepHoldMs(step));
-          const prior = finish;
-          finish = () => {
-            clearTimeout(held);
-            prior?.();
-          };
+          timer = setTimeout(cancel, stepHoldMs(step));
           return;
         }
-        if (!synth || !step.say?.trim()) return done();
+        if (!synth || !step.say?.trim()) return cancel();
         const u = new SpeechSynthesisUtterance([step.title, step.say].filter(Boolean).join(". "));
         if (options.lang) u.lang = options.lang;
         if (options.rate) u.rate = options.rate;
@@ -114,12 +107,18 @@ export function browserVoice(options: BrowserVoiceOptions = {}): StageVoice | nu
           const v = synth.getVoices().find((x) => x.name === options.voiceName);
           if (v) u.voice = v;
         }
-        u.onend = done;
-        u.onerror = done;
+        u.onend = cancel;
+        u.onerror = cancel;
+        timer = setTimeout(cancel, stepHoldMs({ ...step, holdMs: undefined }) * 2 + 4000);
+        cleanup = () => {
+          u.onend = null;
+          u.onerror = null;
+          if (synth.speaking || synth.pending) synth.cancel();
+        };
         synth.speak(u);
       });
     },
-    cancel,
+    cancel: () => cancelStep?.(),
   };
 }
 

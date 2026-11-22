@@ -44,8 +44,7 @@ export function useStage(opts: UseStageOptions): UseStage {
 
   const enabled = opts.enabled !== false && !!opts.url;
   useEffect(() => {
-    if (!enabled) return;
-    session.connect();
+    if (enabled) session.connect();
     return () => session.disconnect();
   }, [session, enabled]);
 
@@ -61,6 +60,7 @@ export function useStage(opts: UseStageOptions): UseStage {
     next: session.next,
     prev: session.prev,
     goto: session.goto,
+    playFrom: session.playFrom,
     stop: session.stop,
     dismiss: session.dismiss,
     sendContext: session.sendContext,

@@ -24,7 +24,7 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type R
 import { MARK_KINDS, lastWordOf, type Box, type Mark, type MarkKind } from "@miadi/stateloom-protocol";
 import { themeStyle, type CanvasTheme } from "./theme.js";
 import { elementName, markPlace, type ElementLabels } from "./names.js";
-import { CloseIcon, MicIcon } from "./icons.js";
+import { CloseIcon, MicIcon, PlayIcon } from "./icons.js";
 
 /** Something that turns speech into words (`browserDictation()`). */
 export interface ListenerLike {
@@ -232,6 +232,8 @@ export function MarkComposer({
 
 export interface MarkThreadProps {
   mark: Mark;
+  /** Play the linked narration, when the host has it for this reply. */
+  playReply?: (reply: NonNullable<Mark["replies"]>[number]) => (() => void) | undefined;
   /** Its number on the board. */
   number?: number;
   onReply?: (text: string) => void;
@@ -256,6 +258,7 @@ export interface MarkThreadProps {
 
 export function MarkThread({
   mark,
+  playReply,
   number,
   onReply,
   onResolve,
@@ -304,12 +307,22 @@ export function MarkThread({
           <span className="slc-stage-said-who">{mark.author.name}</span>
           <span className="slc-stage-said-text">{mark.text}</span>
         </li>
-        {(mark.replies ?? []).map((r, i) => (
-          <li key={i} className={`slc-stage-said slc-stage-said--${r.author.role}`}>
-            <span className="slc-stage-said-who">{r.author.name}</span>
-            <span className="slc-stage-said-text">{r.text}</span>
-          </li>
-        ))}
+        {(mark.replies ?? []).map((r, i) => {
+          const play = r.author.role === "agent" ? playReply?.(r) : undefined;
+          return (
+            <li key={i} className={`slc-stage-said slc-stage-said--${r.author.role}`}>
+              <div className="slc-stage-card-row">
+                <span className="slc-stage-said-who">{r.author.name}</span>
+                {play && (
+                  <button type="button" className="slc-stage-btn slc-stage-btn--quiet" onClick={play} aria-label={`Play reply from ${r.author.name}`} title={`Play reply from ${r.author.name}`}>
+                    <PlayIcon />
+                  </button>
+                )}
+              </div>
+              <span className="slc-stage-said-text">{r.text}</span>
+            </li>
+          );
+        })}
       </ol>
       {mark.status !== "resolved" && lastWordOf(mark) === "person" && <Note>{note}</Note>}
       {onReply && (
