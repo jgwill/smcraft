@@ -120,9 +120,9 @@ test("chronicle: an explicit .erdf/.sqdf/.sysdf/.smdf.json extension is kept; th
   }
 });
 
-test("projectSwitch: the refusal of a non-.json path names the four document types", () => {
+test("projectSwitch: the refusal of a non-.json path names the five document types", () => {
   assert.throws(
     () => resolveProjectSwitch("/tmp/flow.sqdf", "/prev/doc.smdf.json"),
-    /\.smdf\.json \(state machine\), \.erdf\.json \(ERD\), \.sqdf\.json \(sequence\) and \.sysdf\.json \(system\)/,
+    /\.smdf\.json \(state machine\), \.erdf\.json \(ERD\), \.sqdf\.json \(sequence\), \.sysdf\.json \(system\) and \.dmdf\.json \(decision model\)/,
   );
 });

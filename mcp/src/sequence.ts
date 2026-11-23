@@ -71,7 +71,13 @@ const ok = (text: string): ToolResult => ({ content: [{ type: "text", text }] })
 const fail = (text: string): ToolResult => ({ content: [{ type: "text", text }], isError: true });
 const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
-const KIND_WORDS = { machine: "a state machine", erd: "an ERD", sequence: "a sequence", system: "a system" } as const;
+const KIND_WORDS = {
+  machine: "a state machine",
+  erd: "an ERD",
+  sequence: "a sequence",
+  system: "a system",
+  decision: "a decision model",
+} as const;
 
 export function readSequence(path: string): SequenceDefinition | null {
   if (!existsSync(path)) return null;

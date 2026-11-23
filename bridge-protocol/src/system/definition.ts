@@ -2,7 +2,8 @@
  * SYSDF — the System Definition Format (Spec 82).
  *
  * The drawings of one thing being built — its data (`.erdf.json`), its
- * behaviours (`.smdf.json`) and its scenarios (`.sqdf.json`) — are one system.
+ * behaviours (`.smdf.json`), its scenarios (`.sqdf.json`) and its decisions
+ * (`.dmdf.json`, Spec 85) — are one system.
  * A system document names them and the actors its scenarios share. It is the
  * ONLY document that holds paths: members keep linking to each other by name
  * (Spec 80), and a member's path is relative to the system file, so the system
@@ -13,6 +14,7 @@
  * ERDF: everything that reads a system reads the same file whatever is on
  * screen.
  */
+import { isDmdfPath, isDecisionModelDefinition } from "../decision/definition.js";
 import { isErdfPath, isErdDefinition } from "../erd/definition.js";
 import { isSqdfPath, isSequenceDefinition } from "../sequence/definition.js";
 
@@ -90,12 +92,13 @@ export function emptySystem(namespace: string, name: string, description?: strin
 }
 
 /** What a loom document is, by its extension. Anything else `.json` is a state machine, as it always was. */
-export type DocKind = "machine" | "erd" | "sequence" | "system";
+export type DocKind = "machine" | "erd" | "sequence" | "system" | "decision";
 
 export function docKindOfPath(path: string): DocKind {
   if (isErdfPath(path)) return "erd";
   if (isSqdfPath(path)) return "sequence";
   if (isSysdfPath(path)) return "system";
+  if (isDmdfPath(path)) return "decision";
   return "machine";
 }
 
@@ -105,12 +108,23 @@ export function docKindOfContent(doc: unknown): DocKind | null {
   if (isErdDefinition(doc)) return "erd";
   if (isSequenceDefinition(doc)) return "sequence";
   if (isSystemDefinition(doc)) return "system";
+  if (isDecisionModelDefinition(doc)) return "decision";
   if ("state" in (doc as Record<string, unknown>)) return "machine";
   return null;
 }
 
-/** The member kinds a system admits (Spec 82, D9): a system is never a member of another. */
-export const MEMBER_KINDS: readonly DocKind[] = ["erd", "machine", "sequence"];
+/**
+ * The member kinds a system admits (Spec 82, D9): a system is never a member of
+ * another. A decision model (Spec 85) is admitted here and nowhere else: it
+ * stands alone as well, and taking `"decision"` out of this list is the whole
+ * of making it stand alone only (rispec 85, Q3).
+ */
+export const MEMBER_KINDS: readonly DocKind[] = ["erd", "machine", "sequence", "decision"];
+
+/** The extensions a system's members carry, for the messages that name them. */
+export const MEMBER_EXTENSIONS: string = MEMBER_KINDS.map(
+  (k) => ({ erd: ".erdf.json", machine: ".smdf.json", sequence: ".sqdf.json", decision: ".dmdf.json", system: ".sysdf.json" })[k],
+).join(", ");
 
 /** Resolve a member path against the system file's directory. Pure string work — no filesystem. */
 export function resolveMemberPath(systemPath: string, memberPath: string): string {
