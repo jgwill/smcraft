@@ -13,7 +13,7 @@
 **MCP:** `@miadi/stateloom-mcp` 0.4.1 — bins `stateloom-mcp`, `smcraft-mcp`; 65 tools: 22 state-machine, 10 ERD, 14 sequence, 10 system, 9 stage
 **Skills:** `@miadi/stateloom-skills` 0.5.0 — bin `stateloom`
 **Designer:** `web/` — `"private": true`; its prebuilt standalone build ships as `@miadi/stateloom-web` 0.3.5, bin `stateloom-web`
-**Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
+**Framework:** RISE 2.3.0 (Reverse-engineer → Intent-extract → Specify → Export). Since 2.3.0 a new specification is written with its drawings, listed by one `.sysdf.json`. The loom is where they are drawn and checked. Where this goes: <https://llms.jgwill.com/llms-rise-framework.txt> § Toward 3.0, jgwill/llms-txt#48, and the loom's part jgwill/smcraft#35
 **RISE Specs:** 70–84
 **Repository:** https://github.com/jgwill/smcraft
 **Published at:** https://docs.smcraft.jgwill.com
@@ -1215,6 +1215,8 @@ A Zustand store holds the definition, layout (positions + viewport), `docPath`, 
 ---
 
 ## 13. RISE Specifications
+
+Under RISE 2.3.0 a specification in any repository is written with its drawings, and those drawings are made here: SMDF (Spec 70), ERDF (Spec 80), SQDF (Spec 81, `rispecs/81-sqdf-format.spec.md`), and one SYSDF system listing them (Spec 82, `rispecs/82-sysdf-system.spec.md`). What a system will carry so it names the spec it draws (a binding, a role per member, checks between prose and drawings, an export written into the topic folder) is jgwill/smcraft#35. It is proposed, not built.
 
 **[70 — SMDF Format](./rispecs/70-smdf-format.spec.md)** — schema, state types (leaf, composite, final, history, parallel, root), validation V001–V014, JSON primary with XML legacy. The canonical representation every package consumes.
 

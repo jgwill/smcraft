@@ -4,7 +4,7 @@
 
 **Engine:** `@miadi/stateloom-engine` — 0.4.4 (npm; renamed from `smcraft`, deprecated) / `miadi-stateloom-engine` 0.2.1 (PyPI, CLI `smcg`)
 **Loom packages:** `@miadi/stateloom-*` — protocol, client, hub, react, canvas, cli, mcp, skills, web
-**Framework:** RISE v1.2 (Reverse-engineer → Intent-extract → Specify → Export)
+**Framework:** RISE 2.3.0 (Reverse-engineer → Intent-extract → Specify → Export). Since 2.3.0 a new specification is written with its drawings, listed by one `.sysdf.json`. The loom is where they are drawn and checked. Where this goes: <https://llms.jgwill.com/llms-rise-framework.txt> § Toward 3.0, jgwill/llms-txt#48, and the loom's part jgwill/smcraft#35
 **Repository:** https://github.com/jgwill/smcraft
 **Published at:** https://docs.smcraft.jgwill.com
 
@@ -234,6 +234,8 @@ stand the whole loom up, and keep it up, from these alone.
 A browser download always, and `--stamp` / `stamp: true` on demand, produce `[ep252--]<Machine>--<yyMMddHHmmss>.<ext>` — the chronicle episode when the document lives under one, the machine's own name, and a stamp to the second. Built once in `bridge-protocol/src/exportName.ts`, so every surface names files alike.
 
 ## RISE Specifications
+
+Under RISE 2.3.0 a specification in any repository is written with its drawings, and those drawings are made here: SMDF (Spec 70), ERDF (Spec 80), SQDF (Spec 81, `rispecs/81-sqdf-format.spec.md`), and one SYSDF system listing them (Spec 82, `rispecs/82-sysdf-system.spec.md`). What a system will carry so it names the spec it draws (a binding, a role per member, checks between prose and drawings, an export written into the topic folder) is jgwill/smcraft#35. It is proposed, not built.
 
 - [Spec 70 — SMDF Format](./rispecs/70-smdf-format.spec.md): schema, state types, validation V001–V014, JSON/XML
 - [Spec 71 — Runtime Engine](./rispecs/71-runtime-engine.spec.md): State, Context, ContextAsync, TransitionHelper, observers
